@@ -13,6 +13,7 @@ import { request } from '../../api/client';
 import { settingsApi } from '../../api/settings';
 import { apiErrorMessage } from '../../api/errors';
 import { BrandLogo } from '../common/BrandLogo';
+import { refreshFavicon } from '../../utils/favicon';
 import { ActivityView } from '../activity/ActivityView';
 import { DamActivityHistory } from '../dam/DamActivityHistory';
 import {
@@ -169,6 +170,7 @@ export const SettingsView: React.FC = () => {
   const [brandingError, setBrandingError] = useState('');
   const logoInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
+  const faviconUploadPending = useRef(false);
   const flushDamCategoriesRef = useRef<() => Promise<boolean>>(async () => true);
 
   /**
@@ -183,6 +185,7 @@ export const SettingsView: React.FC = () => {
     try {
       const response = await settingsApi.uploadBranding(kind, file);
       const url = response.data.url;
+      if (kind === 'favicon') faviconUploadPending.current = true;
       setGeneralSettings(prev => ({ ...prev, [kind === 'logo' ? 'logoUrl' : 'faviconUrl']: url }));
     } catch (error) {
       setBrandingError(apiErrorMessage(error, kind === 'logo' ? 'بارگذاری لوگو ناموفق بود.' : 'بارگذاری فاوآیکون ناموفق بود.'));
@@ -191,12 +194,25 @@ export const SettingsView: React.FC = () => {
     }
   };
 
+  // The shared settings store may save automatically; refresh only after
+  // persistence, never on a routine page load.
+  useEffect(() => {
+    if (settingsSaveState === 'saved' && faviconUploadPending.current) {
+      faviconUploadPending.current = false;
+      refreshFavicon();
+    }
+  }, [settingsSaveState]);
+
   const handleManualSave = async () => {
     setIsSavingNow(true);
     const damCategoriesSaved = await flushDamCategoriesRef.current();
     const settingsSaved = await saveSettingsNow(true);
     setIsSavingNow(false);
     if (damCategoriesSaved && settingsSaved) {
+      if (faviconUploadPending.current) {
+        faviconUploadPending.current = false;
+        refreshFavicon();
+      }
       notify({ type: 'success', title: 'تنظیمات ذخیره شد', message: 'همه بخش‌های تنظیمات روی سرور ذخیره شد.' });
     }
   };
