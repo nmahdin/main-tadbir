@@ -9,6 +9,7 @@ import { apiConfig, request } from '../../api/client';
 import { damApi } from '../../api/dam';
 import { TextAssetActions } from '../common/TextAssetActions';
 import { SmartImage } from '../common/SmartImage';
+import { useInView } from '../../hooks/useInView';
 import { ImagePreview } from '../common/ImagePreview';
 import { MediaPlayer } from '../common/MediaPlayer';
 import { useDamAssetDetail, type DamAssetDetail } from '../../hooks/useDamAssetDetail';
@@ -258,6 +259,12 @@ export function StageAssetCard({ view, onPreview, actions }: {
 }) {
   const kind = fileKindOf(view);
   const Icon = kind === 'link' ? Link2 : kind === 'text' ? FileText : FileCheck;
+  /**
+   * تصویر بندانگشتی فقط وقتی گرفته می‌شود که کارت به دید کاربر رسیده باشد.
+   * یک مرحله می‌تواند ده‌ها خروجی تصویری داشته باشد؛ درخواست هم‌زمانِ همه،
+   * تصویری را هم دانلود می‌کرد که کاربر هرگز نمی‌دید.
+   */
+  const [cardRef, cardSeen] = useInView<HTMLElement>({ rootMargin: '260px' });
   /** تشخیص تصویر از خودِ خروجی (قالب/MIME/پسوند). */
   const previewFromFlow = imagePreviewSrc(view);
   const isImage = Boolean(previewFromFlow);
@@ -304,7 +311,7 @@ export function StageAssetCard({ view, onPreview, actions }: {
     isTextAsset,
   });
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:shadow-sm">
+    <article ref={cardRef as React.RefObject<HTMLElement>} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-indigo-200 hover:shadow-sm">
       <button
         type="button"
         onClick={() => onPreview(view)}
@@ -326,9 +333,10 @@ export function StageAssetCard({ view, onPreview, actions }: {
             {typeLabel}
           </span>
         </span>
-        {showsImage && previewSrc && (
+        {showsImage && previewSrc && cardSeen && (
           // بخشی از تصویر زیر عنوان: کادر ثابت تا لود کامل صفحه نلرزد و تصویر
-          // با همان الگوی «مات → واضح» بیاید.
+          // با همان الگوی «مات → واضح» بیاید. تا دیده شدن کارت، فقط همان کادر
+          // با پس‌زمینهٔ آرام می‌ماند و هیچ درخواستی فرستاده نمی‌شود.
           <SmartImage
             src={previewSrc}
             alt={view.title}
@@ -337,6 +345,9 @@ export function StageAssetCard({ view, onPreview, actions }: {
             imgClassName="object-cover"
             fallback={<span className="flex h-full w-full items-center justify-center text-slate-400"><ShieldAlert className="h-5 w-5" /></span>}
           />
+        )}
+        {showsImage && previewSrc && !cardSeen && (
+          <span aria-hidden className="mt-1 block h-36 w-full rounded-xl border border-slate-200 bg-slate-100/80" />
         )}
         {view.dataTable && (
           <span className="mt-1 flex flex-wrap items-center gap-1.5 rounded-xl bg-sky-50 px-2.5 py-1.5 text-[10px] font-bold text-sky-700">

@@ -24,6 +24,17 @@ export class SessionChangedError extends ApiError {
     this.name = 'SessionChangedError';
   }
 }
+/**
+ * آیا خطا «نرسیدن به سرور» است (نه «نپذیرفتن» توسط سرور)؟
+ *
+ * تفکیک این دو، پیام اشتباه می‌سازد: وقتی اینترنت لحظه‌ای قطع است، هر درخواستی
+ * شکست می‌خورد و کاربر نباید فکر کند تنظیماتش نامعتبر شده است. هر خطایی که
+ * کد وضعیت HTTP ندارد (یا صفر است) یعنی پاسخِ سرور هرگز نرسیده است.
+ */
+export const isConnectionFailure = (error: unknown): boolean =>
+  error instanceof ApiConnectionError
+  || (error instanceof ApiError && (error.status === 0 || !Number.isFinite(error.status)));
+
 /** متن فارسی سرور؛ پیام‌های انگلیسی چارچوب (مثل Unauthenticated) نمایش داده نمی‌شوند. */
 const PERSIAN_TEXT = /[\u0600-\u06FF]/;
 

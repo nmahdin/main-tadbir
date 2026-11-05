@@ -149,7 +149,9 @@ test('خطای اتصال به اینترنت با نوار و کارت زیبا
   assert.match(apiClient, /markConnectionRestored\(/);
   // پیام‌ها کهربایی و راهنما هستند، نه متن قرمز خام.
   assert.match(connectionBanner, /WifiOff/);
-  assert.match(connectionBanner, /تلاش دوباره/);
+  // دکمهٔ بررسی حالا «بررسی اتصال» است و تلاش خودکار هم خودش انجام می‌شود.
+  assert.match(connectionBanner, /بررسی اتصال/);
+  assert.match(connectionBanner, /probeConnection/);
   assert.match(feedback, /border-amber-200 bg-amber-50/);
   assert.match(primitives, /WifiOff/);
 });

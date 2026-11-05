@@ -6,6 +6,7 @@ import { normalizeProcessTemplates, normalizeProcessTemplate } from '../utils/co
 import { canUsePermission } from '../utils/permissions';
 import { request } from '../api/client';
 import { applyFavicon } from '../utils/favicon';
+import { subscribeConnection } from '../utils/connectionState';
 import { followTaskLink, readTaskLink } from '../utils/taskDeepLink';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
@@ -19,7 +20,7 @@ import {
 } from '../types';
 import { SYSTEM_PERMISSIONS } from '../config/permissions';
 import { runtime } from '../config/runtime';
-import { apiErrorMessage, loginErrorMessage, parseApiError } from '../api/errors';
+import { apiErrorMessage, isConnectionFailure, loginErrorMessage, parseApiError } from '../api/errors';
 import { useAuth } from './AuthContext';
 import { useUI } from './UIContext';
 import { useServerState } from '../queries/useServerState';
@@ -165,7 +166,7 @@ interface AppContextType {
   setContentStatuses: React.Dispatch<React.SetStateAction<ContentStatusSetting[]>>;
   settingsSaveState: 'idle' | 'saving' | 'saved' | 'error';
   settingsSaveError: string | null;
-  saveSettingsNow: () => Promise<boolean>;
+  saveSettingsNow: (force?: boolean) => Promise<boolean>;
 
   // Auth Operations
   registerUser: (data: { name: string; username: string; phone?: string; password?: string; department?: string; title?: string }) => Promise<{ success: boolean; user?: User; message?: string; error?: string }>;
@@ -747,6 +748,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const workspaceLoadedRef = useRef(false);
   const settingsBaseline = useRef<Record<string, string> | null>(null);
   const settingsSaveQueue = useRef<Promise<boolean>>(Promise.resolve(true));
+  /**
+   * کلیدهایی که ذخیره‌شان فقط به‌خاطر قطعی شبکه ناموفق شد.
+   *
+   * این‌ها «تنظیم خراب» نیستند؛ با برگشتن اتصال خودکار دوباره فرستاده می‌شوند.
+   * پیش‌تر همین حالت باعث می‌شد کاربر پیام «ذخیرهٔ تنظیمات ناموفق بود» را
+   * همراهِ نوار قطعی اینترنت ببیند و فکر کند تنظیماتش خراب است.
+   */
+  const pendingSettingsKeys = useRef<Set<string>>(new Set());
+  /**
+   * آخرین مقدارهایی که سرور صریحاً رد کرده است.
+   *
+   * تا وقتی مقدار عوض نشود، دوباره فرستاده نمی‌شوند؛ وگرنه یک مقدار نامعتبر
+   * (مثلاً یک الگوی فرایند با فیلد اضافه) در هر چرخهٔ ذخیره‌سازی خودکار
+   * دوباره و دوباره تلاش می‌کرد و پیام خطا مدام برمی‌گشت.
+   */
+  const rejectedSettingsPayloads = useRef<Map<string, string>>(new Map());
   const lastSyncSource = useRef<Record<string, unknown>>({});
 
   // ── وضعیت بارگذاری فضای کاری، خطاهای ماژول‌ها و توست‌های بازخورد ──
@@ -971,7 +988,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           key,
           JSON.stringify(key === 'google_meet' && value && typeof value === 'object'
             ? persistableGoogleMeetSettings({ ...DEFAULT_GOOGLE_MEET_SETTINGS, ...(value as Partial<GoogleMeetSettings>) })
-            : value),
+            // الگوهای فرایند همان‌جا برای رابط کاربری نرمال می‌شوند (فیلدهای
+            // خالی، ترتیب مرحله‌ها، شناسهٔ چک‌لیست). اگر خط مبنا مقدار خامِ سرور
+            // بماند، نسخهٔ نرمال‌شده همیشه «تغییرکرده» به نظر می‌رسد و در هر
+            // نشست بدون هیچ ویرایشی دوباره فرستاده می‌شود — همان چیزی که پیام
+            // «کلیدهای دارای خطا: process_templates» را تکرار می‌کرد.
+            : key === 'process_templates'
+              ? normalizeProcessTemplates(value)
+              : value),
         ]),
       );
       if (Array.isArray(settingsData.content_types)) setContentTypes(settingsData.content_types as { id: string; name: string }[]);
@@ -1047,6 +1071,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let cancelled = false;
     workspaceLoadedRef.current = false;
     settingsBaseline.current = null;
+    // صف تلاش‌ها و مقدارهای ردشده به نشست قبل تعلق داشتند؛ با نشست تازه پاک می‌شوند.
+    pendingSettingsKeys.current.clear();
+    rejectedSettingsPayloads.current.clear();
     setIsReloadingWorkspace(false);
     if (!isLoggedIn || runtime.demoMode) {
       setIsWorkspaceLoading(false); setIsAuthModalOpen(!isLoggedIn); setModuleErrors({});
@@ -1276,22 +1303,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       settingsBaseline.current = Object.fromEntries(settingValues.map(([key, value]) => [key, JSON.stringify(value)]));
       return true;
     }
+    /** کلیدهایی که سرور صریحاً رد کرد (۴xx/۵xx): تنظیم نامعتبر است، نه شبکه. */
     const failures: string[] = [];
+    /** کلیدهایی که فقط به‌خاطر قطعی شبکه نرسیدند؛ با برگشتن اتصال دوباره می‌روند. */
+    const networkFailures: string[] = [];
     const writableSettings = settingValues.filter(([key, value]) => {
-      if (onlyDirty && settingsBaseline.current?.[key] === JSON.stringify(value)) return false;
+      const serialized = JSON.stringify(value);
+      if (onlyDirty && settingsBaseline.current?.[key] === serialized) return false;
+      // مقداری که سرور قبلاً رد کرده، تا تغییر نکرده دوباره فرستاده نمی‌شود.
+      if (rejectedSettingsPayloads.current.get(key) === serialized) return false;
       if (currentUser.role === 'admin' || hasPermission('settings.manage')) return true;
       return ['process_templates', 'workflows'].includes(key) && (hasPermission('content.edit'));
     });
     await Promise.all(writableSettings.map(async ([key, value]) => {
+      const serialized = JSON.stringify(value);
       try {
         await settingsApi.update(key, value);
-        settingsBaseline.current = { ...settingsBaseline.current, [key]: JSON.stringify(value) };
+        settingsBaseline.current = { ...settingsBaseline.current, [key]: serialized };
+        rejectedSettingsPayloads.current.delete(key);
+        pendingSettingsKeys.current.delete(key);
         queryClient.setQueryData(['workspace', currentUser.id, 'settings'], (old: object) => ({ ...old, [key]: value }));
       } catch (error) {
-        failures.push(key);
+        // «نرسیدن» با «نپذیرفتن» فرق دارد: خطای شبکه یک وضعیت گذراست و پیام
+        // تنظیمات نباید برایش نشان داده شود (نوار قطعی اتصال همان را می‌گوید)؛
+        // ولی پاسخ ۴xx یعنی خودِ مقدار مشکل دارد و کاربر باید بداند.
+        const offline = isConnectionFailure(error);
+        if (offline) {
+          networkFailures.push(key);
+          pendingSettingsKeys.current.add(key);
+        } else {
+          failures.push(key);
+          rejectedSettingsPayloads.current.set(key, serialized);
+        }
         console.error(`Synchronizing "${key}" setting failed.`, error);
       }
     }));
+
+    if (networkFailures.length > 0 && failures.length === 0) {
+      // فقط شبکه: وضعیت خنثی می‌ماند و با برگشتن اتصال خودکار تلاش می‌شود.
+      setSettingsSaveState('idle');
+      setSettingsSaveError('تغییرات محلی ذخیره شد؛ برای ارسال به سرور به اینترنت نیاز است.');
+      return false;
+    }
 
     if (failures.length === 0) {
       setSettingsSaveError(null);
@@ -1301,18 +1354,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setSettingsSaveState('error');
-    setSettingsSaveError(`ذخیره کلیدهای ${failures.join('، ')} ناموفق بود — دسترسی یا اتصال را بررسی کنید.`);
+    setSettingsSaveError(`سرور این تنظیمات را نپذیرفت: ${failures.join('، ')} — مقدارها را بررسی کنید؛ تلاش دوباره تا تغییر مقدار تکرار نمی‌شود.`);
     notify({
       type: 'error',
       title: 'ذخیره تنظیمات ناموفق بود',
       message: `کلیدهای دارای خطا: ${failures.join('، ')}`,
+      detail: 'این خطا از قطعی اینترنت نیست؛ مقدار این کلیدها را سرور نپذیرفت. پس از اصلاح، خودکار ذخیره می‌شود.',
       dedupeKey: 'settings-sync-failed',
     });
     return false;
   };
 
-  /** ذخیره فوری تنظیمات (دکمه «ذخیره تغییرات» در نمای تنظیمات). */
-  const saveSettingsNow = (): Promise<boolean> => {
+  /**
+   * ذخیره فوری تنظیمات (دکمه «ذخیره تغییرات» در نمای تنظیمات).
+   *
+   * `force` یعنی خواست صریح کاربر؛ در این حالت مقداری که سرور قبلاً رد کرده هم
+   * دوباره فرستاده می‌شود (مثلاً پس از اصلاح دستی همان مقدار در جای دیگر).
+   */
+  const saveSettingsNow = (force = false): Promise<boolean> => {
+    if (force) rejectedSettingsPayloads.current.clear();
     const operation = settingsSaveQueue.current.catch(() => false).then(async () => {
       if (!isLoggedIn || !workspaceLoadedRef.current) return false;
       setSettingsSaveState('saving');
@@ -1327,6 +1387,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     settingsSaveQueue.current = operation;
     return operation;
   };
+
+  /**
+   * ارسال دوبارهٔ کلیدهایی که فقط به‌خاطر قطعی شبکه ناموفق شدند.
+   *
+   * بدون این، یک قطعی کوتاه اینترنت باعث می‌شد تنظیمات در صف بماند و کاربر یا
+   * پیام خطای گمراه‌کننده ببیند یا مجبور شود دستی «ذخیره تغییرات» را بزند.
+   */
+  const saveSettingsNowRef = useRef(saveSettingsNow);
+  saveSettingsNowRef.current = saveSettingsNow;
+  useEffect(() => {
+    if (!isLoggedIn || runtime.demoMode) return;
+    return subscribeConnection(offline => {
+      if (offline || pendingSettingsKeys.current.size === 0) return;
+      void saveSettingsNowRef.current();
+    });
+  }, [isLoggedIn, setSettingsSaveState]);
 
   // Persist organization settings shortly after editing; the dirty baseline keeps
   // unchanged collections off the wire and the explicit save button remains available.

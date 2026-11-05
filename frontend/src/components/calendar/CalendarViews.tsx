@@ -20,6 +20,24 @@ export const CALENDAR_RANGE_MODES: Array<{ id: CalendarRangeMode; label: string;
   { id: 'threeWeeks', label: 'سه‌هفتگی', hint: 'بیست‌ویک روز' },
 ];
 
+/** عرضی که از آن پایین‌تر «موبایل» حساب می‌شود (هم‌تراز با کلاس `sm` در Tailwind). */
+export const MOBILE_CALENDAR_QUERY = '(max-width: 639px)';
+
+/**
+ * نمای پیش‌فرض تقویم بر اساس اندازهٔ صفحه.
+ *
+ * روی موبایل، نمای ماهانه هفت ستون فشرده (یا اسکرول افقی) می‌خواهد و عملاً
+ * خواندنش سخت است؛ نمای سه‌هفتگی همان روزها را به شکل فهرست عمودی نشان
+ * می‌دهد و با انگشت طبیعی است. پس پیش‌فرض موبایل «سه‌هفتگی» و پیش‌فرض دسکتاپ
+ * همان «ماهانه» می‌ماند. کاربر هم می‌تواند هر لحظه تب را عوض کند.
+ */
+export const defaultCalendarRangeMode = (): CalendarRangeMode =>
+  typeof window !== 'undefined'
+  && typeof window.matchMedia === 'function'
+  && window.matchMedia(MOBILE_CALENDAR_QUERY).matches
+    ? 'threeWeeks'
+    : 'month';
+
 /** هفتهٔ ایرانی از شنبه شروع می‌شود. */
 export const CALENDAR_WEEKDAYS = ['شنبه', 'یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'];
 

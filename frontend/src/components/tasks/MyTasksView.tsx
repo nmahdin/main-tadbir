@@ -23,6 +23,7 @@ import {
   CalendarRangeToolbar,
   buildCalendarDays,
   calendarRangeLabel,
+  defaultCalendarRangeMode,
   shiftCalendarAnchor,
   type CalendarDay,
   type CalendarRangeMode,
@@ -379,7 +380,7 @@ const MyTasksCalendar: React.FC<{
   onDateChange: (d: Date) => void;
   onSelectTask: (id: string) => void;
 }> = ({ tasks, projects, taskStatuses, currentDate, onDateChange, onSelectTask }) => {
-  const [rangeMode, setRangeMode] = useState<CalendarRangeMode>('month');
+  const [rangeMode, setRangeMode] = useState<CalendarRangeMode>(defaultCalendarRangeMode);
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
   const days = buildCalendarDays(currentDate, rangeMode);
   const tasksOfDay = (iso: string) => sortCalendarEventsByTime<Task>(

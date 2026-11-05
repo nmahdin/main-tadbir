@@ -194,7 +194,7 @@ export const SettingsView: React.FC = () => {
   const handleManualSave = async () => {
     setIsSavingNow(true);
     const damCategoriesSaved = await flushDamCategoriesRef.current();
-    const settingsSaved = await saveSettingsNow();
+    const settingsSaved = await saveSettingsNow(true);
     setIsSavingNow(false);
     if (damCategoriesSaved && settingsSaved) {
       notify({ type: 'success', title: 'تنظیمات ذخیره شد', message: 'همه بخش‌های تنظیمات روی سرور ذخیره شد.' });
@@ -455,12 +455,14 @@ export const SettingsView: React.FC = () => {
       </div>
 
       {settingsSaveState === 'error' && settingsSaveError && (
-        <div role="alert" className="p-4 rounded-2xl bg-rose-50 border border-rose-200 space-y-2">
-          <p className="text-xs font-extrabold text-rose-900 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4" />
-            ذخیره‌سازی تنظیمات با خطا مواجه شد
+        // پیامِ «سرور نپذیرفت» با رنگ خنثی/کهربایی می‌آید (قاعدهٔ دور ۷۵: خطای
+        // شبکه و سرور نباید متن قرمز خام باشد) و صریح می‌گوید مشکل از اینترنت نیست.
+        <div role="alert" className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+          <p className="flex items-center gap-2 text-xs font-extrabold text-amber-900">
+            <AlertTriangle className="h-4 w-4" />
+            ذخیرهٔ تنظیمات انجام نشد
           </p>
-          <p className="text-xs text-rose-800 leading-relaxed">{settingsSaveError}</p>
+          <p className="text-xs leading-relaxed text-amber-900/90">{settingsSaveError}</p>
           <button
             type="button"
             onClick={handleManualSave}

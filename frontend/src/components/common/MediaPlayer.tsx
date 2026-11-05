@@ -92,6 +92,8 @@ export function MediaPlayer({
   const [controlsVisible, setControlsVisible] = useState(true);
   /** نشانگر روی نوار کنترل است؛ تا وقتی آن‌جاست نوار پنهان نمی‌شود. */
   const [controlsPinned, setControlsPinned] = useState(false);
+  /** فراداده در زمان معقول نرسید؛ دکمهٔ «بارگذاری دوباره» نشان داده می‌شود. */
+  const [slow, setSlow] = useState(false);
 
   const isVideo = kind === 'video';
 
@@ -104,12 +106,41 @@ export function MediaPlayer({
     setCurrent(0);
     setDuration(0);
     setBuffered(0);
-    // ویدیو فقط «سرصفحه» را می‌خواند (چند کیلوبایت، نه بایت‌های تصویر) تا
-    // مدت زمان و وضعیت «در حال آماده‌سازی» از همان ورود روشن باشد؛ صدای
-    // معمولی همچنان هیچ بایتی پیش از قصد کاربر نمی‌گیرد.
-    setPreload(isVideo ? 'metadata' : 'none');
+    setSlow(false);
+    // ویدیو از همان لحظهٔ باز شدن کمی از خودش را می‌گیرد.
+    //
+    // پیش‌تر فقط «سرصفحه» خوانده می‌شد؛ نتیجه این بود که در مدال پیش‌نمایش،
+    // پیام «در حال آماده‌سازی ویدیو…» تا کلیک کاربر می‌ماند و پخش هم تا همان
+    // کلیک ممکن نبود (مرورگر در حالت `metadata` تا اولین حرکت کاربر پیش
+    // نمی‌رفت). حالا حالت `auto` است: چند صد کیلوبایت اول بی‌درنگ گرفته
+    // می‌شود، تصویر و مدت زمان معلوم می‌شود و دکمهٔ پخش کار می‌کند. سرور
+    // درخواست بازه‌ای را پشتیبانی می‌کند، پس کل فایل یک‌جا دانلود نمی‌شود.
+    // صدای معمولی همچنان پیش از قصد کاربر هیچ بایتی نمی‌گیرد.
+    setPreload(isVideo ? 'auto' : 'none');
     setControlsVisible(true);
   }, [src, isVideo]);
+
+  /**
+   * نگهبان «فراداده نرسید».
+   *
+   * بعضی مرورگرها در حالت `preload="auto"` هم اگر پاسخ سرور دیر برسد یا
+   * درخواست اول نیمه‌کاره بماند، سراغ فایل نمی‌روند و پیام لودینگ ابدی
+   * می‌ماند. دو بار `load()` تازه (۴ و ۹ ثانیه) این وضعیت را می‌شکند؛ بعد از
+   * آن دکمهٔ «بارگذاری دوباره» در اختیار کاربر است.
+   */
+  useEffect(() => {
+    setSlow(false);
+    if (!isVideo || ready) return;
+    const retryAt = [4000, 9000];
+    const timers = retryAt.map((delay, index) => window.setTimeout(() => {
+      const node = mediaRef.current;
+      if (!node || ready) return;
+      if (node.readyState >= 1) return;
+      node.load();
+      if (index === retryAt.length - 1) setSlow(true);
+    }, delay));
+    return () => timers.forEach(timer => window.clearTimeout(timer));
+  }, [isVideo, ready, src]);
 
   useEffect(() => {
     const onFullscreenChange = () => setFullscreen(Boolean(document.fullscreenElement));
@@ -134,14 +165,16 @@ export function MediaPlayer({
       return;
     }
     if (!started) {
-      setPreload('none');
+      // ویدیویی که هنوز پخش نشده است، بارگیریِ کوتاهِ اولیه‌اش را نگه می‌دارد؛
+      // وگرنه همان پیام «در حال آماده‌سازی» تا کلیک باقی می‌ماند.
+      setPreload(isVideo ? 'auto' : 'none');
       return;
     }
     pauseTimer.current = window.setTimeout(() => setPreload('none'), 600);
     return () => {
       if (pauseTimer.current !== null) window.clearTimeout(pauseTimer.current);
     };
-  }, [playing, started]);
+  }, [playing, started, isVideo]);
 
   /** پیش‌بارگذاری سبک با قصد کاربر: فقط فراداده، نه بایت‌های رسانه. */
   const warmUp = () => {
@@ -276,7 +309,9 @@ export function MediaPlayer({
   };
 
   const loadingLabel = !ready && started ? 'در حال بارگذاری…' : buffering ? 'در حال دریافت ادامهٔ فایل…' : '';
-  const videoClass = `block w-full bg-black object-contain ${fullscreen ? 'h-full max-h-none' : 'h-auto max-h-[62dvh]'}`;
+  // اندازهٔ ثابت پیش از معلوم‌شدن ابعاد فایل: کادر ویدیو از همان نخستین رندر
+  // نسبت ۱۶:۹ دارد تا مدال با رسیدن فراداده نپرد و نلرزد.
+  const videoClass = `block bg-black object-contain ${fullscreen ? 'h-full w-full max-h-none' : 'h-full w-full'}`;
   const audioStatus = loadingLabel
     || (started ? (playing ? 'در حال پخش…' : 'پخش متوقف شد؛ برای ادامه دکمهٔ پخش را بزنید.') : 'برای شروع، دکمهٔ پخش را بزنید.');
 
@@ -315,7 +350,7 @@ export function MediaPlayer({
         data-controls={isVideo ? (controlsVisible ? 'shown' : 'hidden') : undefined}
         className={
           isVideo
-            ? 'ui-media-stage relative flex items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-black'
+            ? 'ui-media-stage relative flex aspect-video w-full max-h-[62dvh] items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-black'
             : 'ui-media-stage relative rounded-2xl border border-slate-200 bg-white p-3 shadow-xs'
         }
       >
@@ -361,9 +396,20 @@ export function MediaPlayer({
              دیده می‌شود تا کاربر بداند باید چه کند (نه اسپینر بی‌پایان).
         */}
         {isVideo && !failed && !ready && (
-          <div role="status" aria-live="polite" className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/45 text-white">
+          <div role="status" aria-live="polite" className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/45 text-white">
             <LoaderCircle className="h-7 w-7 animate-spin" aria-hidden />
             <span className="text-[11px] font-black">{started ? 'در حال بارگذاری ویدیو…' : 'در حال آماده‌سازی ویدیو…'}</span>
+            {/* کادر سیاه می‌ماند (پس‌زمینهٔ پخش‌کننده) تا تصویر که آمد، پرش رنگ نباشد. */}
+            {slow && (
+              <button
+                type="button"
+                onClick={() => { setSlow(false); setReady(false); mediaRef.current?.load(); }}
+                className="pointer-events-auto mt-1 inline-flex items-center gap-1.5 rounded-lg bg-white/95 px-2.5 py-1.5 text-[10px] font-bold text-slate-800"
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                بارگذاری دوباره
+              </button>
+            )}
           </div>
         )}
         {/*

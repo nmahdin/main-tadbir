@@ -5,6 +5,7 @@ import {
   CalendarRangeToolbar,
   buildCalendarDays,
   calendarRangeLabel,
+  defaultCalendarRangeMode,
   shiftCalendarAnchor,
   type CalendarDay,
   type CalendarRangeMode,
@@ -66,7 +67,7 @@ export const SeriesCalendar: React.FC<SeriesCalendarProps> = ({
     return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
   }, [entries]);
   const [anchor, setAnchor] = useState(initialAnchor);
-  const [rangeMode, setRangeMode] = useState<CalendarRangeMode>('month');
+  const [rangeMode, setRangeMode] = useState<CalendarRangeMode>(defaultCalendarRangeMode);
   const [hiddenSeries, setHiddenSeries] = useState<string[]>([]);
   const [expandedDays, setExpandedDays] = useState<string[]>([]);
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);

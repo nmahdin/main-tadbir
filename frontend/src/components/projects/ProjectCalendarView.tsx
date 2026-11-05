@@ -12,6 +12,7 @@ import {
   CalendarRangeToolbar,
   buildCalendarDays,
   calendarRangeLabel,
+  defaultCalendarRangeMode,
   shiftCalendarAnchor,
   type CalendarDay,
   type CalendarRangeMode,
@@ -56,7 +57,7 @@ const SETTLED_CONTENT_STATUSES = ['published', 'archived', 'cancelled'];
 export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?: string }> = ({ projectId, filterAssignee = 'all' }) => {
   const { tasks, projects, contents, users, taskStatuses, setSelectedTaskId, setSelectedProjectId, setSelectedContentId, setActiveView } = useApp();
   const [anchor, setAnchor] = useState(new Date());
-  const [rangeMode, setRangeMode] = useState<CalendarRangeMode>('month');
+  const [rangeMode, setRangeMode] = useState<CalendarRangeMode>(defaultCalendarRangeMode);
   const [filter, setFilter] = useState<CalendarFilter>('all');
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
 
@@ -195,11 +196,13 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
     return <>{rows.map(row => modalCard(row))}</>;
   };
 
-  const tabs: Array<{ value: CalendarFilter; label: string; count: number; icon: LucideIcon }> = [
-    { value: 'all', label: 'همه', count: allEvents.length, icon: LayoutGrid },
-    { value: 'task', label: 'تسک‌ها', count: taskEvents.length, icon: CheckSquare },
-    { value: 'project', label: 'پروژه‌ها', count: projectEvents.length, icon: FolderKanban },
-    { value: 'content', label: 'محتواها', count: contentEvents.length, icon: FileText },
+  // تب‌های نوع رویداد بدون شمارنده: کاربر فقط می‌خواهد بین «همه/تسک‌ها/پروژه‌ها/
+  // محتواها» جابه‌جا شود؛ عددِ کنار هر تب نه تصمیمی می‌ساخت و نه خوانا بود.
+  const tabs: Array<{ value: CalendarFilter; label: string; icon: LucideIcon }> = [
+    { value: 'all', label: 'همه', icon: LayoutGrid },
+    { value: 'task', label: 'تسک‌ها', icon: CheckSquare },
+    { value: 'project', label: 'پروژه‌ها', icon: FolderKanban },
+    { value: 'content', label: 'محتواها', icon: FileText },
   ];
 
   return <div className="space-y-4" dir="rtl">
@@ -223,7 +226,6 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
           >
             <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span>{tab.label}</span>
-            <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] ${active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{tab.count.toLocaleString('fa-IR')}</span>
           </button>
         );
       })}

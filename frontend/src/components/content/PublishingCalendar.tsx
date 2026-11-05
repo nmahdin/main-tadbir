@@ -12,6 +12,7 @@ import {
   CalendarRangeToolbar,
   buildCalendarDays,
   calendarRangeLabel,
+  defaultCalendarRangeMode,
   shiftCalendarAnchor,
   type CalendarDay,
   type CalendarRangeMode,
@@ -62,7 +63,7 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
 }) => {
   const { users } = useApp();
   const [anchor, setAnchor] = useState(new Date());
-  const [rangeMode, setRangeMode] = useState<CalendarRangeMode>('month');
+  const [rangeMode, setRangeMode] = useState<CalendarRangeMode>(defaultCalendarRangeMode);
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
 
   // تاریخ انتشار هر محتوا با تاریخ تقویمی روز تطبیق داده می‌شود تا اختلاف منطقهٔ

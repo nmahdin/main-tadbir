@@ -71,7 +71,9 @@ test('بلندی صدا منوی شناور دارد و دکمهٔ سرعت مر
 });
 
 test('تمام‌صفحه واقعاً کل صفحه را پر می‌کند', () => {
-  assert.match(player, /fullscreen \? 'h-full max-h-none' : 'h-auto max-h-\[62dvh\]'/);
+  // کادر ویدیو پیش از معلوم‌شدن ابعاد هم نسبت ثابت دارد (۱۶:۹) تا نلرزد.
+  assert.match(player, /fullscreen \? 'h-full w-full max-h-none' : 'h-full w-full'/);
+  assert.match(player, /aspect-video w-full max-h-\[62dvh\]/);
   assert.match(player, /ui-media-stage/);
   assert.match(player, /webkitEnterFullscreen/);
   assert.match(css, /\.ui-media-stage:fullscreen video \{[\s\S]{0,160}max-height: none;/);
