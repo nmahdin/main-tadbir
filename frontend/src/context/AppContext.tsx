@@ -795,8 +795,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (secondary) window.localStorage.setItem('tadbir:theme-secondary', secondary);
           if (identity.logoUrl) window.localStorage.setItem('tadbir:brand-logo', identity.logoUrl);
           else window.localStorage.removeItem('tadbir:brand-logo');
-          if (identity.faviconUrl) window.localStorage.setItem('tadbir:brand-favicon', identity.faviconUrl);
-          else window.localStorage.removeItem('tadbir:brand-favicon');
+          // فاوآیکون را `applyFavicon` پس از تأییدِ لود شدن کش می‌کند.
         } catch { /* storage may be disabled */ }
         stopFavicon = applyFavicon(identity.faviconUrl);
       })

@@ -148,12 +148,9 @@ const MainLayout: React.FC = () => {
     if (isWorkspaceLoading) return;
     const raw = generalSettings.faviconUrl || '';
     try {
-      if (raw) {
-        const { href } = new URL(raw, window.location.href);
-        window.localStorage.setItem('tadbir:brand-favicon', href);
-      } else {
-        window.localStorage.removeItem('tadbir:brand-favicon');
-      }
+      // کشِ فاوآیکون را خودِ `applyFavicon` می‌نویسد و فقط نشانی‌ای را نگه
+      // می‌دارد که واقعاً لود شده است؛ نوشتنِ مقدار خامِ تنظیمات این‌جا باعث
+      // می‌شد بار بعد، نشانیِ در دسترس‌نبوده پیش از رندر روی تب بنشیند.
       if (generalSettings.logoUrl) {
         window.localStorage.setItem('tadbir:brand-logo', generalSettings.logoUrl);
       } else {

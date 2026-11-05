@@ -10,7 +10,9 @@ const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1
 test('cached favicon is applied at HTML parsing time', () => {
   assert.match(html, /data-tadbir-favicon="pending"/);
   assert.equal(scripts.length, 2);
-  const icon = { href: '', dataset: {} };
+  // نوعِ اعلام‌شده باید پاک شود؛ وگرنه PNG با برچسب SVG رد می‌شود و آیکون قبلی می‌ماند.
+  const cleared = [];
+  const icon = { href: '', dataset: {}, removeAttribute: (name) => cleared.push(name) };
   vm.runInNewContext(scripts[1], {
     localStorage: { getItem: () => '/api/v1/media/brand/logo.png' },
     document: { querySelector: () => icon },
@@ -19,6 +21,7 @@ test('cached favicon is applied at HTML parsing time', () => {
   });
   assert.equal(icon.href, 'https://tadbir.example/api/v1/media/brand/logo.png');
   assert.equal(icon.dataset.tadbirFavicon, 'custom');
+  assert.deepEqual(cleared, ['type']);
 });
 
 test('the cached favicon refuses non-HTTP protocols', () => {

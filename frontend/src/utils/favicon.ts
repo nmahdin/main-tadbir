@@ -76,6 +76,23 @@ const restoreDefault = (link: HTMLLinkElement): void => {
  * این لینک از `link[rel~="icon"]` جدا است، چون `apple-touch-icon` یک نشانهٔ
  * مستقل است و نباید جای آیکون تب را بگیرد.
  */
+/** کلید حافظهٔ مرورگر برای آیکون تأییدشده؛ `index.html` پیش از رندر آن را می‌خواند. */
+const FAVICON_STORAGE_KEY = 'tadbir:brand-favicon';
+
+/**
+ * فقط نشانی‌ای کش می‌شود که واقعاً لود شده است.
+ *
+ * پیش از این، مقدار خامِ تنظیمات (حتی وقتی فایل در دسترس نبود) در حافظه نوشته
+ * می‌شد؛ صفحه در بار بعد همان نشانی شکسته را پیش از رندر روی تب می‌گذاشت و
+ * مرورگر آیکون قبلی را نگه می‌داشت.
+ */
+const rememberFavicon = (href: string | null): void => {
+  try {
+    if (href) window.localStorage.setItem(FAVICON_STORAGE_KEY, href);
+    else window.localStorage.removeItem(FAVICON_STORAGE_KEY);
+  } catch { /* حافظهٔ مرورگر ممکن است بسته باشد */ }
+};
+
 const APPLE_ICON = 'link[rel="apple-touch-icon"]';
 
 const clearAppleIcon = (): void => {
@@ -106,6 +123,7 @@ export function applyFavicon(raw?: string | null): () => void {
   if (!url) {
     restoreDefault(link);
     clearAppleIcon();
+    rememberFavicon(null);
     return () => {};
   }
 
@@ -131,6 +149,8 @@ export function applyFavicon(raw?: string | null): () => void {
       link.href = href;
       document.head.appendChild(link);
       mirrorAppleIcon(href);
+      // همین نشانیِ تأییدشده در حافظه می‌ماند تا بار بعد پیش از رندر اعمال شود.
+      rememberFavicon(href);
     };
 
     probe.onerror = () => {
@@ -144,6 +164,7 @@ export function applyFavicon(raw?: string | null): () => void {
       }
       restoreDefault(link);
       clearAppleIcon();
+      rememberFavicon(null);
     };
 
     probe.src = href;

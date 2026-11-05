@@ -31,6 +31,11 @@
           const url = new URL(saved, location.href);
           if ((url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password) {
             const icon = document.querySelector('link[rel="icon"]');
+            // نوعِ اعلام‌شده باید با فایل هم‌خوان باشد؛ اگر `type="image/svg+xml"`
+            // روی یک PNG بماند، مرورگر آیکون را رد می‌کند و همان آیکون قبلیِ تب
+            // دیده می‌شود. پس نوع حذف می‌شود و تصمیم به عهدهٔ `Content-Type`
+            // پاسخِ سرور می‌افتد (همان کاری که `utils/favicon` هم می‌کند).
+            icon.removeAttribute('type');
             icon.href = url.href;
             icon.dataset.tadbirFavicon = 'custom';
           }
