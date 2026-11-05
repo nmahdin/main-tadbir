@@ -21,37 +21,19 @@
     </script>
     <!-- آیکون پیش‌فرض؛ مرورگر فقط یک آیکون را جدی می‌گیرد، پس آیکون
          سفارشیِ سامانه همین لینک را جایگزین می‌کند (see src/utils/favicon.ts). -->
-    <!-- A neutral placeholder avoids briefly displaying the wrong organization's icon.
-         The last verified custom icon is restored synchronously before React starts. -->
+    <!-- Keep the tab neutral until the authoritative identity is resolved. Never paint a stale cached icon. -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" data-tadbir-favicon="pending" />
-    <script>
-      try {
-        const saved = localStorage.getItem('tadbir:brand-favicon');
-        if (saved) {
-          const url = new URL(saved, location.href);
-          if ((url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password) {
-            const icon = document.querySelector('link[rel="icon"]');
-            // نوعِ اعلام‌شده باید با فایل هم‌خوان باشد؛ اگر `type="image/svg+xml"`
-            // روی یک PNG بماند، مرورگر آیکون را رد می‌کند و همان آیکون قبلیِ تب
-            // دیده می‌شود. پس نوع حذف می‌شود و تصمیم به عهدهٔ `Content-Type`
-            // پاسخِ سرور می‌افتد (همان کاری که `utils/favicon` هم می‌کند).
-            icon.removeAttribute('type');
-            icon.href = url.href;
-            icon.dataset.tadbirFavicon = 'custom';
-          }
-        }
-      } catch (_) { /* unavailable storage: keep a neutral icon until identity loads */ }
-    </script>
+
     <title>داشبورد | پلتفرم تدبیر</title>
     <meta name="description" content="سامانه تدبیر، پلتفرم مدرن و سازمانی مدیریت پروژه‌ها، تیم‌ها، وظایف، احراز هویت، مدیریت کاربران و سطوح دسترسی به زبان فارسی." />
     <meta property="og:title" content="سامانه تدبیر — سامانه جامع مدیریت پروژه، تیم‌ها، وظایف و کاربران" />
     <meta property="og:description" content="سامانه تدبیر، پلتفرم مدرن و سازمانی مدیریت پروژه‌ها، تیم‌ها، وظایف، احراز هویت، مدیریت کاربران و سطوح دسترسی به زبان فارسی." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <script type="module" crossorigin src="/assets/index-IFcv6Qbm.js"></script>
+    <script type="module" crossorigin src="/assets/index-CjIkkn-6.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/react-vendor-5Tsf0Dfd.js">
     <link rel="modulepreload" crossorigin href="/assets/query-vendor-B9gR5pku.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-CXA4quTD.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-olng0C9z.css">
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased font-sans selection:bg-indigo-500 selection:text-white">
     <div id="root"></div>
