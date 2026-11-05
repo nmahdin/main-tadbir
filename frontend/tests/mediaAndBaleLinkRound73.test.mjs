@@ -76,7 +76,7 @@ test('the browser favicon is versioned, typed and keeps the default on failure',
   // منطق فاوآیکون به `utils/favicon` منتقل شد (دور ۷۵) تا «فقط یک لینک آیکون»
   // در سند تضمین شود؛ افکت `App` فقط آن را صدا می‌زند.
   assert.match(app, /import \{ applyFavicon \} from '\.\/utils\/favicon';/);
-  assert.match(app, /applyFavicon\(generalSettings\.faviconUrl\)/);
+  assert.match(app, /return applyFavicon\(raw\)/);
   assert.match(favicon, /\.rel = 'icon';/);
   // لینکِ موجود در سند بازاستفاده می‌شود تا مرورگر آیکون تازه را جدی بگیرد.
   assert.match(favicon, /const iconSlot = \(\): HTMLLinkElement => \{/);
@@ -86,7 +86,7 @@ test('the browser favicon is versioned, typed and keeps the default on failure',
   assert.match(favicon, /probe\.onerror = \(\) => \{/);
   assert.match(favicon, /document\.head\.querySelectorAll<HTMLLinkElement>\('link\[rel~="icon"\]'\)/);
   // لینک ثابت `index.html` هم نشانه‌گذاری شده تا در جایگزینی نادیده نماند.
-  assert.match(indexHtml, /<link rel="icon" type="image\/svg\+xml" href="\/favicon.svg" data-tadbir-favicon="default" \/>/);
+  assert.match(indexHtml, /data-tadbir-favicon="pending"/);
 });
 
 test('the Bale bot confirms a successful link instead of silently showing a menu', () => {
