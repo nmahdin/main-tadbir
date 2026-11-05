@@ -24,6 +24,7 @@ import { faviconType, mediaUrl } from './mediaUrl';
 
 /** آیکون پیش‌فرض پروژه؛ در `index.html` هم همین نشانه‌گذاری شده است. */
 export const DEFAULT_FAVICON = '/favicon.svg';
+export const PENDING_FAVICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
 
 const DEFAULT_TYPE = 'image/svg+xml';
 
@@ -61,6 +62,14 @@ const iconSlot = (): HTMLLinkElement => {
   created.href = DEFAULT_FAVICON;
   document.head.appendChild(created);
   return created;
+};
+
+/** Neutral placeholder for identity transitions; no old branded image is painted. */
+const holdNeutral = (link: HTMLLinkElement): void => {
+  if (link.dataset.tadbirFavicon === 'pending' && link.href === PENDING_FAVICON) return;
+  link.dataset.tadbirFavicon = 'pending';
+  link.type = DEFAULT_TYPE;
+  link.href = PENDING_FAVICON;
 };
 
 /** آیکون پیش‌فرض روی همان لینک مشترک برمی‌گردد (تب بی‌آیکون نمی‌ماند). */
@@ -119,7 +128,8 @@ export function applyFavicon(raw?: string | null): () => void {
   const url = value ? mediaUrl(value) : '';
   const link = iconSlot();
 
-  // بدون فایل سفارشی: همان لینک به آیکون پیش‌فرض برمی‌گردد.
+  // No configured favicon: fall back to the project icon. During a requested
+  // custom-icon load we never temporarily render this old/default icon.
   if (!url) {
     restoreDefault(link);
     clearAppleIcon();
@@ -143,11 +153,14 @@ export function applyFavicon(raw?: string | null): () => void {
       settled = true;
       // همان لینک سند به فایل تازه اشاره می‌کند؛ آخر بردنش در `head` هم باعث
       // می‌شود مرورگر این آیکون را آخرین و معتبرترین نامزد ببیند.
-      link.dataset.tadbirFavicon = 'custom';
-      if (mime) link.type = mime;
-      else link.removeAttribute('type');
-      link.href = href;
-      document.head.appendChild(link);
+      // Avoid resetting the tab icon when multiple identity requests resolve
+      // with the same URL (login and authenticated workspace).
+      if (link.href !== href || link.dataset.tadbirFavicon !== 'custom') {
+        link.dataset.tadbirFavicon = 'custom';
+        if (mime) link.type = mime;
+        else link.removeAttribute('type');
+        link.href = href;
+      }
       mirrorAppleIcon(href);
       // همین نشانیِ تأییدشده در حافظه می‌ماند تا بار بعد پیش از رندر اعمال شود.
       rememberFavicon(href);
@@ -162,7 +175,9 @@ export function applyFavicon(raw?: string | null): () => void {
         retry = setTimeout(load, 900);
         return;
       }
-      restoreDefault(link);
+      // A transient network error is not evidence that the organization
+      // deliberately removed its icon. Never flash the old default asset.
+      if (link.dataset.tadbirFavicon !== 'custom') holdNeutral(link);
       clearAppleIcon();
       rememberFavicon(null);
     };
