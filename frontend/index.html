@@ -19,10 +19,8 @@
         }
       } catch (_) { /* storage can be disabled by the browser */ }
     </script>
-    <!-- آیکون پیش‌فرض؛ مرورگر فقط یک آیکون را جدی می‌گیرد، پس آیکون
-         سفارشیِ سامانه همین لینک را جایگزین می‌کند (see src/utils/favicon.ts). -->
-    <!-- Keep the tab neutral until the authoritative identity is resolved. Never paint a stale cached icon. -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" data-tadbir-favicon="pending" />
+    <!-- Browser-owned stable favicon: no React bootstrap or image swapping on reload. -->
+    <link rel="icon" href="__TADBIR_FAVICON_URL__" data-tadbir-favicon="stable" />
 
     <title>داشبورد | پلتفرم تدبیر</title>
     <meta name="description" content="سامانه تدبیر، پلتفرم مدرن و سازمانی مدیریت پروژه‌ها، تیم‌ها، وظایف، احراز هویت، مدیریت کاربران و سطوح دسترسی به زبان فارسی." />
