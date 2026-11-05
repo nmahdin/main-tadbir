@@ -20,6 +20,35 @@ class SystemSettingController extends Controller
 {
     public function __construct(private readonly OrganizationSettings $settings) {}
 
+    /**
+     * Stable browser-managed favicon, available before React or public identity
+     * loads. The URL never changes across reloads; HTTP caching prevents flicker.
+     */
+    public function publicFavicon(): \Symfony\Component\HttpFoundation\Response
+    {
+        $stored = SystemSetting::query()->where('key', 'general')->first();
+        $general = $this->settings->hydrate('general', $stored?->value);
+        $path = PublicMedia::path($general['faviconUrl'] ?? null);
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+
+        if ($path !== null && preg_match('/\\.(png|jpe?g|webp)$/i', $path) === 1 && $disk->exists($path)) {
+            // Only public uploaded raster images are eligible. File names are
+            // replaced upon upload, so a short browser cache is safe.
+            return $disk->response($path, null, [
+                'Cache-Control' => 'public, max-age=300',
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
+        }
+
+        // A real, empty SVG prevents browsers from falling back to /favicon.ico
+        // or displaying the retired built-in Tadbir icon.
+        return response('<svg xmlns="http://www.w3.org/2000/svg"/>', 200, [
+            'Content-Type' => 'image/svg+xml',
+            'Cache-Control' => 'public, max-age=60',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
     /** Safe visual identity required by the login page before authentication. */
     public function publicIdentity(): JsonResponse
     {
