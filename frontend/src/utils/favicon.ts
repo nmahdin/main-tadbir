@@ -22,8 +22,6 @@ import { faviconType, mediaUrl } from './mediaUrl';
  *    ضعیف)، یک بار دیگر تلاش می‌شود و تنها پس از آن آیکون پیش‌فرض بازمی‌گردد.
  */
 
-/** آیکون پیش‌فرض پروژه؛ در `index.html` هم همین نشانه‌گذاری شده است. */
-export const DEFAULT_FAVICON = '/favicon.svg';
 export const PENDING_FAVICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
 
 const DEFAULT_TYPE = 'image/svg+xml';
@@ -50,7 +48,7 @@ const versionOf = (value: string): string => {
  */
 const iconSlot = (): HTMLLinkElement => {
   const existing = iconLinks();
-  const managed = existing.find(node => node.dataset.tadbirFavicon === 'default')
+  const managed = existing.find(node => node.dataset.tadbirFavicon === 'pending')
     || existing.find(node => node.dataset.tadbirFavicon === 'custom')
     || existing[0];
   existing.filter(node => node !== managed).forEach(node => node.remove());
@@ -58,8 +56,9 @@ const iconSlot = (): HTMLLinkElement => {
 
   const created = document.createElement('link');
   created.rel = 'icon';
-  created.dataset.tadbirFavicon = 'default';
-  created.href = DEFAULT_FAVICON;
+  created.dataset.tadbirFavicon = 'pending';
+  created.type = DEFAULT_TYPE;
+  created.href = PENDING_FAVICON;
   document.head.appendChild(created);
   return created;
 };
@@ -72,12 +71,6 @@ const holdNeutral = (link: HTMLLinkElement): void => {
   link.href = PENDING_FAVICON;
 };
 
-/** آیکون پیش‌فرض روی همان لینک مشترک برمی‌گردد (تب بی‌آیکون نمی‌ماند). */
-const restoreDefault = (link: HTMLLinkElement): void => {
-  link.dataset.tadbirFavicon = 'default';
-  link.type = DEFAULT_TYPE;
-  link.href = DEFAULT_FAVICON;
-};
 
 /**
  * آیکون لمسی iOS/اندروید (`apple-touch-icon`) هم با همان فایل هم‌گام می‌شود؛
@@ -85,7 +78,7 @@ const restoreDefault = (link: HTMLLinkElement): void => {
  * این لینک از `link[rel~="icon"]` جدا است، چون `apple-touch-icon` یک نشانهٔ
  * مستقل است و نباید جای آیکون تب را بگیرد.
  */
-/** کلید حافظهٔ مرورگر برای آیکون تأییدشده؛ `index.html` پیش از رندر آن را می‌خواند. */
+/** Kept only for invalidating the obsolete favicon browser cache. */
 const FAVICON_STORAGE_KEY = 'tadbir:brand-favicon';
 
 /**
@@ -128,10 +121,9 @@ export function applyFavicon(raw?: string | null): () => void {
   const url = value ? mediaUrl(value) : '';
   const link = iconSlot();
 
-  // No configured favicon: fall back to the project icon. During a requested
-  // custom-icon load we never temporarily render this old/default icon.
+  // No organization favicon: stay neutral; the old built-in icon is removed.
   if (!url) {
-    restoreDefault(link);
+    holdNeutral(link);
     clearAppleIcon();
     rememberFavicon(null);
     return () => {};
@@ -162,8 +154,8 @@ export function applyFavicon(raw?: string | null): () => void {
         link.href = href;
       }
       mirrorAppleIcon(href);
-      // همین نشانیِ تأییدشده در حافظه می‌ماند تا بار بعد پیش از رندر اعمال شود.
-      rememberFavicon(href);
+      // No cached favicon is rendered at startup; invalidate legacy cache.
+      rememberFavicon(null);
     };
 
     probe.onerror = () => {
