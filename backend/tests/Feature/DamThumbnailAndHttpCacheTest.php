@@ -26,13 +26,25 @@ class DamThumbnailAndHttpCacheTest extends TestCase
 
     public $mockConsoleOutput = false;
 
-    private function actor(array $keys, string $roleKey = 'media'): User
+    /**
+     * کاربر آزمایشی با مجوزهای داده‌شده.
+     *
+     * هر فراخوانی نقش تازه‌ای می‌سازد: بعضی تست‌ها عمداً کاربر «کم‌مجوز» می‌خواهند
+     * و اگر نقش مشترک باشد، مجوزهای کاربر قبلی به او ارث می‌رسد.
+     */
+    private function actor(array $keys, ?string $roleKey = null): User
     {
-        $role = Role::create(['key' => $roleKey, 'name' => $roleKey, 'color' => '#000000', 'is_system' => false, 'is_active' => true]);
+        $roleKey ??= 'media-'.substr(md5(uniqid('', true)), 0, 10);
+
+        $role = Role::firstOrCreate(
+            ['key' => $roleKey],
+            ['name' => $roleKey, 'color' => '#000000', 'is_system' => false, 'is_active' => true],
+        );
         foreach ($keys as $key) {
             $permission = Permission::firstOrCreate(['key' => $key], ['label' => $key, 'category' => 'dam']);
-            $role->permissions()->attach($permission);
+            $role->permissions()->syncWithoutDetaching([$permission->id]);
         }
+        $role->unsetRelation('permissions');
         $user = User::factory()->create(['role_id' => $role->id, 'role_key' => $roleKey]);
         Sanctum::actingAs($user);
 
