@@ -52,7 +52,8 @@ test('approval center previews outputs and content stages expose direct decision
   assert.match(center, /outputRow\.outputs\.map/);
   assert.match(detail, /تأیید مستقیم/);
   assert.match(detail, /setSelectedStageForReject\(stage\)/);
-  assert.match(controller, /'outputs' => array_values/);
+  // دور ۸۸: پنجرهٔ خروجی همهٔ خروجی‌های مرتبط با مرحله را می‌آورد، نه فقط خروجی خودِ مرحله.
+  assert.match(controller, /'outputs' => \$this->reviewOutputs\(\$task->content, \$stage\)/);
 });
 
 test('sorting uses a criterion dropdown and one icon direction button', async () => {

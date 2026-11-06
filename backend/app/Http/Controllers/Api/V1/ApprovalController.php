@@ -41,7 +41,7 @@ class ApprovalController extends Controller
                 }
                 $rows[] = ['id' => (string) $task->id, 'type' => 'content_stage', 'title' => $task->content->title,
                     'stageTitle' => $stage['title'] ?? '', 'stageDescription' => $stage['description'] ?? null,
-                    'outputs' => array_values(is_array($stage['outputs'] ?? null) ? $stage['outputs'] : []),
+                    'outputs' => $this->reviewOutputs($task->content, $stage),
                     'workReport' => $stage['workReport'] ?? null,
                     'contentId' => (string) $task->content_id, 'stageId' => $task->content_stage_id,
                     'status' => $stage['status'], 'createdAt' => $task->created_at?->toIso8601String(), 'deadline' => $task->deadline?->toDateString(),
@@ -50,6 +50,88 @@ class ApprovalController extends Controller
         });
 
         return response()->json(['data' => $rows, 'meta' => ['current_page' => $number, 'last_page' => max(1, (int) ceil($total / $size)), 'per_page' => $size, 'total' => $total]]);
+    }
+
+    /**
+     * همهٔ خروجی‌هایی که داورِ این مرحله باید ببیند — نه فقط خروجی خودِ مرحله.
+     *
+     * چرا: در جریان محتوا، فایلِ تحویلی معمولاً در مرحلهٔ تولید ثبت می‌شود و
+     * مرحلهٔ بازبینی فقط «تأیید» است؛ پیش‌تر پنجرهٔ «نمایش خروجی» فقط
+     * `stage['outputs']` همان مرحله را می‌خواند و برای بیشتر پرونده‌ها خالی بود.
+     * حالا خروجی‌های خودِ مرحله، خروجی‌هایی که به این مرحله ارجاع شده‌اند،
+     * خروجی‌های مرحله‌های پیش‌نیاز و — اگر هیچ‌کدام نبود — خروجی نزدیک‌ترین
+     * مرحلهٔ قبلیِ دارای خروجی هم می‌آیند، هر کدام با نام مرحلهٔ مبدأ.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function reviewOutputs(Content $content, array $stage): array
+    {
+        $stages = collect(is_array($content->payload['stages'] ?? null) ? $content->payload['stages'] : [])
+            ->filter(fn ($item) => is_array($item))->values();
+        $stageId = (string) ($stage['id'] ?? '');
+        $collected = [];
+
+        $push = function (array $source, string $relation) use (&$collected): void {
+            foreach ((is_array($source['outputs'] ?? null) ? $source['outputs'] : []) as $output) {
+                if (! is_array($output)) {
+                    continue;
+                }
+                $key = (string) ($output['id'] ?? '');
+                if ($key === '') {
+                    $key = md5((string) json_encode($output));
+                }
+                if (isset($collected[$key])) {
+                    continue;
+                }
+                $collected[$key] = [...$output,
+                    'stageId' => (string) ($source['id'] ?? ''),
+                    'stageTitle' => (string) ($source['title'] ?? ''),
+                    'relation' => $relation];
+            }
+        };
+
+        // ۱) خروجی‌های خودِ همین مرحله.
+        $push($stage, 'current');
+
+        // ۲) خروجی‌هایی که مرحلهٔ دیگری آن‌ها را به این مرحله ارجاع داده است.
+        foreach ($stages as $source) {
+            if ((string) ($source['id'] ?? '') === $stageId) {
+                continue;
+            }
+            $forwarded = array_values(array_filter(
+                is_array($source['outputs'] ?? null) ? $source['outputs'] : [],
+                fn ($output) => is_array($output) && (string) ($output['forwardedToStageId'] ?? '') === $stageId,
+            ));
+            if ($forwarded !== []) {
+                $push(['id' => $source['id'] ?? '', 'title' => $source['title'] ?? '', 'outputs' => $forwarded], 'forwarded');
+            }
+        }
+
+        // ۳) خروجی مرحله‌های پیش‌نیاز صریح همین مرحله.
+        foreach ((array) ($stage['dependsOnStageIds'] ?? []) as $dependencyId) {
+            $dependency = $stages->firstWhere('id', $dependencyId);
+            if (is_array($dependency)) {
+                $push($dependency, 'dependency');
+            }
+        }
+
+        // ۴) اگر هنوز چیزی پیدا نشد، نزدیک‌ترین مرحلهٔ قبلیِ دارای خروجی
+        //    (حداکثر سه مرحله عقب) تا داور با پنجرهٔ خالی روبه‌رو نشود.
+        if ($collected === []) {
+            $before = $stages->takeWhile(fn ($item) => (string) ($item['id'] ?? '') !== $stageId)->reverse();
+            $hops = 0;
+            foreach ($before as $previous) {
+                if ($hops++ >= 3) {
+                    break;
+                }
+                $push($previous, 'previous');
+                if ($collected !== []) {
+                    break;
+                }
+            }
+        }
+
+        return array_values($collected);
     }
 
     public function forwardOutput(Request $request, Content $content, string $stage, string $output, ContentReview $review)
