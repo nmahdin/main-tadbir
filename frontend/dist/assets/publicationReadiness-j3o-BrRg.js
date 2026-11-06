@@ -1,0 +1,1 @@
+const e=["approved","completed","skipped"],t=["published","archived","cancelled","suspended"],d=s=>!!(s!=null&&s.length)&&s.every(i=>e.includes(String(i.status))),l=s=>t.includes(String(s||"")),o=s=>String(s.status||"")==="ready_to_publish"||!l(s.status)&&d(s.stages),u=s=>o(s)?"ready_to_publish":String(s.status||"");export{u as p};
