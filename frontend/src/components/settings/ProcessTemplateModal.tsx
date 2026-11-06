@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ContentProcessTemplate, ReviewerStrategy, StageAdvanceMode } from '../../types';
 import { normalizeProcessTemplate, safeText } from '../../utils/contentProcessTemplates';
-import { ArrowDown, ArrowUp, X, Plus, Trash2, FileText, Check, Settings } from 'lucide-react';
+import { ArrowDown, ArrowUp, X, Plus, Trash2, FileText, Check, Settings, LoaderCircle } from 'lucide-react';
 
 interface ProcessTemplateModalProps {
   isOpen: boolean;
@@ -443,7 +443,7 @@ export const ProcessTemplateModal: React.FC<ProcessTemplateModalProps> = ({ isOp
             disabled={!safeText(name).trim() || saving}
             className="ui-form-action px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-sm font-extrabold shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
           >
-            <Check className="w-4 h-4" />
+            {saving ? <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden /> : <Check className="w-4 h-4" aria-hidden />}
             {saving ? 'در حال ذخیره…' : 'ذخیره الگو'}
           </button>
         </div>

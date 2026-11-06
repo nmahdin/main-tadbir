@@ -4,7 +4,7 @@ import {
   ChevronDown, Download, ExternalLink, Eye, FileArchive, FileCheck, FileSpreadsheet, FileText, FileType, FolderKanban, Image as ImageIcon,
   Link2, LoaderCircle, Music, Paperclip, Pencil, Presentation, Send, ShieldAlert, TableProperties, Video,
 } from 'lucide-react';
-import { Modal } from '../common/Primitives';
+import { Button, Modal } from '../common/Primitives';
 import { RichTextContent, RichTextEditor, hasRichTextContent, richTextToPlainText, sanitizeRichTextHtml } from '../common/RichTextEditor';
 import { apiConfig, request } from '../../api/client';
 import { damApi } from '../../api/dam';
@@ -204,6 +204,15 @@ export const stageAssetTypeLabel = (view: StageAssetView, meta?: {
   if (mime.includes('sheet') || mime.includes('excel')) return 'فایل Excel';
   if (mime.includes('presentation') || mime.includes('powerpoint')) return 'فایل PowerPoint';
   if (mime.startsWith('text/')) return 'فایل متنی';
+  // دور ۸۵: برچسب «فایل»ِ بی‌فرمت نماند؛ اگر فقط MIME داریم، زیرنوع آن را
+  // نشان می‌دهیم (مثلاً application/zip → «فایل ZIP»).
+  const subtype = mime.split('/')[1]?.split(';')[0]?.trim();
+  if (subtype) {
+    const known = EXT_LABEL[subtype];
+    if (known) return `فایل ${known}`;
+    if (subtype.includes('zip') || subtype.includes('rar') || subtype.includes('compressed')) return 'فایل ZIP';
+    if (/^[a-z0-9.+-]{2,12}$/.test(subtype)) return `فایل ${subtype.toUpperCase()}`;
+  }
   return 'فایل';
 };
 
@@ -323,7 +332,9 @@ export function StageAssetCard({ view, onPreview, actions }: {
         )}
       </button>
       <footer className="flex items-center justify-end gap-1 border-t border-slate-100 bg-slate-50/60 px-3 py-1.5">
-        <button type="button" onClick={() => onPreview(view)} className="ui-button ui-button-ghost !min-h-7 !rounded-lg !px-2.5 !py-1 text-[10px]"><Eye className="h-3.5 w-3.5" />پیش‌نمایش</button>
+        {/* دکمهٔ پیش‌نمایش با همان دکمهٔ استاندارد سامانه (دور ۸۵) تا با
+            «نیازمند اصلاح»/«تأیید» و بقیهٔ دکمه‌ها یک‌شکل باشد. */}
+        <Button variant="secondary" onClick={() => onPreview(view)} title="پیش‌نمایش این خروجی"><Eye className="h-4 w-4" aria-hidden />پیش‌نمایش</Button>
         {actions}
       </footer>
     </article>

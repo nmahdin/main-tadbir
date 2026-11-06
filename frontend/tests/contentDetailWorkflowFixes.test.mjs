@@ -163,7 +163,9 @@ test('the attachment count is computed on page load, not when the tab opens', ()
   assert.match(contentDetail, /const workflowInputs = stages\.flatMap\(stage => stageInputs\(stage\)\.map\(input => \(\{ input, stageTitle: stage\.title \}\)\)\)/);
   assert.match(contentDetail, /const inputs = stageInputs\(stage\)/);
   assert.match(contentDetail, /const forwardedInputs = forwardedStageInputCount\(stage\)/);
-  assert.match(contentDetail, /const inputItems = inputs\.map\(\(input, index\) => \(\{/);
+  // دور ۸۵: نام/قالب فایل از دارایی مخزن تکمیل می‌شود، پس نقشهٔ ورودی‌ها بدنه دارد.
+  assert.match(contentDetail, /const inputItems = inputs\.map\(\(input, index\) => \{/);
+  assert.match(contentDetail, /const assetMeta = \(assetId\?: string\) =>/);
   // شمار ورودی‌های ارجاع‌شده همچنان محاسبه می‌شود، اما توضیح زیر عنوان بخش حذف شده است.
   assert.doesNotMatch(contentDetail, /description=\{forwardedInputs > 0/);
   assert.doesNotMatch(contentDetail, /primaryStageInputs/);

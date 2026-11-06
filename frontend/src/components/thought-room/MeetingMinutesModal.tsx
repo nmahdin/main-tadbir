@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, User, Paperclip } from 'lucide-react';
+import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, User, Paperclip, LoaderCircle } from 'lucide-react';
 import { ThinkTankMeeting, MeetingActionItem, MeetingAttachment } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { PersianDatePicker } from '../common/PersianDatePicker';
@@ -401,7 +401,7 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
               type="submit" disabled={saving || attachmentSaving}
               className="ui-form-action px-5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md flex items-center gap-1.5"
             >
-              <CheckCircle2 className="w-4 h-4" />
+              {saving ? <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden /> : <CheckCircle2 className="w-4 h-4" aria-hidden />}
               <span>{saving ? 'در حال ذخیره…' : 'نهایی‌سازی و ثبت صورتجلسه'}</span>
             </button>
           </div>

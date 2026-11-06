@@ -31,7 +31,11 @@ type SelectItem = {
 const MENU_MIN_WIDTH = 168;
 const MENU_MAX_WIDTH = 360;
 const MENU_MARGIN = 8;
+const MENU_MAX_HEIGHT = 300;
+/** کمترین ارتفاعی که فهرست با آن خواناست؛ فقط وقتی فضای هر دو طرف کمتر است. */
+const MIN_MENU_HEIGHT = 96;
 const ITEM_HEIGHT = 34;
+const ITEM_GROUP_HEIGHT = 18;
 
 const nativeValueSetter = () => Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
 
@@ -65,7 +69,7 @@ export const CustomSelectLayer: React.FC = () => {
   const [menu, setMenu] = useState<HTMLSelectElement | null>(null);
   const [items, setItems] = useState<SelectItem[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [position, setPosition] = useState<{ top: number; left: number; minWidth: number; maxHeight: number; above: boolean } | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number; minWidth: number; width: number; height: number; maxHeight: number; above: boolean } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<number | null>(null);
   const [closing, setClosing] = useState(false);
@@ -98,19 +102,46 @@ export const CustomSelectLayer: React.FC = () => {
 
   useEffect(() => () => { if (closeTimer.current !== null) window.clearTimeout(closeTimer.current); }, []);
 
-  const place = useCallback((select: HTMLSelectElement, count: number) => {
+  /**
+   * جای‌گذاری فهرست.
+   *
+   * قاعدهٔ دور ۸۵: فهرست هرگز بیرون از قاب دید کاربر باز نمی‌شود. پیش‌تر
+   * وقتی پایین فیلد جای کافی نبود، فهرست «بالا» باز می‌شد اما با
+   * `translateY(-100%)` و ارتفاع حداقل ۱۲۰ پیکسل — در جدولی که نزدیک لبهٔ
+   * پایین صفحه است، همین باعث می‌شد بخشی از فهرست بیرون از نمایشگر بیفتد و
+   * انتخابگر «تعداد در صفحه» عملاً دیده نشود. حالا:
+   *   ۱) اگر جای پایین کم باشد و بالای فیلد بیشتر باشد، فهرست بالای فیلد
+   *      باز می‌شود؛
+   *   ۲) ارتفاع فهرست از همان فضای موجود بیشتر نمی‌شود (اسکرول داخلی)؛
+   *   ۳) مختصات نهایی در محدودهٔ نمایشگر بسته می‌شود، پس هیچ بخشی گم نمی‌شود.
+   */
+  const place = useCallback((select: HTMLSelectElement, count: number, groups = 0) => {
     const rect = select.getBoundingClientRect();
     const minWidth = Math.min(MENU_MAX_WIDTH, Math.max(MENU_MIN_WIDTH, rect.width));
-    const needed = Math.min(count * ITEM_HEIGHT + 12, 300);
-    const spaceBelow = window.innerHeight - rect.bottom - MENU_MARGIN;
-    const spaceAbove = rect.top - MENU_MARGIN;
+    // سرگروه‌های `optgroup` هم ارتفاع می‌گیرند؛ در محاسبهٔ فضای لازم شمرده می‌شوند.
+    const needed = Math.min(count * ITEM_HEIGHT + groups * ITEM_GROUP_HEIGHT + 12, MENU_MAX_HEIGHT);
+    const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - MENU_MARGIN);
+    const spaceAbove = Math.max(0, rect.top - MENU_MARGIN);
     const above = spaceBelow < needed && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(120, above ? spaceAbove - 4 : spaceBelow - 4);
+    const available = above ? spaceAbove : spaceBelow;
+    // ارتفاع دقیق، نه «حداقل»؛ با ارتفاع ثابت، فهرست هرگز از قاب بیرون نمی‌زند.
+    const height = Math.max(Math.min(needed, available), MIN_MENU_HEIGHT);
+    const clampedHeight = Math.min(height, Math.max(available, MIN_MENU_HEIGHT));
+    const top = above ? Math.max(MENU_MARGIN, rect.top - 6 - clampedHeight) : rect.bottom + 6;
+    const width = Math.min(MENU_MAX_WIDTH, Math.max(minWidth, Math.min(rect.width, window.innerWidth - 2 * MENU_MARGIN)));
     const left = Math.min(
-      Math.max(MENU_MARGIN, rect.right - minWidth),
-      Math.max(MENU_MARGIN, window.innerWidth - minWidth - MENU_MARGIN),
+      Math.max(MENU_MARGIN, rect.right - width),
+      Math.max(MENU_MARGIN, window.innerWidth - width - MENU_MARGIN),
     );
-    setPosition({ top: above ? rect.top - 6 : rect.bottom + 6, left, minWidth, maxHeight, above });
+    setPosition({
+      top: Math.max(MENU_MARGIN, Math.min(top, window.innerHeight - clampedHeight - MENU_MARGIN)),
+      left,
+      minWidth,
+      width,
+      height: clampedHeight,
+      maxHeight: clampedHeight,
+      above,
+    });
   }, []);
 
   const open = useCallback((select: HTMLSelectElement) => {
@@ -120,7 +151,7 @@ export const CustomSelectLayer: React.FC = () => {
     setItems(next);
     const selectedIndex = next.findIndex(item => item.index === select.selectedIndex && !item.disabled);
     setActiveIndex(selectedIndex >= 0 ? selectedIndex : next.findIndex(item => !item.disabled));
-    place(select, next.length);
+    place(select, next.length, new Set(next.map(item => item.group).filter(Boolean)).size);
     select.setAttribute('aria-expanded', 'true');
     setClosing(false);
     if (closeTimer.current !== null) { window.clearTimeout(closeTimer.current); closeTimer.current = null; }
@@ -229,14 +260,18 @@ export const CustomSelectLayer: React.FC = () => {
       aria-label={menu.getAttribute('aria-label') || menu.closest('label')?.textContent?.trim().slice(0, 60) || 'انتخاب گزینه'}
       dir="rtl"
       data-custom-select="true"
+      data-placement={position.above ? 'above' : 'below'}
       style={{
         position: 'fixed',
+        // ارتفاع و عرض دقیق با مختصات بالا؛ بدون `translateY` تا محاسبهٔ
+        // «بیرون نرفتن از نمایشگر» دقیق بماند.
         top: position.top,
         left: position.left,
+        width: position.width,
         minWidth: position.minWidth,
         maxWidth: MENU_MAX_WIDTH,
+        height: position.height,
         maxHeight: position.maxHeight,
-        transform: position.above ? 'translateY(-100%)' : undefined,
       }}
       data-state={closing ? 'closing' : 'open'}
       className="ui-pop z-[130] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-1 shadow-lg outline-none"

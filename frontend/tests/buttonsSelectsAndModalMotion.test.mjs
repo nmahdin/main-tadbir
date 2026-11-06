@@ -30,8 +30,9 @@ test('only action buttons keep the subtle shadow', () => {
   assert.match(actionRule, /box-shadow: var\(--button-shadow\) !important/);
   assert.match(css, /\[role='tab'\],\s*\n\[role='tablist'\] > button,\s*\naside button,\s*\n\[id\^='nav-item-'\],\s*\n\[data-button-flat\] \{\s*\n  box-shadow: none !important;/);
   // دکمهٔ «ثبت خروجی» هم از نشانهٔ صریح دکمهٔ اقدام استفاده می‌کند
+  // (دور ۸۵: همان کامپوننت مشترک Button با نشانگر لودینگ، نه دکمهٔ خام)
   const detail = readFileSync(new URL('../src/components/content/ContentDetailView.tsx', import.meta.url), 'utf8');
-  assert.match(detail, /data-button-action="save" type="submit"[^>]*className="ui-form-action ui-button ui-button-primary/);
+  assert.match(detail, /<Button action="save" type="submit" loading=\{isSavingDeliverable\}/);
 });
 
 test('the shared modal animates both in and out', () => {

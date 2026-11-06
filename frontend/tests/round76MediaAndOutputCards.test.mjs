@@ -55,7 +55,9 @@ test('ویدیو پیش از آماده‌شدن نشانگر لودینگ دا�
   assert.match(player, /در حال بارگذاری ویدیو…/);
   // دور ۸۳: جانمای لودینگ هم‌اندازهٔ پخش‌کننده با اسکلت روشن (نه کادر سیاه).
   assert.match(player, /aria-label="در حال آماده‌سازی پخش‌کنندهٔ ویدیو"/);
-  assert.match(player, /ui-skeleton h-full w-full absolute inset-0/);
+  // دور ۸۵: فقط یک جانما (خود قاب)؛ اسکلتِ گردگوشهٔ داخلی حذف شد و پیام در مرکز است.
+  assert.match(player, /data-video-placeholder="single"/);
+  assert.doesNotMatch(player, /ui-skeleton h-full w-full absolute inset-0/);
   assert.match(player, /isVideo && playing && buffering/);
 });
 

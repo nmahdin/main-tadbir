@@ -71,9 +71,11 @@ test('ویدیو تا آماده‌شدن، جانمای لودینگ هم‌ا�
   assert.match(player, /transition-colors duration-500/);
   // خود ویدیو تا آماده‌شدن دیده نمی‌شود و سپس «مات → شفاف» می‌شود.
   assert.match(player, /transition-opacity duration-500 ease-out \$\{verticalReady \? 'opacity-100' : 'pointer-events-none opacity-0'\}/);
-  // جانما: اسکلت + پیام، روی همان قاب.
+  // جانما: یک قاب، با نشانگر و پیام در مرکز (دور ۸۵: لایهٔ دوم حذف شد).
   assert.match(player, /aria-label="در حال آماده‌سازی پخش‌کنندهٔ ویدیو"/);
-  assert.match(player, /ui-skeleton h-full w-full absolute inset-0/);
+  assert.match(player, /data-video-placeholder="single"/);
+  assert.match(player, /flex flex-col items-center justify-center gap-3 p-4 text-center/);
+  assert.doesNotMatch(player, /ui-skeleton h-full w-full absolute inset-0/);
   // کنترل‌ها هم تا اولین فریم پنهان می‌مانند.
   assert.match(player, /data-visible=\{isVideo \? \(verticalReady && controlsVisible \? 'true' : 'false'\) : 'true'\}/);
 });

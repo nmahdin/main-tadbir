@@ -376,8 +376,8 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
               disabled={isSubmitting || isCreatingMeet}
               className="ui-form-action px-5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md flex items-center gap-1.5"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{isSubmitting ? 'در حال ذخیره...' : 'ثبت و ارسال دعوت‌نامه جلسه'}</span>
+              {isSubmitting || isCreatingMeet ? <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden /> : <CheckCircle2 className="w-4 h-4" aria-hidden />}
+              <span>{isSubmitting || isCreatingMeet ? 'در حال ذخیره...' : 'ثبت و ارسال دعوت‌نامه جلسه'}</span>
             </button>
           </div>
         </form>

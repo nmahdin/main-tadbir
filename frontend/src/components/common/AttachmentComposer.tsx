@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Eye, File, FileText, Folder, FolderOpen, HardDrive, Library, LoaderCircle, Paperclip, Pencil, Plus, Search, TableProperties, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Eye, File, FileText, Folder, FolderOpen, HardDrive, Library, LoaderCircle, Paperclip, Pencil, Plus, Search, TableProperties, Trash2, Upload, X } from 'lucide-react';
 import { request, uploadRequest, type ApiResponse } from '../../api/client';
 import { apiConfig } from '../../api/client';
 import { useApp } from '../../context/AppContext';
@@ -451,6 +451,10 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     }
     return candidate;
   };
+  /** ریشهٔ همین بخش؛ برای گرفتن `submit` فرمِ والد (هشدار متنِ اضافه‌نشده). */
+  const rootRef = useRef<HTMLElement | null>(null);
+  /** آخرین وضعیت «متن آمادهٔ ثبت‌نشده» برای listener نیتیو فرم. */
+  const pendingTextRef = useRef(false);
   const [mode, setMode] = useState<Mode>('file');
   const activeMode: Mode = (() => {
     const fallback: Mode = mode === 'file' && !canUpload ? (canBrowse ? 'library' : canUseTables ? 'table' : 'file') : mode;
@@ -819,6 +823,31 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
       : value.assets.filter(item => item.id !== asset.id) });
   };
   const count = attachmentDraftCount(value);
+  /**
+   * هشدار «متن نوشته‌شده ولی به فهرست اضافه‌نشده» (دور ۸۵).
+   *
+   * کاربر ممکن است متن یادداشت را بنویسد و بی‌آنکه «افزودن به فهرست» را بزند،
+   * دکمهٔ ثبت/ذخیرهٔ فرمِ بیرونی را بزند؛ پیش‌تر متن بی‌صدا از بین می‌رفت. اینجا
+   * فرمِ والد در فاز capture گرفته می‌شود: اگر متنی آمادهٔ افزودن باشد، ثبت
+   * متوقف و پیام روشن نمایش داده می‌شود. چون همهٔ فرم‌ها این بخش را داخل یک
+   * `<form>` می‌گذارند، این مراقبت برای همهٔ مدال‌ها یک‌جا کار می‌کند.
+   */
+  const pendingText = !disabled && (Boolean(draftTitle.trim()) || hasRichTextContent(draftBody));
+  pendingTextRef.current = pendingText;
+  useEffect(() => {
+    const form = rootRef.current?.closest('form');
+    if (!form) return;
+    const guard = (event: Event) => {
+      if (!pendingTextRef.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setMode('text');
+      setError('متن یادداشت هنوز به فهرست اضافه نشده است؛ اول دکمهٔ «افزودن به فهرست» را بزنید یا متن را پاک کنید، بعد ثبت کنید.');
+      requestAnimationFrame(() => rootRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    };
+    form.addEventListener('submit', guard, true);
+    return () => form.removeEventListener('submit', guard, true);
+  }, []);
 
   const modes = [
     { id: 'file' as Mode, label: 'فایل', description: 'تصویر، سند و رسانه', icon: Upload, allowed: canUpload, count: value.files.length },
@@ -827,7 +856,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
     { id: 'table' as Mode, label: 'جدول اطلاعات', description: 'ساخت جدول یا افزودن ردیف', icon: TableProperties, allowed: canUseTables, count: (value.tables || []).length },
   ].filter(item => !allowedModes || allowedModes.includes(item.id));
 
-  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-label={title}>
+  return <section ref={rootRef} className="overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-label={title}>
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600"><Paperclip className="h-5 w-5" /></span>
@@ -882,6 +911,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
             </Button>
             {editingTextId && <Button type="button" variant="ghost" onClick={() => { setEditingTextId(null); setDraftTitle(''); setDraftBody(''); }} className="text-xs"><X className="h-4 w-4" />انصراف از ویرایش</Button>}
           </div>
+          {pendingText && <p className="flex items-start gap-1.5 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[10px] font-bold leading-5 text-amber-800"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />این متن هنوز به فهرست اضافه نشده است؛ با «افزودن به فهرست» ثبتش کنید، وگرنه هنگام ذخیره یادآوری می‌شوید.</p>}
         </div>}
 
         {activeMode === 'library' && <div className="space-y-3">

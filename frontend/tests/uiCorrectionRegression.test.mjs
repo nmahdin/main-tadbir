@@ -37,7 +37,9 @@ test('content creation and workflow corrections retain required and themed behav
   // پایینِ فرم در بدنهٔ پیمایش‌شوندهٔ مدال «چسبان» است تا دکمهٔ ثبت همیشه در دسترس بماند.
   assert.match(detail, /<footer className="sticky bottom-0 z-10 flex shrink-0[^>]*border-t/);
   assert.match(detail, /ui-button ui-button-secondary/);
-  assert.match(detail, /ui-button ui-button-primary/);
+  // دور ۸۵: دکمه‌های شروع/ارسال/تأیید/اصلاح مرحله با همان Button سامانه یکپارچه شدند.
+  assert.match(detail, /<Button\s+variant="primary"\s+loading=\{stageActionKey === `start:\$\{stage\.id\}`\}/);
+  assert.match(detail, /<Button variant="danger"[\s\S]{0,400}?نیازمند اصلاح</);
 });
 
 test('compact form-action styling is explicit and does not leak into headers, tabs, menus, or cards', async () => {

@@ -386,7 +386,9 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           <button
             id="top-user-avatar-btn"
             onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
-            className="ui-tap flex shrink-0 items-center gap-2 rounded-full border border-transparent p-1 pr-1.5 transition-colors hover:border-slate-200 hover:bg-slate-100"
+            // دور ۸۵: مانند بقیهٔ دکمه‌های سربرگ، گوشهٔ گردِ معمولی (نه کپسولی)؛
+            // در حالت عادی بدون پس‌زمینه و فقط با هاور کمی خاکستری می‌شود.
+            className="ui-tap flex shrink-0 items-center gap-2 rounded-xl border border-transparent p-1 pr-1.5 transition-colors hover:bg-slate-100"
           >
             <Avatar user={currentUser} size="sm" />
             <span className="hidden md:inline-block text-xs font-bold text-slate-800 max-w-[100px] truncate">

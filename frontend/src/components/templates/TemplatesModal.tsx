@@ -19,7 +19,8 @@ import {
   Play, 
   FolderKanban, 
   CheckSquare, 
-  LayoutGrid
+  LayoutGrid,
+  LoaderCircle
 } from 'lucide-react';
 
 export const TemplatesModal: React.FC = () => {
@@ -478,7 +479,8 @@ export const TemplatesModal: React.FC = () => {
                       id="btn-confirm-apply-template"
                       className="ui-form-action px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
                     >
-                      ایجاد پروژه و بارگذاری تسک‌ها
+                      {saving && <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden />}
+                      {saving ? 'در حال ایجاد پروژه…' : 'ایجاد پروژه و بارگذاری تسک‌ها'}
                     </button>
                   </div>
                 </form>

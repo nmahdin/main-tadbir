@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { X, Lightbulb, Plus, Trash2, BarChart2 } from 'lucide-react';
+import { X, Lightbulb, Plus, Trash2, BarChart2, LoaderCircle } from 'lucide-react';
 import { Priority, Idea } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
@@ -492,7 +492,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
               disabled={isSubmitting}
               className="ui-form-action px-5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md transition-all flex items-center gap-2"
             >
-              <Lightbulb className="w-4 h-4" />
+              {isSubmitting ? <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden /> : <Lightbulb className="w-4 h-4" aria-hidden />}
               <span>{isSubmitting ? 'در حال ذخیره...' : isEditing ? 'ذخیره تغییرات' : 'ثبت ایده'}</span>
             </button>
           </div>

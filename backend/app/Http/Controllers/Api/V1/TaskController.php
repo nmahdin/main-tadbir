@@ -32,10 +32,27 @@ class TaskController extends Controller
         // List rows intentionally exclude comments, files and history. Those
         // relations are loaded only by show(); eager-loading them for every row
         // made task navigation grow with the complete audit history.
+        /**
+         * دامنهٔ «تسک‌های یک محتوا» (دور ۸۵).
+         *
+         * صفحهٔ «تسک‌های من» فقط تسک‌های خودِ کاربر را می‌دهد و همین درست است؛
+         * اما فهرست تسک‌های یک پروندهٔ محتوا باید همهٔ وظایف آن پرونده را نشان
+         * دهد، وگرنه کارهای تکمیل‌شده یا کارهای دیگران (ارزیاب/ناشر) غایب
+         * می‌مانند و تب «تسک‌های مربوط» ناقص دیده می‌شود.
+         *
+         * قاعده: اگر `content_id` آمده باشد و کاربر مجوز دیدن همان محتوا را
+         * داشته باشد، فیلتر «مسئول من» برداشته می‌شود. بدون مجوز یا بدون
+         * `content_id`، همان دامنهٔ شخصی قبلی سر جایش است.
+         */
+        $contentScope = $request->integer('content_id');
+        $contentTasksVisible = $contentScope
+            && ($content = Content::find($contentScope))
+            && app(ContentAccess::class)->canView($request->user(), $content);
+
         $tasks = Task::query()
             // The personal task page is a server-enforced scope: request filters
             // may narrow these rows, but can never expose another assignee's task.
-            ->where('assignee_id', $request->user()->id)
+            ->when(! $contentTasksVisible, fn ($query) => $query->where('assignee_id', $request->user()->id))
             ->when($request->filled('due'), function ($query) use ($request): void {
                 $due = $request->string('due')->toString();
                 $query->whereNotIn('status', ['completed', 'archived']);

@@ -69,6 +69,8 @@ export function MediaPlayer({
 }: MediaPlayerProps) {
   const mediaRef = useRef<HTMLMediaElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  /** قاب جانمای ویدیو؛ مرکز پیام لودینگ نسبت به همین قاب سنجیده می‌شود. */
+  const placeholderRef = useRef<HTMLDivElement | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
   const volumeRef = useRef<HTMLDivElement | null>(null);
   const pauseTimer = useRef<number | null>(null);
@@ -412,27 +414,31 @@ export function MediaPlayer({
           ۲) در حالت توقف، دکمهٔ بزرگ پخش/ادامه — پیش از شروع هم همین دکمه
              دیده می‌شود تا کاربر بداند باید چه کند (نه اسپینر بی‌پایان).
         */}
-        {/* جانمای لودینگ به‌اندازهٔ خود پخش‌کننده: پیش از رسیدن اولین فریم، هیچ
-            نوار کنترل یا کادر سیاهی دیده نمی‌شود؛ فقط همین قاب با اسکلت و پیام. */}
+        {/* جانمای لودینگ (دور ۸۵: فقط یکی).
+            پیش‌تر دو لایه روی هم می‌نشست: خودِ قاب روشن + یک اسکلتِ گردگوشهٔ
+            داخلی؛ کاربر دو «جانما» می‌دید. حالا تنها همان قابِ پخش‌کننده جانماست
+            و روی آن فقط نشانگر چرخان و پیام، دقیقاً در مرکز، نمایش داده می‌شود.
+            اندازهٔ قاب هم همان اندازهٔ نهایی است تا مدال نپرد. */}
         {isVideo && !failed && !ready && (
           <div
+            ref={placeholderRef}
             role="status"
             aria-live="polite"
             aria-label="در حال آماده‌سازی پخش‌کنندهٔ ویدیو"
-            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-100"
+            data-video-placeholder="single"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-4 text-center"
           >
-            <div aria-hidden className="ui-skeleton h-full w-full absolute inset-0" />
-            <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white/90 text-indigo-600 shadow-sm">
-              <LoaderCircle className="h-6 w-6 animate-spin" aria-hidden />
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-indigo-600 shadow-xs">
+              <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden />
             </span>
-            <span className="relative text-[11px] font-black text-slate-600">
+            <span className="max-w-full text-[11px] font-black text-slate-600">
               {started ? 'در حال بارگذاری ویدیو…' : 'در حال آماده‌سازی ویدیو…'}
             </span>
             {slow && (
               <button
                 type="button"
                 onClick={() => { setSlow(false); setReady(false); mediaRef.current?.load(); }}
-                className="pointer-events-auto mt-1 inline-flex items-center gap-1.5 rounded-lg bg-white/95 px-2.5 py-1.5 text-[10px] font-bold text-slate-800"
+                className="pointer-events-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-slate-700"
               >
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden />
                 بارگذاری دوباره
