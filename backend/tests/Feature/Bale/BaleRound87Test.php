@@ -145,7 +145,9 @@ class BaleRound87Test extends TestCase
         $this->assertNotEmpty($this->sent, 'اطلاعات انتشار باید فرستاده شود.');
         $this->assertStringContainsString('اطلاعات انتشار', (string) $this->sent[0]['text']);
         $buttons = (string) json_encode($this->sent[0]['reply_markup'] ?? []);
-        // دکمهٔ «دریافت اطلاعات انتشار» باید به همان وظیفه برگردد، نه به حلقهٔ بازگشتی.
-        $this->assertStringContainsString('pubinfo:'.$task->id, $buttons);
+        // دکمه‌های همان پیام به وظیفه برمی‌گردند (کپی کپشن/فایل)، نه به حلقهٔ بازگشتی
+        // که پیش‌تر خطای ۵۰۰ می‌داد.
+        $this->assertStringContainsString('pubcap:'.$task->id, $buttons);
+        $this->assertStringContainsString('task:'.$task->id, $buttons);
     }
 }
