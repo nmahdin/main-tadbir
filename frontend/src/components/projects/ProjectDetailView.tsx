@@ -263,8 +263,10 @@ export const ProjectDetailView: React.FC = () => {
 
   return (
     <div dir="rtl" className="mx-auto max-w-7xl space-y-5 p-4 text-right sm:p-6 lg:p-8">
-      <section className="overflow-visible rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
-        <div className="h-1.5 rounded-t-3xl bg-gradient-to-l from-indigo-600 via-violet-500 to-purple-400" />
+      <section className="relative overflow-visible rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
+        {/* نوار بالای کارت همرنگ رنگ اصلی سامانه، دقیقاً مثل صفحهٔ جزئیات محتوا:
+            گرادیان ثابت قبلی با تغییر رنگ سازمانی هم‌رنگ نمی‌شد (دور ۸۹). */}
+        <div aria-hidden className="pointer-events-none absolute inset-x-5 top-0 h-1 rounded-b-full bg-[var(--color-primary)] sm:inset-x-6" data-brand-band="primary" />
         <div className="p-5 sm:p-7">
           {/* سربرگ پروژه با همان عرض کارت: عنوان و عملیات در یک ردیف، سپس چهار کارت اطلاعات هم‌عرض. */}
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">

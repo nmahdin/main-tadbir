@@ -75,6 +75,9 @@ class TaskResource extends JsonResource
                     'stageTitle' => $stage ? ($stage['title'] ?? null) : null,
                 ];
             }),
+            /** نام محتوا/پروژه برای خط دوم عنوان تسک در «تسک‌های من». */
+            'contentTitle' => $this->whenLoaded('content', fn () => $this->content?->title),
+            'projectTitle' => $this->whenLoaded('project', fn () => $this->project?->name),
             'dependencies' => collect($this->dependencies ?? [])->map(fn ($id) => (string) $id)->values(),
             'isBlocked' => (bool) $this->is_blocked,
             'blockedReason' => $this->blocked_reason,

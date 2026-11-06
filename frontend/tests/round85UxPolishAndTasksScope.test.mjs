@@ -117,7 +117,11 @@ test('متن وضعیت مرحلهٔ در انتظار بررسی کوتاه و 
 });
 
 test('تب فعال در همهٔ نوارهای تب یک سایهٔ بسیار کم دارد', () => {
-  assert.match(css, /\[role="tab"\]\[aria-selected="true"\],\s*\n\[role="tab"\]\[data-state="active"\] \{\s*\n  box-shadow: 0 1px 2px rgb\(15 23 42 \/ 0\.08\)/);
+  assert.match(css, /\[role='tab'\]\[aria-selected='true'\],\s*\n\[role='tab'\]\[data-state='active'\],\s*\n\[data-tab-active='true'\] \{\s*\n  box-shadow: 0 1px 2px rgb\(15 23 42 \/ \.12\)/);
+  // دور ۸۹: تب فعالی که زمینهٔ اصلی دارد هم سایه می‌گیرد؛ پیش‌تر صفر شده بود و
+  // در «محتواها/ایده‌ها/جلسات/تسک‌ها» هیچ سایه‌ای دیده نمی‌شد.
+  assert.match(css, /\[role='tab'\]\[aria-selected='true'\]\.bg-indigo-600,\s*\n\[role='tab'\]\[aria-selected='true'\]\.bg-indigo-700,\s*\n\[role='tab'\]\[aria-selected='true'\]\.ui-button-primary \{\s*\n  box-shadow: 0 1px 2px rgb\(15 23 42 \/ \.18\)/);
+  assert.doesNotMatch(css, /bg-indigo-700 \{\s*\n  box-shadow: none !important;/);
   // قاعدهٔ «تب‌ها تخت بمانند» هنوز برای تب‌های غیرفعال برجاست.
   assert.match(css, /\[role='tab'\],\s*\n\[role='tablist'\] > button,/);
 });

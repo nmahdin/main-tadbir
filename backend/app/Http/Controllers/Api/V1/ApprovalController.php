@@ -53,21 +53,19 @@ class ApprovalController extends Controller
     }
 
     /**
-     * همهٔ خروجی‌هایی که داورِ این مرحله باید ببیند — نه فقط خروجی خودِ مرحله.
+     * خروجی‌های همان مرحله‌ای که در انتظار بررسی است.
      *
-     * چرا: در جریان محتوا، فایلِ تحویلی معمولاً در مرحلهٔ تولید ثبت می‌شود و
-     * مرحلهٔ بازبینی فقط «تأیید» است؛ پیش‌تر پنجرهٔ «نمایش خروجی» فقط
-     * `stage['outputs']` همان مرحله را می‌خواند و برای بیشتر پرونده‌ها خالی بود.
-     * حالا خروجی‌های خودِ مرحله، خروجی‌هایی که به این مرحله ارجاع شده‌اند،
-     * خروجی‌های مرحله‌های پیش‌نیاز و — اگر هیچ‌کدام نبود — خروجی نزدیک‌ترین
-     * مرحلهٔ قبلیِ دارای خروجی هم می‌آیند، هر کدام با نام مرحلهٔ مبدأ.
+     * چرا بازنویسی شد (دور ۸۹): در دور ۸۸ برای پرکردن پنجرهٔ خالی، خروجی
+     * مرحله‌های پیشین هم می‌آمد؛ ولی داور باید فقط چیزی را ببیند که **همین
+     * مرحله** تحویل داده است، نه همهٔ خروجی‌های محتوا. پس فقط دو دسته برمی‌گردد:
+     * خروجی خودِ مرحله، و خروجی‌هایی که مرحلهٔ دیگری صریحاً به این مرحله ارجاع
+     * داده است (`forwardedToStageId`). هر قلم نام مرحلهٔ مبدأ و نسبتش را با
+     * خود دارد تا اگر ارجاعی بود، مبدأ روشن باشد.
      *
      * @return array<int, array<string, mixed>>
      */
     private function reviewOutputs(Content $content, array $stage): array
     {
-        $stages = collect(is_array($content->payload['stages'] ?? null) ? $content->payload['stages'] : [])
-            ->filter(fn ($item) => is_array($item))->values();
         $stageId = (string) ($stage['id'] ?? '');
         $collected = [];
 
@@ -94,7 +92,7 @@ class ApprovalController extends Controller
         $push($stage, 'current');
 
         // ۲) خروجی‌هایی که مرحلهٔ دیگری آن‌ها را به این مرحله ارجاع داده است.
-        foreach ($stages as $source) {
+        foreach (collect(is_array($content->payload['stages'] ?? null) ? $content->payload['stages'] : [])->filter(fn ($item) => is_array($item)) as $source) {
             if ((string) ($source['id'] ?? '') === $stageId) {
                 continue;
             }
@@ -104,30 +102,6 @@ class ApprovalController extends Controller
             ));
             if ($forwarded !== []) {
                 $push(['id' => $source['id'] ?? '', 'title' => $source['title'] ?? '', 'outputs' => $forwarded], 'forwarded');
-            }
-        }
-
-        // ۳) خروجی مرحله‌های پیش‌نیاز صریح همین مرحله.
-        foreach ((array) ($stage['dependsOnStageIds'] ?? []) as $dependencyId) {
-            $dependency = $stages->firstWhere('id', $dependencyId);
-            if (is_array($dependency)) {
-                $push($dependency, 'dependency');
-            }
-        }
-
-        // ۴) اگر هنوز چیزی پیدا نشد، نزدیک‌ترین مرحلهٔ قبلیِ دارای خروجی
-        //    (حداکثر سه مرحله عقب) تا داور با پنجرهٔ خالی روبه‌رو نشود.
-        if ($collected === []) {
-            $before = $stages->takeWhile(fn ($item) => (string) ($item['id'] ?? '') !== $stageId)->reverse();
-            $hops = 0;
-            foreach ($before as $previous) {
-                if ($hops++ >= 3) {
-                    break;
-                }
-                $push($previous, 'previous');
-                if ($collected !== []) {
-                    break;
-                }
             }
         }
 

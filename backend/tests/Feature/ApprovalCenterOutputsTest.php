@@ -13,11 +13,12 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * «نمایش خروجی» در مرکز بررسی و تأیید باید **همهٔ** خروجی‌های مرحله را بیاورد،
- * نه فقط خروجی خودِ مرحلهٔ بازبینی را.
+ * «نمایش خروجی» در مرکز بررسی و تأیید باید خروجی **همان مرحله‌ای** را بیاورد که
+ * در انتظار بررسی است — نه همهٔ خروجی‌های محتوا و نه خروجی مرحله‌های پیشین.
  *
- * در جریان واقعی، فایل در مرحلهٔ تولید ثبت می‌شود و مرحلهٔ بازبینی فقط تأیید
- * است؛ پیش‌تر پنجرهٔ خروجی برای بیشتر پرونده‌ها خالی بود.
+ * تنها استثنا، خروجی‌هایی است که مرحلهٔ دیگری صریحاً به همین مرحله ارجاع داده
+ * است (`forwardedToStageId`)؛ همان‌ها هم با نام مرحلهٔ مبدأ و نسبت `forwarded`
+ * برمی‌گردند تا داور بداند از کجا آمده‌اند.
  */
 class ApprovalCenterOutputsTest extends TestCase
 {
@@ -56,7 +57,16 @@ class ApprovalCenterOutputsTest extends TestCase
         ], ...$overrides];
     }
 
-    public function test_review_window_lists_own_outputs_and_the_previous_stage_outputs(): void
+    /** یک ردیف بررسی برای همین کاربر می‌سازد و ردیف API را برمی‌گرداند. */
+    private function reviewRow(Content $content, User $reviewer, string $stageId): array|null
+    {
+        Task::create(['title' => 'بازبینی محتوا', 'kind' => 'content_review', 'assignee_id' => $reviewer->id,
+            'content_id' => $content->id, 'content_stage_id' => $stageId, 'status' => 'review', 'priority' => 'medium']);
+
+        return $this->getJson('/api/v1/approvals')->assertOk()->json('data.0');
+    }
+
+    public function test_review_window_shows_only_the_stage_under_review(): void
     {
         $reviewer = $this->actor(['content.view', 'content.approve', 'tasks.view']);
 
@@ -66,78 +76,71 @@ class ApprovalCenterOutputsTest extends TestCase
             'status' => 'producing',
             'payload' => ['stages' => [
                 $this->stage('produce', 'تولید گرافیک', ['status' => 'approved', 'order' => 1, 'outputs' => [
-                    ['id' => 'out-1', 'name' => 'پوستر نهایی', 'type' => 'file', 'url' => '/api/v1/dam/files/7', 'fileName' => 'poster.pdf', 'fileSize' => '۲ مگابایت'],
+                    ['id' => 'out-1', 'name' => 'پوستر نهایی', 'type' => 'file', 'url' => '/api/v1/dam/files/7', 'fileName' => 'poster.pdf'],
                 ]]),
-                // مرحلهٔ بازبینی خروجی خودش را ندارد: همان حالتی که پنجره را خالی می‌کرد.
-                $this->stage('review', 'بازبینی سردبیری', ['status' => 'pending_approval', 'order' => 2, 'reviewerId' => (string) $reviewer->id]),
+                $this->stage('review', 'بازبینی سردبیری', ['status' => 'pending_approval', 'order' => 2,
+                    'reviewerId' => (string) $reviewer->id, 'outputs' => [
+                        ['id' => 'out-review', 'name' => 'یادداشت داور', 'type' => 'text', 'value' => 'بدون ایراد'],
+                    ]]),
             ]],
         ]);
-        Task::create(['title' => 'بازبینی محتوا', 'kind' => 'content_review', 'assignee_id' => $reviewer->id,
-            'content_id' => $content->id, 'content_stage_id' => 'review', 'status' => 'review', 'priority' => 'medium']);
 
-        $response = $this->getJson('/api/v1/approvals')->assertOk();
-        $row = $response->json('data.0');
+        $row = $this->reviewRow($content, $reviewer, 'review');
 
         $this->assertNotNull($row, 'ردیف بررسی باید برگردد.');
         $this->assertSame('بازبینی سردبیری', $row['stageTitle']);
-        $this->assertCount(1, $row['outputs']);
-        $this->assertSame('out-1', $row['outputs'][0]['id']);
-        $this->assertSame('تولید گرافیک', $row['outputs'][0]['stageTitle']);
-        $this->assertSame('previous', $row['outputs'][0]['relation']);
-        $this->assertSame('produce', $row['outputs'][0]['stageId']);
+        $this->assertSame(['out-review'], array_column($row['outputs'], 'id'), 'فقط خروجی همین مرحله باید بیاید.');
+        $this->assertSame('current', $row['outputs'][0]['relation']);
+        $this->assertNotContains('out-1', array_column($row['outputs'], 'id'), 'خروجی مرحلهٔ قبل نباید نمایش داده شود.');
     }
 
-    public function test_review_window_includes_forwarded_and_own_outputs_without_duplicates(): void
+    public function test_review_window_is_empty_when_the_review_stage_has_no_outputs(): void
     {
         $reviewer = $this->actor(['content.view', 'content.approve', 'tasks.view']);
+        $content = Content::create([
+            'title' => 'محتوای بدون خروجی بازبینی',
+            'type' => 'article',
+            'status' => 'producing',
+            'payload' => ['stages' => [
+                $this->stage('write', 'نگارش', ['status' => 'approved', 'order' => 1, 'outputs' => [
+                    ['id' => 'out-write', 'name' => 'متن اصلی', 'type' => 'text', 'value' => 'متن'],
+                ]]),
+                $this->stage('review', 'بازبینی', ['status' => 'pending_approval', 'order' => 2, 'reviewerId' => (string) $reviewer->id]),
+            ]],
+        ]);
 
+        $row = $this->reviewRow($content, $reviewer, 'review');
+        $this->assertSame([], $row['outputs']);
+    }
+
+    public function test_review_window_includes_outputs_forwarded_to_this_stage_without_duplicates(): void
+    {
+        $reviewer = $this->actor(['content.view', 'content.approve', 'tasks.view']);
         $content = Content::create([
             'title' => 'گزارش تحلیلی',
             'type' => 'article',
             'status' => 'producing',
             'payload' => ['stages' => [
                 $this->stage('write', 'نگارش متن', ['status' => 'approved', 'order' => 1, 'outputs' => [
-                    ['id' => 'out-text', 'name' => 'متن نهایی', 'type' => 'text', 'value' => 'متن کامل گزارش'],
-                    ['id' => 'out-forward', 'name' => 'فایل ارجاعی', 'type' => 'file', 'url' => '/api/v1/dam/files/9', 'forwardedToStageId' => 'approve'],
+                    ['id' => 'out-sent', 'name' => 'فایل ارجاعی', 'type' => 'file', 'url' => '/api/v1/dam/files/9', 'forwardedToStageId' => 'approve'],
+                    ['id' => 'out-kept', 'name' => 'فایل داخلی', 'type' => 'file', 'url' => '/api/v1/dam/files/10'],
                 ]]),
                 $this->stage('approve', 'تأیید نهایی', ['status' => 'pending_approval', 'order' => 2,
-                    'reviewerId' => (string) $reviewer->id, 'dependsOnStageIds' => ['write'],
+                    'reviewerId' => (string) $reviewer->id,
                     'outputs' => [['id' => 'out-own', 'name' => 'یادداشت داور', 'type' => 'text', 'value' => 'بدون ایراد']]]),
             ]],
         ]);
-        Task::create(['title' => 'تأیید محتوا', 'kind' => 'content_review', 'assignee_id' => $reviewer->id,
-            'content_id' => $content->id, 'content_stage_id' => 'approve', 'status' => 'review', 'priority' => 'medium']);
 
-        $row = $this->getJson('/api/v1/approvals')->assertOk()->json('data.0');
+        $row = $this->reviewRow($content, $reviewer, 'approve');
         $ids = array_column($row['outputs'], 'id');
         $relations = array_column($row['outputs'], 'relation', 'id');
 
-        // خروجی خودِ مرحله اول می‌آید، بعد ارجاعی و پیش‌نیاز؛ هیچ تکراری نیست.
         $this->assertSame('out-own', $ids[0]);
         $this->assertSame('current', $relations['out-own']);
-        $this->assertContains('out-forward', $ids);
-        $this->assertContains('out-text', $ids);
-        $this->assertSame('forwarded', $relations['out-forward']);
-        $this->assertSame('dependency', $relations['out-text']);
+        $this->assertContains('out-sent', $ids);
+        $this->assertSame('forwarded', $relations['out-sent']);
+        $this->assertNotContains('out-kept', $ids, 'خروجی ارجاع‌نشدهٔ مرحلهٔ دیگر نباید بیاید.');
         $this->assertSame(count($ids), count(array_unique($ids)));
-    }
-
-    public function test_review_window_is_empty_only_when_no_stage_has_outputs(): void
-    {
-        $reviewer = $this->actor(['content.view', 'content.approve', 'tasks.view']);
-        $content = Content::create([
-            'title' => 'محتوای بدون خروجی',
-            'type' => 'article',
-            'status' => 'producing',
-            'payload' => ['stages' => [
-                $this->stage('one', 'قدم اول', ['status' => 'approved', 'order' => 1]),
-                $this->stage('review', 'بازبینی', ['status' => 'pending_approval', 'order' => 2, 'reviewerId' => (string) $reviewer->id]),
-            ]],
-        ]);
-        Task::create(['title' => 'بازبینی', 'kind' => 'content_review', 'assignee_id' => $reviewer->id,
-            'content_id' => $content->id, 'content_stage_id' => 'review', 'status' => 'review', 'priority' => 'medium']);
-
-        $row = $this->getJson('/api/v1/approvals')->assertOk()->json('data.0');
-        $this->assertSame([], $row['outputs']);
+        $this->assertSame('نگارش متن', $row['outputs'][array_search('out-sent', $ids, true)]['stageTitle']);
     }
 }

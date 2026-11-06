@@ -148,6 +148,12 @@ export interface Task {
   dependencies: string[]; // Task IDs this task depends on
   isBlocked?: boolean;
   blockedReason?: string;
+  /**
+   * نام محتوا/پروژهٔ مرتبط که خودِ سرور با همان کوئری فهرست می‌فرستد؛ تا خط
+   * دوم عنوان تسک به فهرست محتوای بارگذاری‌شده در مرورگر گره نخورد.
+   */
+  contentTitle?: string | null;
+  projectTitle?: string | null;
   createdAt: string;
   updatedAt: string;
 }

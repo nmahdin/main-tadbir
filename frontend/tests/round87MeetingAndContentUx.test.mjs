@@ -165,13 +165,14 @@ test('فیلتر وضعیت موارد مرتبط پروژه همان واژگا
 test('زیر عنوان تسک، نام محتوا/پروژهٔ مرتبط می‌آید و بدون ارتباط هیچ خطی نیست', async () => {
   const view = await source('../src/components/tasks/MyTasksView.tsx');
   assert.match(view, /const linkedContent = task\.contentId \? contents\.find/);
-  assert.match(view, /relatedLabel = linkedContent/);
+  assert.match(view, /const contentLabel = task\.contentTitle \|\| linkedContent\?\.title \|\| ''/);
   assert.match(view, /\{relatedLabel && <span className="mt-0\.5 block truncate text-\[10px\] font-bold text-slate-500">\{relatedLabel\}<\/span>\}/);
 });
 
 test('کارت خروجی محتوا در صفحهٔ عریض سه‌ستونه است', async () => {
   const sections = await source('../src/components/content/StageAssetSections.tsx');
-  assert.match(sections, /lg:grid-cols-2 xl:grid-cols-3/);
+  // دور ۸۹: عرض کارت کمی کمتر شد؛ سه ستون از لپ‌تاپ و چهار ستون در عریض‌ترین حالت.
+  assert.match(sections, /sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4/);
 });
 
 test('نوار رنگی سربرگ محتوا هم‌رنگ رنگ اصلی و داخل کارت است', async () => {

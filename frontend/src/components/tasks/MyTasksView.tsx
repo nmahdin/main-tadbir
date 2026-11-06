@@ -226,11 +226,20 @@ export const MyTasksView: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredTasks.map(task => {
                   const proj = projects.find(p => p.id === task.projectId);
-                  // خط دوم عنوان: نام محتوای مرتبط، وگرنه پروژه؛ بدون ارتباط، خالی.
+                  /**
+                   * خط دوم عنوان: نام محتوای مرتبط، وگرنه پروژه.
+                   *
+                   * پیش‌تر نام محتوا فقط از فهرست `contents` مرورگر پیدا می‌شد؛ آن
+                   * فهرست ۱۰۰ مورد اول است و برای بقیه، خط دوم خالی یا فقط نام
+                   * پروژه دیده می‌شد. حالا عنوانِ خودِ سرور (`contentTitle`) اول
+                   * است و فهرست محلی فقط پشتیبان است.
+                   */
                   const linkedContent = task.contentId ? contents.find(item => item.id === task.contentId) : undefined;
-                  const relatedLabel = linkedContent
-                    ? `محتوا: ${linkedContent.title}${linkedContent.code ? ` (${linkedContent.code})` : ''}`
-                    : (proj ? `پروژه: ${proj.name}` : '');
+                  const contentLabel = task.contentTitle || linkedContent?.title || '';
+                  const projectLabel = task.projectTitle || proj?.name || '';
+                  const relatedLabel = contentLabel
+                    ? `محتوا: ${contentLabel}${linkedContent?.code ? ` (${linkedContent.code})` : ''}`
+                    : (projectLabel ? `پروژه: ${projectLabel}` : '');
                   const isPastDue = task.status !== 'completed' && task.deadline < todayStr;
                   const isCompleted = task.status === 'completed';
                   return (
@@ -348,7 +357,8 @@ export const MyTasksView: React.FC = () => {
                       >
                         <div className="mb-2 flex items-start justify-between gap-2">
                           <PriorityPill priority={task.priority} size="sm" />
-                          {proj && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{proj.name}</span>}
+                          {/* در کارت کانبان هم نام محتوای مرتبط اولویت دارد، بعد پروژه. */}
+                          {(task.contentTitle || proj) && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{task.contentTitle || proj?.name}</span>}
                         </div>
                         <h4 className="mb-3 line-clamp-2 text-[12px] font-bold leading-5 text-slate-900">{task.title}</h4>
                         <div className="flex items-center justify-between border-t border-slate-100 pt-2">

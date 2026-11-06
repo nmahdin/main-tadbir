@@ -50,6 +50,15 @@ class TaskController extends Controller
             && app(ContentAccess::class)->canView($request->user(), $content);
 
         $tasks = Task::query()
+            /**
+             * نام محتوا/پروژهٔ مرتبط برای نمایش زیر عنوان تسک (دور ۸۹).
+             *
+             * پیش‌تر رابط کاربری نام را از فهرست محتواهای بارگذاری‌شده پیدا
+             * می‌کرد؛ آن فهرست محدود است و برای تسک‌های بیرونِ آن، خط دوم خالی
+             * می‌ماند. حالا خودِ سرور فقط دو ستون سبک (عنوان/نام) را با همان
+             * کوئری می‌آورد.
+             */
+            ->with(['content:id,title', 'project:id,name'])
             // The personal task page is a server-enforced scope: request filters
             // may narrow these rows, but can never expose another assignee's task.
             ->when(! $contentTasksVisible, fn ($query) => $query->where('assignee_id', $request->user()->id))

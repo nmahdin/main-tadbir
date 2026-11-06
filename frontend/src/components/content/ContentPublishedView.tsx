@@ -72,10 +72,22 @@ export const ContentPublishedView: React.FC = () => {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [publisherFilter, setPublisherFilter] = useState('all');
+  /** فیلتر «مجموعهٔ محتوا»: همان سری‌ای که محتوا به آن پیوند خورده است. */
+  const [seriesFilter, setSeriesFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
   const publishers = users.filter(user => contents.some(content => content.status === 'published' && content.publisherId === user.id));
+  /**
+   * گزینه‌های مجموعه از خودِ محتواهای منتشرشده ساخته می‌شود (نه فهرست همهٔ
+   * مجموعه‌ها) تا فقط مجموعه‌هایی بیایند که واقعاً پروندهٔ منتشرشده دارند؛
+   * گزینهٔ «بدون مجموعه» هم برای پرونده‌های مستقل می‌ماند.
+   */
+  const seriesOptions = Array.from(new Map(
+    publishedContents
+      .filter(content => content.seriesId)
+      .map(content => [String(content.seriesId), content.seriesName || content.seriesCode || `مجموعهٔ ${content.seriesId}`] as const),
+  ).entries()).map(([id, name]) => ({ id, name }));
   const filteredContents = publishedContents.filter(content => {
     const needle = query.trim().toLowerCase();
     if (needle) {
@@ -84,6 +96,8 @@ export const ContentPublishedView: React.FC = () => {
     }
     if (typeFilter !== 'all' && content.type !== typeFilter) return false;
     if (publisherFilter !== 'all' && String(content.publisherId || '') !== publisherFilter) return false;
+    if (seriesFilter === 'none' && content.seriesId) return false;
+    if (seriesFilter !== 'all' && seriesFilter !== 'none' && String(content.seriesId || '') !== seriesFilter) return false;
     if (dateFrom || dateTo) {
       const day = toIsoDateKey(content.publishInfo?.date);
       if (!day) return false;
@@ -92,11 +106,12 @@ export const ContentPublishedView: React.FC = () => {
     }
     return true;
   });
-  const activeFilterCount = [Boolean(query.trim()), typeFilter !== 'all', publisherFilter !== 'all', Boolean(dateFrom), Boolean(dateTo)].filter(Boolean).length;
+  const activeFilterCount = [Boolean(query.trim()), typeFilter !== 'all', publisherFilter !== 'all', seriesFilter !== 'all', Boolean(dateFrom), Boolean(dateTo)].filter(Boolean).length;
   const resetFilters = () => {
     setQuery('');
     setTypeFilter('all');
     setPublisherFilter('all');
+    setSeriesFilter('all');
     setDateFrom('');
     setDateTo('');
   };
@@ -157,6 +172,13 @@ export const ContentPublishedView: React.FC = () => {
               <select value={publisherFilter} onChange={event => setPublisherFilter(event.target.value)} className="ui-input mt-1.5 text-xs">
                 <option value="all">همه ناشران</option>
                 {publishers.map(user => <option key={user.id} value={user.id}>{user.name} {user.family || ''}</option>)}
+              </select>
+            </label>
+            <label className="text-[11px] font-bold text-slate-600">مجموعهٔ محتوا
+              <select value={seriesFilter} onChange={event => setSeriesFilter(event.target.value)} className="ui-input mt-1.5 text-xs">
+                <option value="all">همهٔ مجموعه‌ها</option>
+                <option value="none">بدون مجموعه</option>
+                {seriesOptions.map(series => <option key={series.id} value={series.id}>{series.name}</option>)}
               </select>
             </label>
             <div className="text-[11px] font-bold text-slate-600">از تاریخ انتشار<PersianDatePicker className="mt-1.5" value={dateFrom} onChange={setDateFrom} placeholder="از تاریخ شمسی…" /></div>

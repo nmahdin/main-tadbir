@@ -482,10 +482,11 @@ export function StageAssetSection({
       <div id={bodyId} className={isOutput ? '' : `grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
         <div className={isOutput ? '' : 'overflow-hidden'} inert={!open ? true : undefined}>
           <div className="p-3 sm:p-4">
-            {/* عرض کارت خروجی کمی کمتر شد (دور ۸۷): در صفحه‌های عریض سه کارت
-                در یک ردیف می‌نشینند تا هر کارت به اندازهٔ خوانا بماند. */}
+            {/* عرض کارت خروجی (دور ۸۷ و کمترشدن دور ۸۹): از تبلت دو ستون، از
+                لپ‌تاپ سه ستون و در صفحه‌های خیلی عریض چهار ستون؛ کارت باریک‌تر
+                می‌شود ولی متن همچنان خوانا می‌ماند. */}
             {items.length > 0 ? (
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                 {items.map(view => <StageAssetCard key={view.id} view={view} onPreview={onPreview} actions={renderActions?.(view)} />)}
               </div>
             ) : (
