@@ -22,6 +22,7 @@ use App\Services\TaskOperations;
 use App\Support\Dam\DamRelationRole;
 use App\Support\Dam\DamRichText;
 use App\Support\Media\DamFileKind;
+use App\Support\Media\DamThumbnail;
 use App\Support\Media\DamZipStream;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -30,6 +31,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 
 class DamAssetController extends Controller
 {
@@ -993,6 +995,80 @@ class DamAssetController extends Controller
         }
 
         return $this->mediaResponse($file->storage_disk, $file->storage_path, $file->original_filename, $mime);
+    }
+
+    /**
+     * بندانگشتی سبک تصویر برای کارت‌ها و ردیف‌های مخزن (دور ۸۴).
+     *
+     * پیش‌تر همین کادرهای کوچک، نشانی `preview` (فایل اصلی) را می‌گرفتند؛ یک
+     * فهرست بیست‌ردیفی از عکس‌های موبایلی می‌توانست ده‌ها مگابایت دانلود کند.
+     * اکنون نسخهٔ کوچک و کش‌شده (WebP در صورت پشتیبانی سرور) سرو می‌شود و
+     * پاسخ با `Cache-Control` بلندمدت + `ETag` همراه است تا مرورگر دوباره
+     * آن را نگیرد. اگر تبدیل تصویر روی این سرور ممکن نباشد، همان فایل اصلی
+     * برمی‌گردد تا بندانگشتی خالی نماند.
+     */
+    public function thumbnail(Request $request, DamAsset $asset)
+    {
+        $this->permitted($request, 'assets.preview', $asset);
+        $file = $this->versionFile($asset, $request);
+        abort_unless($file && Storage::disk($file->storage_disk)->exists($file->storage_path), 404);
+        $mime = strtolower($file->mime_type ?: 'application/octet-stream');
+        abort_unless(
+            str_starts_with($mime, 'image/') && $mime !== 'image/svg+xml',
+            415,
+            'بندانگشتی فقط برای تصاویر ساخته می‌شود.',
+        );
+
+        $thumbnails = app(DamThumbnail::class);
+        $thumb = $thumbnails->forFile($file, $thumbnails->width($request->query('w')));
+        if ($thumb === null) {
+            // تبدیل تصویر روی این سرور ممکن نشد (نبود Imagick/GD یا دیسک ابری):
+            // همان فایل اصلی سرو می‌شود تا بندانگشتی خالی نماند؛ کش و ETag هم
+            // می‌مانند تا دست‌کم درخواست تکراری دانلود نشود.
+            $original = $this->mediaResponse($file->storage_disk, $file->storage_path, $file->original_filename, $mime);
+
+            return $this->withImageCache(
+                $original,
+                $request,
+                sprintf('"dam-file-%s-%s"', (string) ($file->id ?: 'file'), (string) ($file->checksum ?: $file->file_size)),
+            );
+        }
+
+        $response = response()->file($thumb['path'], [
+            'Content-Type' => $thumb['mime'],
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+
+        return $this->withImageCache($response, $request, $thumb['etag']);
+    }
+
+    /**
+     * کش مرورگری برای بندانگشتی.
+     *
+     * نسخهٔ کوچک با اثر انگشت نسخهٔ فایل نام‌گذاری می‌شود و نسخهٔ فایل هم پس از
+     * بارگذاری تغییر نمی‌کند؛ پس کش یک‌هفته‌ای امن است. درخواست تکراری با همان
+     * `ETag` به ۳۰۴ بدون بدنه پاسخ می‌گیرد.
+     */
+    private function withImageCache(Response $response, Request $request, string $etag): Response
+    {
+        $cache = 'private, max-age=604800';
+        $response->headers->set('ETag', $etag);
+        $response->headers->set('Cache-Control', $cache);
+
+        $ifNoneMatch = trim((string) $request->headers->get('If-None-Match', ''));
+        if ($ifNoneMatch === '') {
+            return $response;
+        }
+        foreach (explode(',', $ifNoneMatch) as $candidate) {
+            $candidate = trim($candidate);
+            if ($candidate === $etag || $candidate === 'W/'.$etag || $candidate === '*') {
+                $notModified = response('', 304, ['ETag' => $etag, 'Cache-Control' => $cache]);
+
+                return $notModified;
+            }
+        }
+
+        return $response;
     }
 
     /**

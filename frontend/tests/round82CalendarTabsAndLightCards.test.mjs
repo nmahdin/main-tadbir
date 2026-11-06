@@ -13,11 +13,12 @@ const library = read('../src/components/dam/DamLibrary.tsx');
 const preview = read('../src/components/dam/AssetPreviewModal.tsx');
 const stage = read('../src/components/content/StageAssetSections.tsx');
 
-test('تب‌های نوع رویداد: فعال سفید، غیرفعال بی‌حاشیه و بی‌پس‌زمینه، هاور کم‌رنگ', () => {
-  // تب فعال: پس‌زمینهٔ سفید، بدون حاشیه.
-  assert.match(calendar, /'bg-white text-slate-900 shadow-xs'/);
+test('تب‌های نوع رویداد: نوار سفید، تب فعال با رنگ اصلی، غیرفعال بی‌حاشیه', () => {
+  // دور ۸۴: کل نوار تب‌ها سفید است و تب فعال با رنگ اصلی سامانه پر می‌شود.
+  assert.match(calendar, /rounded-2xl border border-slate-200 bg-white p-1\.5 shadow-2xs/);
+  assert.match(calendar, /'bg-indigo-600 text-white shadow-xs'/);
   // تب غیرفعال: شفاف، بدون حاشیه، فقط هاورِ کم‌رنگ.
-  assert.match(calendar, /'bg-transparent text-slate-500 hover:bg-white\/60 hover:text-slate-700'/);
+  assert.match(calendar, /'bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700'/);
   // هیچ رنگ پُرِ اصلی و هیچ حاشیه‌ای روی تب‌ها نمانده باشد.
   assert.doesNotMatch(calendar, /border-indigo-600 bg-indigo-600 text-white/);
   assert.doesNotMatch(calendar, /border-slate-200 bg-white text-slate-600 hover:border-indigo-200/);
@@ -75,7 +76,8 @@ test('هر محتوا در تقویم فقط یک باکس دارد', () => {
   assert.match(calendar, /id: `content-\$\{content\.id\}`,/);
   assert.doesNotMatch(calendar, /content-publish-/);
   assert.doesNotMatch(calendar, /content-deadline-/);
-  // مهلت اولویت دارد و در نبود آن تاریخ انتشار می‌آید.
-  assert.match(calendar, /const date = deadline \|\| publishDate;/);
-  assert.match(calendar, /const publishLabel = publishDate && publishDate !== date/);
+  // دور ۸۴: تاریخ انتشار اولویت دارد تا محتوای منتشرشده هم روی تقویم بماند و
+  // مهلت تولید در توضیح همان کارت بیاید.
+  assert.match(calendar, /const date = publishDate \|\| scheduledDate \|\| deadline \|\| fallback;/);
+  assert.match(calendar, /مهلت تولید: \$\{deadline\}/);
 });

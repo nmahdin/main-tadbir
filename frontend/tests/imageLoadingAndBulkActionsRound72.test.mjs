@@ -44,9 +44,10 @@ test('the progressive loader never adds network requests and preloads on intent'
   assert.equal(smart.match(/<img\s+\n?\s*ref=\{imgRef\}/g)?.length, 1);
   assert.match(preload, /export function preloadImage\(src\?: string \| null\): void \{/);
   assert.match(preload, /image\.src = url;/);
-  // هاور/فوکوس روی کارت مخزن، تصویر مدال را پیش‌بارگذاری می‌کند.
-  assert.match(dam, /const intent = imageIntentProps\(previewSrc\);/);
-  assert.match(dam, /<button onClick=\{onOpen\} \{\.\.\.intent\}/);
+  // دور ۸۴: کارت مخزن دیگر فایل اصلی را پیش‌بارگذاری نمی‌کند؛ نسخهٔ کوچکِ
+  // کش‌شده روی خود کارت می‌آید و فایل کامل فقط با باز شدن مدال دانلود می‌شود.
+  assert.match(dam, /const thumbSrc = isImage \? damApi\.library\.thumbnailUrl\(asset\.id, 320\) : '';/);
+  assert.doesNotMatch(dam, /imageIntentProps\(previewSrc\)/);
   // دور ۸۲: کارت خروجی محتوا هیچ تصویری پیش‌بارگذاری (یا لود) نمی‌کند؛ تصویر
   // فقط وقتی مدال «پیش‌نمایش» باز شود گرفته می‌شود.
   assert.doesNotMatch(stage, /preloadImage\(/);

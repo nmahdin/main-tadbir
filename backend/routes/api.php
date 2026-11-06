@@ -251,6 +251,9 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('dam/library/{asset}', [DamAssetController::class, 'destroy']);
         Route::post('dam/library/{asset}/restore', [DamAssetController::class, 'restore']);
         Route::get('dam/library/{asset}/preview', [DamAssetController::class, 'preview']);
+        // بندانگشتی سبک (دور ۸۴): کارت‌ها و ردیف‌ها به‌جای فایل اصلی، نسخهٔ
+        // کوچک و کش‌شده را می‌گیرند؛ حجم مصرفی فهرست مخزن تا یک‌دهم کم می‌شود.
+        Route::get('dam/library/{asset}/thumbnail', [DamAssetController::class, 'thumbnail']);
         Route::get('dam/library/{asset}/download', [DamAssetController::class, 'download']);
         Route::post('dam/library/{asset}/temporary-link', [DamAssetController::class, 'temporaryLink'])->middleware('throttle:30,1');
         Route::post('dam/library/{asset}/versions', [DamAssetController::class, 'revise']);

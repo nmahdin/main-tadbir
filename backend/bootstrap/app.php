@@ -2,6 +2,7 @@
 
 use App\Bot\Bale\Support\OperationsSchema;
 use App\Http\Middleware\ApiLocale;
+use App\Http\Middleware\ConditionalJsonCache;
 use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\EnsureMaintenanceMode;
 use App\Http\Middleware\EnsureUserHasPermission;
@@ -32,6 +33,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // پیام‌های اعتبارسنجیِ API همیشه فارسی باشند (مستقل از APP_LOCALE میزبان)
         // تا خطای ۴۲۲ دلیلِ ردشدن ورودی را بگوید، نه یک متن کلی.
         $middleware->api(prepend: [ApiLocale::class]);
+
+        // پاسخ‌های JSON ِ GET با ETag اعتبارسنجی می‌شوند؛ درخواستِ تکراریِ
+        // بدون تغییر، ۳۰۴ بدون بدنه می‌گیرد (صرفه‌جویی اینترنت، دور ۸۴).
+        $middleware->api(append: [ConditionalJsonCache::class]);
 
         // فعال‌سازی احراز هویت مبتنی بر کوکی/نشست برای SPA (Sanctum).
         $middleware->statefulApi();

@@ -10,6 +10,7 @@ import {
   Table as TableIcon, Tag, Trash2, Users, X,
 } from 'lucide-react';
 import { ApiResponse, apiConfig, request } from '../../api/client';
+import { damApi } from '../../api/dam';
 import { useApp } from '../../context/AppContext';
 import { useUrlFilter } from '../../routing/useUrlFilter';
 import { DamDataTables } from './DamDataTables';
@@ -24,7 +25,7 @@ import { Button, Modal } from '../common/Primitives';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft, type AttachmentDraft } from '../common/AttachmentComposer';
 import { Collapsible } from '../common/Collapsible';
 import { PersianDatePicker } from '../common/PersianDatePicker';
-import { SmartImage, imageIntentProps } from '../common/SmartImage';
+import { SmartImage } from '../common/SmartImage';
 import { ImagePreview } from '../common/ImagePreview';
 import { MediaPlayer } from '../common/MediaPlayer';
 import { SearchableSelect } from '../common/SearchableSelect';
@@ -1128,14 +1129,19 @@ const AssetGridCard: React.FC<{ asset: Asset; statusLabel: (id: string) => strin
   const isContent = asset.type === 'content';
   const mime = (asset.latest_file?.mime_type || '').toLowerCase();
   const isImage = mime.startsWith('image/') && mime !== 'image/svg+xml';
-  const previewSrc = isImage ? `${apiConfig.baseUrl}/dam/library/${asset.id}/preview` : '';
-  // هاور یا فوکوس روی کارت، تصویر پیش‌نمایش را همان‌جا پیش‌بارگذاری می‌کند تا
-  // باز‌شدن مدال پیش‌نمایش تصویر را آماده ببیند.
-  const intent = imageIntentProps(previewSrc);
+  /*
+   * دور ۸۴: کارت ۱۲۸ پیکسلی دیگر فایل اصلی را نمی‌گیرد.
+   *
+   * پیش‌تر همین `<SmartImage>` نشانی `preview` را لود می‌کرد (یعنی عکس کامل
+   * چند مگابایتی برای یک کادر کوچک) و هاور هم تصویر اصلی مدال را پیش‌بارگذاری
+   * می‌کرد. حالا کارت نسخهٔ کوچکِ کش‌شده (`?w=320`) را می‌گیرد و پیش‌بارگذاری
+   * هاور حذف شده است؛ تصویر کامل فقط با باز شدن مدال پیش‌نمایش دانلود می‌شود.
+   */
+  const thumbSrc = isImage ? damApi.library.thumbnailUrl(asset.id, 320) : '';
   return <div className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:border-indigo-300 hover:shadow ${selected ? 'border-indigo-400 ring-1 ring-indigo-300' : 'border-slate-200'}`}>
-    <button onClick={onOpen} {...intent} data-press="none" className="flex h-32 items-center justify-center overflow-hidden bg-slate-50 text-slate-300">
+    <button onClick={onOpen} data-press="none" className="flex h-32 items-center justify-center overflow-hidden bg-slate-50 text-slate-300">
       {isImage
-        ? <SmartImage src={previewSrc} alt={asset.title} priority={priority} busy className="h-full w-full" />
+        ? <SmartImage src={thumbSrc} alt={asset.title} priority={priority} busy className="h-full w-full" />
         : isContent ? <FileText className="h-10 w-10 text-violet-300" /> : <File className="h-10 w-10 text-indigo-200" />}
     </button>
     {canSelect && <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`انتخاب ${asset.title}`} className="absolute right-2.5 top-2.5 z-10 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />}
