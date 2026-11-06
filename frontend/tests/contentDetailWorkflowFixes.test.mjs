@@ -81,7 +81,9 @@ test('the content code is bolder and more readable next to the description', () 
 test('the reviewer chip uses the same grey tone as the other responsibility chips', () => {
   const chipStart = contentDetail.indexOf("title={stage.reviewRequired === false ? 'این مرحله به ارزیاب نیاز ندارد'");
   assert.ok(chipStart > -1, 'نشان ارزیاب باید عنوان توضیحی داشته باشد');
-  const chip = contentDetail.slice(Math.max(0, chipStart - 700), contentDetail.indexOf('{stageDeadline &&'));
+  // انتهای برش، آغازِ کنترلِ مهلت مرحله است (دور ۸۷ این کنترل جای شرطِ
+  // `{stageDeadline && (` را گرفت و همیشه رندر می‌شود).
+  const chip = contentDetail.slice(Math.max(0, chipStart - 700), contentDetail.indexOf('aria-label="انتخاب مهلت مرحله"'));
   assert.match(chip, /bg-slate-50 hover:border-indigo-300 hover:bg-white/);
   assert.doesNotMatch(chip, /amber/);
   assert.match(chip, /ارزیاب: \{stageReviewer\.name\}/);
@@ -105,7 +107,11 @@ test('stage deadlines carry tier colours and drive the derived «تأخیر» st
   assert.match(deadlineTones, /today: 'border-rose-200 bg-rose-50 text-rose-700'/);
   assert.match(deadlineTones, /past: 'border-violet-200 bg-violet-50 text-violet-700'/);
   assert.match(contentDetail, /const stageOverdue = Boolean\(stageDeadline && stageDeadline\.tier === 'past' && OPEN_STAGE_STATUSES\.includes\(stage\.status\)\)/);
-  assert.match(contentDetail, /\{stageDeadline && \(/);
+  // مهلت مرحله حالا همیشه دیده می‌شود («بدون مهلت» هم حالت معتبر است) و با
+  // کلیک همان‌جا انتخاب می‌شود — دور ۸۷.
+  assert.match(contentDetail, /stage\.deadline \? formatPersianDate\(stage\.deadline\) : 'بدون مهلت'/);
+  assert.match(contentDetail, /aria-label="انتخاب مهلت مرحله"/);
+  assert.match(contentDetail, /assignStageResponsibility\(content\.id, stage\.id, \{ deadline: date \}\)/);
   // مرحلهٔ تمام‌شده رنگ تأخیر و برچسب نسبی نمی‌گیرد؛ فقط مرحلهٔ ناتمام رنگی می‌شود.
   assert.match(contentDetail, /const stageFinished = \['approved', 'completed', 'skipped'\]\.includes\(stage\.status\)/);
   assert.match(contentDetail, /const stageDeadlineTone = stageFinished \? 'later' : \(stageDeadline\?\.tier \?\? 'unknown'\)/);

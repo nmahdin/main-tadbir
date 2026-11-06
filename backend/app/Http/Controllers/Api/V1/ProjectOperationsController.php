@@ -41,8 +41,10 @@ class ProjectOperationsController extends Controller
             'tasks' => $request->user()->hasPermission('tasks.view') ? (clone $tasks)->count() : 0,
             'completedTasks' => $request->user()->hasPermission('tasks.view') ? (clone $tasks)->where('status', 'completed')->count() : 0,
             'assets' => $request->user()->hasPermission('assets.view') ? $this->assetQuery($request, $project)->count() : 0,
-            'ideas' => $request->user()->hasPermission('thinktank.view') ? WorkspaceRecord::where('project_id', $project->id)->where('kind', WorkspaceRecord::KIND_IDEA)->count() : 0,
-            'meetings' => $request->user()->hasPermission('meetings.view') ? WorkspaceRecord::where('project_id', $project->id)->where('kind', WorkspaceRecord::KIND_MEETING)->count() : 0,
+            // شمارندهٔ تب‌ها باید با همان فهرستی بخواند که کاربر می‌بیند؛ رکورد
+            // بایگانی‌شده در فهرست پیش‌فرض نیست، پس در شمارش هم نمی‌آید.
+            'ideas' => $request->user()->hasPermission('thinktank.view') ? WorkspaceRecord::where('project_id', $project->id)->where('kind', WorkspaceRecord::KIND_IDEA)->where('status', '!=', 'archived')->count() : 0,
+            'meetings' => $request->user()->hasPermission('meetings.view') ? WorkspaceRecord::where('project_id', $project->id)->where('kind', WorkspaceRecord::KIND_MEETING)->where('status', '!=', 'archived')->count() : 0,
             'activities' => $request->user()->hasPermission('reports.view') ? ActivityLog::where('project_id', $project->id)->count() : 0,
             'activeContents' => $canViewContent ? (clone $contents)->whereNotIn('status', ['published', 'cancelled', 'suspended'])->count() : 0,
             'openTasks' => $request->user()->hasPermission('tasks.view') ? (clone $tasks)->where('status', '!=', 'completed')->count() : 0,

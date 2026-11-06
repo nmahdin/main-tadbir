@@ -1,4 +1,5 @@
 import { PERSIAN_MONTH_NAMES, gregorianToJalali, toPersianDigits } from './jalali';
+export { toIsoDateKey } from './isoDate';
 
 /**
  * تاریخِ امروزِ مرورگر به‌صورت میلادی (`YYYY-MM-DD`).

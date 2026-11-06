@@ -13,7 +13,6 @@ import { DEADLINE_CHIP_TONES, DEADLINE_ICON_TONES, deadlineToneTier } from '../.
 import { Avatar } from '../common/Avatar';
 import { PriorityPill } from '../common/PriorityPill';
 import { Button, ErrorState, LoadingState, Modal } from '../common/Primitives';
-import { TaskAssetsSection } from './TaskAssetsSection';
 import { EditTaskModal } from './EditTaskModal';
 import { Collapsible } from '../common/Collapsible';
 
@@ -184,7 +183,9 @@ export const TaskDetailDrawer: React.FC = () => {
           <form onSubmit={submitSubtask} className="mt-4 flex gap-2 border-t border-slate-100 pt-4"><input value={newSubtaskText} onChange={event => setNewSubtaskText(event.target.value)} disabled={!canChecklist} placeholder="عنوان مورد جدید…" className="ui-input flex-1" /><Button type="submit" variant="secondary" disabled={!canChecklist || !newSubtaskText.trim()}>افزودن</Button></form>
         </section>}
 
-        {hasPermission('assets.view') && <TaskAssetsSection key={task.id} task={task} />}
+        {/* پیوست‌ها/دارایی‌های وظیفه در این پنجره نمایش داده نمی‌شوند (دور ۸۷):
+            ثبت و مدیریت فایل از مسیر مخزن و از «خروجی‌های مرحله» انجام می‌شود،
+            نه از جزئیات وظیفه. فرم ویرایش وظیفه دست‌نخورده می‌ماند. */}
 
         {false && <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
           <div className="mb-4 flex items-center gap-2"><MessageSquare className="h-4 w-4 text-indigo-600" /><h4 className="text-xs font-black text-slate-900">دیدگاه‌ها و هماهنگی‌ها</h4><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{toPersianDigits(task.comments.length)}</span></div>

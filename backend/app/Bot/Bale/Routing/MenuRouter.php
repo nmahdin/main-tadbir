@@ -90,7 +90,11 @@ final class MenuRouter
             return;
         }
         $callbackMessageId = $callback['message']['message_id'] ?? null;
-        if ($callback && (is_int($callbackMessageId) || (is_string($callbackMessageId) && ctype_digit($callbackMessageId)))
+        // استثنا: دکمه‌های «دریافت فایل» و «کپی کپشن» پیامِ اطلاعات انتشار را پاک
+        // نمی‌کنند (دور ۸۷)؛ کاربر باید بتواند از همان پیام فایل بعدی را بگیرد یا
+        // متن کپشن را کپی کند. پاک‌سازیِ پیام برای بقیهٔ دکمه‌ها مثل قبل است.
+        $keepsPromptMessage = (bool) preg_match('/^pub(file|cap):/', (string) $action);
+        if (! $keepsPromptMessage && $callback && (is_int($callbackMessageId) || (is_string($callbackMessageId) && ctype_digit($callbackMessageId)))
             && (int) $callbackMessageId > 0 && (int) $callbackMessageId < PHP_INT_MAX) {
             $this->outbox->enqueueCallbackCleanup($key.':cleanup', $chat, (int) $callbackMessageId, $link);
         }
@@ -472,7 +476,18 @@ final class MenuRouter
             $result = 'گزارش شماره '.$comment->id.' ثبت شد. زمان: '.$comment->created_at->toIso8601String();
         } elseif ($session->step === 'done_confirm') {
             $task = $this->tasks->changeStatus($user, $task, 'completed', $session->data['expected_status'] ?? null, 'bale');
-            $result = '✅ وظیفه تکمیل شد: '.(self::LABELS[$task->status] ?? $task->status);
+            $session->delete();
+            // پیام موفقیت صریح و مستقل (دور ۸۷): کاربر باید بی‌درنگ ببیند کار
+            // انجام شده و راهِ دیدن فهرست/همان تسک را داشته باشد.
+            $this->reply($key, $chat, $link,
+                "✅ وظیفه با موفقیت تکمیل شد\n\n📌 ".$this->plain($task->title, 180)
+                ."\n🏷 وضعیت: ".(self::LABELS[$task->status] ?? $task->status)
+                ."\n📅 پایان: ".PersianDate::format(now()),
+                [[['text' => '📋 وظایف من', 'callback_data' => 'tasks']],
+                    [['text' => '🔎 جزئیات همین تسک', 'callback_data' => 'task:'.$task->id]]],
+                'task', $task->id);
+
+            return;
         } else {
             abort_if($task->content_id || ! in_array($task->kind, [null, 'general'], true), 403);
             $task = $this->tasks->changeStatus($user, $task, $session->data['status'], $session->data['expected_status'], 'bale');
@@ -494,12 +509,22 @@ final class MenuRouter
             'soon' => $query->whereBetween('deadline', [app(OrganizationTime::class)->date(), app(OrganizationTime::class)->now()->addDays(3)->toDateString()]),
             default => null,
         };
-        $tasks = $query->orderByDesc('id')->offset($page * 5)->limit(6)->get();
+        // ترتیب بر پایهٔ مهلت: قدیمی‌ترین (عقب‌افتاده) اول، امروز و آینده پشت سرِ
+        // آن، و وظیفه‌های بدون مهلت در پایان. فهرست همهٔ کارهای باز است، نه فقط
+        // کارهای همین هفته، تا هیچ وظیفهٔ انجام‌نشده‌ای از کارتابل بیرون نماند.
+        $tasks = $query
+            ->orderByRaw('case when deadline is null then 1 else 0 end')
+            ->orderBy('deadline')
+            ->orderByDesc('id')
+            ->offset($page * 5)->limit(6)->get();
+        $today = app(OrganizationTime::class)->date();
         $rows = [];
-        $body = '📋 *وظایف من* — صفحه '.PersianDate::digits($page + 1)."\n\n";
+        $body = '📋 *وظایف من* (به ترتیب مهلت) — صفحه '.PersianDate::digits($page + 1)."\n\n";
         foreach ($tasks->take(5) as $i => $task) {
             $number = PersianDate::digits($i + 1);
-            $body .= $number.'. *'.$this->plain($task->title, 180)."* \n🏷 ".(self::LABELS[$task->status] ?? 'نامشخص').'  |  📅 '.PersianDate::format($task->deadline)."\n\n";
+            $deadline = $task->deadline ? PersianDate::format($task->deadline) : 'بدون مهلت';
+            $overdue = $task->deadline && $task->deadline->toDateString() < $today ? ' ⏰ گذشته' : '';
+            $body .= $number.'. *'.$this->plain($task->title, 180)."* \n🏷 ".(self::LABELS[$task->status] ?? 'نامشخص').'  |  📅 '.$deadline.$overdue."\n\n";
             $rows[] = [['text' => '🔎 جزئیات تسک '.$number.' · '.mb_substr($task->title, 0, 30), 'callback_data' => 'task:'.$task->id]];
         }
         $this->pages($rows, 'tasks:'.$filter.':', $page, $tasks->count() > 5);

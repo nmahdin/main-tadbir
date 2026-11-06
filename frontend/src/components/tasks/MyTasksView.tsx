@@ -42,6 +42,7 @@ export const MyTasksView: React.FC = () => {
     currentUser,
     tasks,
     projects,
+    contents,
     taskStatuses,
     taskPriorities,
     setSelectedTaskId,
@@ -225,6 +226,11 @@ export const MyTasksView: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredTasks.map(task => {
                   const proj = projects.find(p => p.id === task.projectId);
+                  // خط دوم عنوان: نام محتوای مرتبط، وگرنه پروژه؛ بدون ارتباط، خالی.
+                  const linkedContent = task.contentId ? contents.find(item => item.id === task.contentId) : undefined;
+                  const relatedLabel = linkedContent
+                    ? `محتوا: ${linkedContent.title}${linkedContent.code ? ` (${linkedContent.code})` : ''}`
+                    : (proj ? `پروژه: ${proj.name}` : '');
                   const isPastDue = task.status !== 'completed' && task.deadline < todayStr;
                   const isCompleted = task.status === 'completed';
                   return (
@@ -245,7 +251,11 @@ export const MyTasksView: React.FC = () => {
                           >
                             {isCompleted && <CheckCircle2 className="h-3.5 w-3.5" />}
                           </button>
-                          <span className={`truncate text-[13px] ${isCompleted ? 'font-medium text-slate-500 line-through' : ''}`}>{task.title}</span>
+                          <div className="min-w-0">
+                            <span className={`block truncate text-[13px] ${isCompleted ? 'font-medium text-slate-500 line-through' : ''}`}>{task.title}</span>
+                            {/* نام محتوا/پروژهٔ مرتبط زیر عنوان؛ اگر وظیفه به جایی وصل نیست، هیچ خطی نمی‌آید. */}
+                            {relatedLabel && <span className="mt-0.5 block truncate text-[10px] font-bold text-slate-500">{relatedLabel}</span>}
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">

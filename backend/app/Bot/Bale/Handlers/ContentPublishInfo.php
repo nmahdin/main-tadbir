@@ -211,7 +211,9 @@ final class ContentPublishInfo
     /** شناسهٔ callback برای همان مقصدی که پیام از آن آمده است (وظیفه یا پرونده). */
     private function infoAction(?Task $task, Content $content): string
     {
-        return $task ? $this->infoAction($task, $content) : 'pubinfo:content:'.$content->id;
+        // پیش‌تر این متد خودش را صدا می‌زد و برای هر وظیفهٔ انتشار، بازگشتِ
+        // بی‌پایان و خطای ۵۰۰ می‌داد.
+        return $task ? 'pubinfo:'.$task->id : 'pubinfo:content:'.$content->id;
     }
 
     private function outputAction(?Task $task, Content $content, int $index): string

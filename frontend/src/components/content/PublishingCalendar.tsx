@@ -5,6 +5,7 @@ import { formatPersianTime } from '../../utils/date';
 import { isPublishedContent, publicationRemaining, type PublicationTone } from '../../utils/publicationTiming';
 import { sortCalendarEventsByTime, type CalendarDueTone } from '../../utils/calendarTone';
 import { contentStatusColor, contentStatusLabel } from '../../utils/statusBadges';
+import { publicationDisplayStatus } from '../../utils/publicationReadiness';
 import { CalendarEventCard, type CalendarEventStatus } from '../calendar/CalendarEventCard';
 import { CalendarDayModal } from '../calendar/CalendarDayModal';
 import {
@@ -83,7 +84,7 @@ export const PublishingCalendar: React.FC<PublishingCalendarProps> = ({
    * دقیقاً همان وضعیتی را نشان می‌دهد که در صفحهٔ محتوا ثبت شده است.
    */
   const statusOf = (content: PublicationCalendarEntry): CalendarEventStatus => {
-    const key = String(content.status || content.publishInfo?.status || '');
+    const key = publicationDisplayStatus(content) || String(content.publishInfo?.status || '');
     return { label: contentStatusLabel(key), color: contentStatusColor(key) };
   };
 

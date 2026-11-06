@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, User, Paperclip, LoaderCircle } from 'lucide-react';
+import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, User, UserPlus, Paperclip, LoaderCircle, Clock } from 'lucide-react';
 import { ThinkTankMeeting, MeetingActionItem, MeetingAttachment } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { PersianDatePicker } from '../common/PersianDatePicker';
@@ -7,6 +7,7 @@ import { formatPersianDate } from '../../utils/date';
 import { MeetingAttachmentRow } from './MeetingAttachmentRow';
 import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 import { useModalExit } from '../common/useModalExit';
+import { addMinutesToClock, clockGapMinutes, durationMinutes, normalizeClock, parseGuests, readableGap } from '../../utils/meetings';
 
 interface MeetingMinutesModalProps {
   meeting: ThinkTankMeeting | null;
@@ -44,6 +45,22 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
   const [presentIds, setPresentIds] = useState<string[]>(
     meeting?.presentIds || meeting?.attendeeIds || []
   );
+
+  /**
+   * زمان شروع و پایان واقعی جلسه و نام مهمان‌ها — همان چیزی که در صورت‌جلسه
+   * باید مشخص باشد. مقدار پیش‌فرض از خود جلسه می‌آید (ساعت برنامه‌ریزی‌شده و
+   * مدت آن) تا کاربر فقط تأیید کند.
+   */
+  const [startTime, setStartTime] = useState(
+    normalizeClock(meeting?.startTime) || normalizeClock(meeting?.time) || ''
+  );
+  const [endTime, setEndTime] = useState(
+    normalizeClock(meeting?.endTime)
+      || addMinutesToClock(meeting?.startTime || meeting?.time, durationMinutes(meeting?.duration))
+  );
+  const [guestsText, setGuestsText] = useState((meeting?.guests || []).join('، '));
+  const guestNames = parseGuests(guestsText);
+  const actualDuration = readableGap(startTime, endTime);
 
   const togglePresent = (userId: string) => {
     setPresentIds(prev => prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]);
@@ -96,6 +113,9 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
+    // زمان جلسه بخشی از صورت‌جلسه است: بدون شروع/پایان معتبر ثبت نمی‌شود.
+    if (!startTime || !endTime) { setSaveError('ساعت شروع و پایان جلسه را وارد کنید.'); return; }
+    if (clockGapMinutes(startTime, endTime) <= 0) { setSaveError('ساعت پایان باید بعد از ساعت شروع باشد.'); return; }
     setSaving(true); setSaveError(''); setAttachmentError('');
     try {
       await addMeetingMinutes(
@@ -103,7 +123,8 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
         minutesSummary.trim(),
         decisions.filter(d => d.trim()),
         actionItems.filter(a => a.title.trim()),
-        presentIds
+        presentIds,
+        { startTime, endTime, guests: guestNames }
       );
       // ضمیمه‌ها با همان مسیر مشترکِ سامانه در مخزن ثبت و به همین جلسه وصل می‌شوند.
       // اگر ثبت ضمیمه نیمه‌کاره بماند، صورت‌جلسه از دست نمی‌رود و پیش‌نویس
@@ -165,6 +186,59 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
         </div>
 
         <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 flex-1">
+          {/* زمان واقعی جلسه و مهمان‌ها */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <h4 className="mb-2.5 flex items-center gap-1.5 text-xs font-bold text-slate-800">
+              <Clock className="h-4 w-4 text-indigo-600" />
+              زمان برگزاری جلسه
+            </h4>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="text-[11px] font-bold text-slate-600">
+                ساعت شروع
+                <input
+                  required
+                  type="time"
+                  dir="ltr"
+                  value={startTime}
+                  onChange={event => setStartTime(normalizeClock(event.target.value) || event.target.value)}
+                  className="ui-input mt-1.5 text-xs"
+                />
+              </label>
+              <label className="text-[11px] font-bold text-slate-600">
+                ساعت پایان
+                <input
+                  required
+                  type="time"
+                  dir="ltr"
+                  value={endTime}
+                  onChange={event => setEndTime(normalizeClock(event.target.value) || event.target.value)}
+                  className="ui-input mt-1.5 text-xs"
+                />
+              </label>
+            </div>
+            <p className="mt-2 text-[11px] font-bold text-slate-500">
+              {actualDuration ? `مدت واقعی جلسه: ${actualDuration}` : 'ساعت پایان را بعد از ساعت شروع وارد کنید.'}
+            </p>
+
+            <label className="mt-3 block text-[11px] font-bold text-slate-600">
+              <span className="inline-flex items-center gap-1"><UserPlus className="h-3.5 w-3.5 text-indigo-600" />حضور افراد مهمان (نام‌ها را با ویرگول جدا کنید)</span>
+              <input
+                type="text"
+                value={guestsText}
+                onChange={event => setGuestsText(event.target.value)}
+                placeholder="مثال: دکتر احمدی، خانم کریمی"
+                className="ui-input mt-1.5 text-xs"
+              />
+            </label>
+            {guestNames.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {guestNames.map((guest, index) => (
+                  <span key={`${guest}-${index}`} className="rounded-full border border-indigo-200 bg-white px-2 py-0.5 text-[10px] font-bold text-indigo-800">{guest}</span>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Minutes Summary */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">

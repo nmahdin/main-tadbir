@@ -382,7 +382,7 @@ interface AppContextType {
   updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => Promise<ThinkTankMeeting>;
   createMeetingGoogleMeet: (meetingId: string) => Promise<ThinkTankMeeting>;
   deleteThinkTankMeeting: (meetingId: string) => Promise<boolean>;
-  addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => Promise<void>;
+  addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[], timing?: { startTime?: string; endTime?: string; guests?: string[] }) => Promise<void>;
   addMeetingAttachment: (meetingId: string, file: File, folderId?: string) => Promise<void>;
   appendMeetingAttachments: (meetingId: string, attachments: MeetingAttachment[]) => Promise<void>;
   removeMeetingAttachment: (meetingId: string, attachmentId: string) => void;
@@ -4341,12 +4341,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const addMeetingMinutes = async (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => {
+  const addMeetingMinutes = async (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[], timing?: { startTime?: string; endTime?: string; guests?: string[] }) => {
     const meeting = thinkTankMeetings.find(m => m.id === meetingId);
     await updateThinkTankMeeting(meetingId, {
       status: 'completed', minutesSummary: minutes, decisions,
       actionItems: actionItems || meeting?.actionItems || [],
       presentIds: presentIds ?? meeting?.presentIds ?? [],
+      // ساعت شروع/پایان و مهمان‌ها بخشی از صورت‌جلسه‌اند؛ اگر ثبت نشوند، مقدار
+      // قبلی جلسه دست‌نخورده می‌ماند.
+      ...(timing?.startTime ? { startTime: timing.startTime } : {}),
+      ...(timing?.endTime ? { endTime: timing.endTime } : {}),
+      ...(timing?.guests ? { guests: timing.guests } : {}),
     });
     notify({ type: 'success', title: 'صورت‌جلسه ذخیره شد' });
   };

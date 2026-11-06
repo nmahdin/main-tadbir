@@ -82,8 +82,15 @@ const domainStatuses: Partial<Record<DomainTab, Array<[string, string]>>> = {
   contents: [['planning', 'برنامه‌ریزی'], ['producing', 'در تولید'], ['reviewing', 'بازبینی'], ['ready_to_publish', 'آماده انتشار'], ['published', 'منتشرشده'], ['archived', 'بایگانی']],
   series: [['active', 'فعال'], ['paused', 'متوقف'], ['archived', 'بایگانی']],
   tasks: [['backlog', 'در انتظار بررسی'], ['in_progress', 'در حال انجام'], ['review', 'بازبینی'], ['completed', 'تکمیل‌شده'], ['archived', 'بایگانی']],
-  ideas: [['submitted', 'ثبت‌شده'], ['reviewing', 'در بررسی'], ['approved', 'تأییدشده'], ['converted', 'تبدیل‌شده'], ['rejected', 'ردشده']],
-  meetings: [['scheduled', 'برنامه‌ریزی‌شده'], ['completed', 'برگزارشده'], ['cancelled', 'لغوشده']],
+  // فهرست وضعیت‌ها باید دقیقاً همان واژگان سرور باشد؛ مقدار ناموجود در دیتابیس
+  // («reviewing»/«converted» در نسخهٔ قبلی) فیلتر را خالی می‌کرد و کاربر فکر
+  // می‌کرد «موارد مرتبط پروژه» بارگذاری نمی‌شود.
+  ideas: [
+    ['draft', 'پیش‌نویس'], ['submitted', 'در انتظار بررسی اولیه'], ['under_review', 'در حال ارزیابی'],
+    ['needs_info', 'نیازمند اطلاعات'], ['approved', 'تأییدشده'], ['in_progress', 'در حال پیاده‌سازی'],
+    ['implemented', 'پیاده‌سازی‌شده'], ['completed', 'خاتمه‌یافته'], ['rejected', 'ردشده'], ['archived', 'بایگانی‌شده'],
+  ],
+  meetings: [['scheduled', 'برنامه‌ریزی‌شده'], ['in_progress', 'در حال برگزاری'], ['completed', 'برگزارشده'], ['cancelled', 'لغوشده'], ['archived', 'بایگانی‌شده']],
 };
 
 const statusLabels: Record<string, string> = {
@@ -101,6 +108,16 @@ const statusLabels: Record<string, string> = {
   open: 'باز',
   closed: 'بسته',
   paused: 'متوقف',
+  scheduled: 'برنامه‌ریزی‌شده',
+  under_review: 'در حال ارزیابی',
+  needs_info: 'نیازمند اطلاعات',
+  implemented: 'پیاده‌سازی‌شده',
+  rejected: 'ردشده',
+  cancelled: 'لغوشده',
+  producing: 'در حال تولید',
+  reviewing: 'در حال بازبینی',
+  ready_to_publish: 'آماده انتشار',
+  planning: 'برنامه‌ریزی',
 };
 
 const statusColors: Record<string, string> = {
@@ -114,6 +131,16 @@ const statusColors: Record<string, string> = {
   paused: 'border-amber-200 bg-amber-50 text-amber-700',
   on_hold: 'border-amber-200 bg-amber-50 text-amber-700',
   archived: 'border-slate-200 bg-slate-100 text-slate-600',
+  scheduled: 'border-sky-200 bg-sky-50 text-sky-700',
+  under_review: 'border-blue-200 bg-blue-50 text-blue-700',
+  needs_info: 'border-amber-200 bg-amber-50 text-amber-700',
+  implemented: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  rejected: 'border-rose-200 bg-rose-50 text-rose-700',
+  cancelled: 'border-slate-200 bg-slate-100 text-slate-600',
+  producing: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+  reviewing: 'border-violet-200 bg-violet-50 text-violet-700',
+  ready_to_publish: 'border-sky-200 bg-sky-50 text-sky-700',
+  planning: 'border-slate-200 bg-slate-50 text-slate-600',
 };
 
 export const ProjectDetailView: React.FC = () => {
@@ -157,19 +184,27 @@ export const ProjectDetailView: React.FC = () => {
     status: filters.status,
   }), [page, filters]);
 
+  /**
+   * فقط پروژه‌ای که روی سرور شناسهٔ عددی دارد می‌تواند «موارد مرتبط» بخواهد.
+   * پیش‌تر فقط خلاصهٔ پروژه این شرط را داشت و تب‌های تسک/محتوا/ایده/جلسه برای
+   * پروژهٔ موقت (`tmp-…`) درخواست ۴۰۴ می‌فرستادند؛ نتیجه همان «موارد مرتبط
+   * پروژه لود نمی‌شود» بود. حالا همهٔ کوئری‌ها یک شرط دارند و پیام روشن هم
+   * نمایش داده می‌شود.
+   */
+  const serverProjectId = Boolean(project && /^\d+$/.test(project.id));
   const summary = useQuery({
     queryKey: ['project-operations', selectedProjectId, 'summary'],
     queryFn: () => projectOperationsApi.summary(selectedProjectId!),
-    enabled: Boolean(project && !/^tmp-/.test(project.id)),
+    enabled: serverProjectId,
   });
-  const tasks = useQuery({ queryKey: ['project-operations', selectedProjectId, 'tasks', commonParams], queryFn: () => projectOperationsApi.tasks(selectedProjectId!, commonParams), enabled: tab === 'tasks' && hasPermission('tasks.view') });
-  const contents = useQuery({ queryKey: ['project-operations', selectedProjectId, 'contents', commonParams], queryFn: () => projectOperationsApi.contents(selectedProjectId!, commonParams), enabled: tab === 'contents' && hasPermission('content.view') });
-  const series = useQuery({ queryKey: ['project-operations', selectedProjectId, 'series', commonParams], queryFn: () => projectOperationsApi.series(selectedProjectId!, commonParams), enabled: tab === 'series' && hasPermission('content.view') });
-  const planSeries = useQuery({ queryKey: ['project-operations', selectedProjectId, 'series-plan'], queryFn: () => projectOperationsApi.series(selectedProjectId!, { per_page: 100 }), enabled: tab === 'plan' && hasPermission('content.view') });
-  const activities = useQuery({ queryKey: ['project-operations', selectedProjectId, 'activities', commonParams], queryFn: () => projectOperationsApi.activities(selectedProjectId!, commonParams), enabled: tab === 'activities' && hasPermission('reports.view') });
-  const ideas = useQuery({ queryKey: ['project-operations', selectedProjectId, 'ideas', commonParams], queryFn: () => projectOperationsApi.ideas(selectedProjectId!, commonParams), enabled: tab === 'ideas' && hasPermission('thinktank.view') });
-  const meetings = useQuery({ queryKey: ['project-operations', selectedProjectId, 'meetings', commonParams], queryFn: () => projectOperationsApi.meetings(selectedProjectId!, commonParams), enabled: tab === 'meetings' && hasPermission('meetings.view') });
-  const plans = useQuery({ queryKey: ['project-plans', selectedProjectId], queryFn: () => projectOperationsApi.plans(selectedProjectId!), enabled: tab === 'plan' && hasPermission('content.view') });
+  const tasks = useQuery({ queryKey: ['project-operations', selectedProjectId, 'tasks', commonParams], queryFn: () => projectOperationsApi.tasks(selectedProjectId!, commonParams), enabled: serverProjectId && tab === 'tasks' && hasPermission('tasks.view') });
+  const contents = useQuery({ queryKey: ['project-operations', selectedProjectId, 'contents', commonParams], queryFn: () => projectOperationsApi.contents(selectedProjectId!, commonParams), enabled: serverProjectId && tab === 'contents' && hasPermission('content.view') });
+  const series = useQuery({ queryKey: ['project-operations', selectedProjectId, 'series', commonParams], queryFn: () => projectOperationsApi.series(selectedProjectId!, commonParams), enabled: serverProjectId && tab === 'series' && hasPermission('content.view') });
+  const planSeries = useQuery({ queryKey: ['project-operations', selectedProjectId, 'series-plan'], queryFn: () => projectOperationsApi.series(selectedProjectId!, { per_page: 100 }), enabled: serverProjectId && tab === 'plan' && hasPermission('content.view') });
+  const activities = useQuery({ queryKey: ['project-operations', selectedProjectId, 'activities', commonParams], queryFn: () => projectOperationsApi.activities(selectedProjectId!, commonParams), enabled: serverProjectId && tab === 'activities' && hasPermission('reports.view') });
+  const ideas = useQuery({ queryKey: ['project-operations', selectedProjectId, 'ideas', commonParams], queryFn: () => projectOperationsApi.ideas(selectedProjectId!, commonParams), enabled: serverProjectId && tab === 'ideas' && hasPermission('thinktank.view') });
+  const meetings = useQuery({ queryKey: ['project-operations', selectedProjectId, 'meetings', commonParams], queryFn: () => projectOperationsApi.meetings(selectedProjectId!, commonParams), enabled: serverProjectId && tab === 'meetings' && hasPermission('meetings.view') });
+  const plans = useQuery({ queryKey: ['project-plans', selectedProjectId], queryFn: () => projectOperationsApi.plans(selectedProjectId!), enabled: serverProjectId && tab === 'plan' && hasPermission('content.view') });
 
   const invalidate = async () => {
     await Promise.all([
@@ -307,6 +342,12 @@ export const ProjectDetailView: React.FC = () => {
           ))}
         </div>
       </nav>
+
+      {!serverProjectId && (
+        <p role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-bold leading-6 text-amber-900">
+          این پروژه هنوز روی سرور ثبت نشده است (شناسهٔ موقت). موارد مرتبط — تسک، محتوا، مجموعه، ایده و جلسه — پس از ذخیرهٔ پروژه روی سرور نمایش داده می‌شوند؛ چیزی گم نشده است.
+        </p>
+      )}
 
       {currentTab === 'overview' && <Overview summary={summary} onTab={switchTab} />}
       {currentTab === 'plan' && (

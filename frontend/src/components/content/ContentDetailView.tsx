@@ -275,6 +275,9 @@ export const ContentDetailView: React.FC = () => {
   /** کدام تراشهٔ مسئول/ارزیاب باز است؛ هر بار فقط یکی. */
   const [stagePersonPicker, setStagePersonPicker] = useState<{ stageId: string; field: 'assignee' | 'reviewer' } | null>(null);
   const [stagePersonSaving, setStagePersonSaving] = useState<string | null>(null);
+  /** کدام مهلت مرحله باز است؛ مثل تراشهٔ مسئول، همان‌جا تاریخ انتخاب می‌شود. */
+  const [stageDeadlinePicker, setStageDeadlinePicker] = useState<string | null>(null);
+  const [stageDeadlineSaving, setStageDeadlineSaving] = useState<string | null>(null);
   const [applyingTemplateId, setApplyingTemplateId] = useState<string | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   // مختصات منوی وضعیت جدا از سربرگ کارت محاسبه می‌شود تا برش نخورد.
@@ -1184,6 +1187,25 @@ export const ContentDetailView: React.FC = () => {
       : { type: 'error', title: 'تغییر فرد انجام نشد', message: 'دلیل دقیق در پیام‌های سرور آمده است؛ دسترسی و وضعیت جریان را بررسی کنید.' });
   };
 
+  /**
+   * تغییر مهلت همان مرحله با کلیک روی تاریخ — دقیقاً همان الگوی «مسئول مرحله».
+   *
+   * مسیر داده هیچ‌چیز تازه‌ای نمی‌سازد: `assignStageResponsibility` همان تابعی است
+   * که مسئول/ارزیاب را ذخیره می‌کند و سرور هم مهلت مرحله را می‌پذیرد؛ بنابراین
+   * تسکِ همان مرحله هم مهلتش را از همین مقدار می‌گیرد.
+   */
+  const changeStageDeadline = async (stage: ContentStage, date: string) => {
+    if (!canAssignStagePeople || !date) return;
+    if (String(stage.deadline || '').slice(0, 10) === String(date).slice(0, 10)) { setStageDeadlinePicker(null); return; }
+    setStageDeadlinePicker(null);
+    setStageDeadlineSaving(stage.id);
+    const saved = await assignStageResponsibility(content.id, stage.id, { deadline: date });
+    setStageDeadlineSaving(null);
+    notify(saved
+      ? { type: 'success', title: 'مهلت مرحله تغییر کرد', message: `مهلت جدید: ${formatPersianDate(date)}`, dedupeKey: `stage-deadline-${stage.id}` }
+      : { type: 'error', title: 'تغییر مهلت انجام نشد', message: 'دلیل دقیق در پیام‌های سرور آمده است؛ دسترسی و وضعیت جریان را بررسی کنید.' });
+  };
+
   /** فهرست کشویی انتخاب فرد؛ با کلیک بیرون بسته می‌شود و داده‌ای جعل نمی‌کند. */
   const stagePersonPanel = (stage: ContentStage, field: 'assignee' | 'reviewer') => {
     const options = stagePeopleOptions(stage, field);
@@ -1240,10 +1262,12 @@ export const ContentDetailView: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-200 text-right" dir="rtl">
       {/* Top Header Card */}
-      <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
+      <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
         {/* نوار بالای باکس هم‌رنگ رنگ اصلی سامانه: با تغییر رنگ سازمانی، همین
-            نوار هم عوض می‌شود (گرادیان ثابتِ قبلی رنگ برند را نقض می‌کرد). */}
-        <div className="h-1 bg-[var(--color-primary)]" data-brand-band="primary" />
+            نوار هم عوض می‌شود (گرادیان ثابتِ قبلی رنگ برند را نقض می‌کرد).
+            از دور ۸۷ دو سرِ نوار گرد و کمی تودرتر است تا مثل یک نوارِ جدا و
+            بیرونِ باکس دیده نشود و داخل همان کارت بنشیند. */}
+        <div aria-hidden className="pointer-events-none absolute inset-x-5 top-0 h-1 rounded-b-full bg-[var(--color-primary)] sm:inset-x-6" data-brand-band="primary" />
         <div className="p-5 sm:p-6">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
             <div className="min-w-0 flex-1">
@@ -1510,13 +1534,42 @@ export const ContentDetailView: React.FC = () => {
                             {stagePersonPicker?.stageId === stage.id && stagePersonPicker.field === 'reviewer' && stagePersonPanel(stage, 'reviewer')}
                           </div>
 
-                          {stageDeadline && (
-                            <div className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border ${DEADLINE_CHIP_TONES[stageDeadlineTone]}`} title={stageFinished ? 'مهلت این مرحله (تکمیل‌شده)' : 'مهلت این مرحله'}>
-                              <Calendar className={`w-3.5 h-3.5 ${DEADLINE_ICON_TONES[stageDeadlineTone]}`} />
-                              <span className="font-sans">{formatPersianDate(stage.deadline)}</span>
+                          {/* مهلت مرحله؛ مثل تراشهٔ مسئول با کلیک همان‌جا تاریخ
+                              انتخاب می‌شود و نیازی به پنجرهٔ جدا نیست. */}
+                          <div className="relative">
+                            <button
+                              type="button"
+                              disabled={!canAssignStagePeople || stageDeadlineSaving === stage.id}
+                              aria-haspopup={canAssignStagePeople ? 'dialog' : undefined}
+                              aria-expanded={stageDeadlinePicker === stage.id}
+                              onClick={() => setStageDeadlinePicker(current => current === stage.id ? null : stage.id)}
+                              title={canAssignStagePeople
+                                ? (stageFinished ? 'مهلت این مرحله (تکمیل‌شده) — برای تغییر کلیک کنید' : 'کلیک برای تغییر مهلت این مرحله')
+                                : 'تغییر مهلت نیازمند دسترسی مدیریت جریان محتوا یا نقش مدیر محتواست'}
+                              className={`flex items-center gap-1 rounded-xl border px-2.5 py-1.5 transition-colors ${DEADLINE_CHIP_TONES[stageDeadlineTone]} ${canAssignStagePeople ? 'cursor-pointer hover:brightness-95' : ''}`}
+                            >
+                              {stageDeadlineSaving === stage.id
+                                ? <InlineSpinner size="sm" className="text-current" />
+                                : <Calendar className={`w-3.5 h-3.5 ${DEADLINE_ICON_TONES[stageDeadlineTone]}`} />}
+                              <span className="font-sans">{stage.deadline ? formatPersianDate(stage.deadline) : 'بدون مهلت'}</span>
                               {stageDeadlineLabel && <span className="text-[10px] font-bold">· {stageDeadlineLabel}</span>}
-                            </div>
-                          )}
+                              {canAssignStagePeople && <ChevronDown className="h-3 w-3 opacity-60" aria-hidden />}
+                            </button>
+                            {stageDeadlinePicker === stage.id && (
+                              <>
+                                <button type="button" tabIndex={-1} aria-label="بستن انتخاب تاریخ" onClick={() => setStageDeadlinePicker(null)} className="fixed inset-0 z-30 cursor-default bg-transparent" />
+                                <div role="dialog" aria-label="انتخاب مهلت مرحله" className="absolute left-0 top-full z-40 mt-1 w-64 rounded-xl border border-slate-200 bg-white p-3 text-right shadow-xl">
+                                  <p className="pb-1 text-[10px] font-black text-slate-500">مهلت این مرحله</p>
+                                  <PersianDatePicker
+                                    value={stage.deadline ? String(stage.deadline).slice(0, 10) : ''}
+                                    onChange={date => void changeStageDeadline(stage, date)}
+                                    label="تاریخ شمسی"
+                                    portal
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
 

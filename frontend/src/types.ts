@@ -1064,9 +1064,15 @@ export interface ThinkTankMeeting {
   projectId?: string;
   title: string;
   description?: string;
-  date: string; // e.g. "۱۴۰۵/۰۶/۱۵"
+  /** تاریخ جلسه به شکل میلادی `YYYY-MM-DD` در نوشتن‌های تازه؛ دادهٔ قدیمی ممکن است شمسی باشد. */
+  date: string;
   time: string; // e.g. "۱۰:۳۰"
   duration: string; // e.g. "۹۰ دقیقه"
+  /** ساعت شروع و پایان واقعی جلسه (`HH:MM`)؛ هنگام ثبت صورت‌جلسه پر می‌شوند. */
+  startTime?: string;
+  endTime?: string;
+  /** مهمان‌هایی که کاربر سامانه نیستند؛ فقط نام آن‌ها نگه داشته می‌شود. */
+  guests?: string[];
   organizerId: string;
   attendeeIds: string[];
   presentIds?: string[];

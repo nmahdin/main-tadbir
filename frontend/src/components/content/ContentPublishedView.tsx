@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ContentTypeBadge } from '../../utils/statusBadges';
 import { formatPersianDate } from '../../utils/date';
+import { toIsoDateKey } from '../../utils/isoDate';
 import { useApp } from '../../context/AppContext';
 import type { Content } from '../../types';
 import { sortByPublicationMoment } from '../../utils/publicationTiming';
 import { Button, IconButton } from '../common/Primitives';
+import { PersianDatePicker } from '../common/PersianDatePicker';
+import { Collapsible } from '../common/Collapsible';
 import {
   FileText,
   Video,
@@ -16,7 +19,9 @@ import {
   Send,
   RotateCcw,
   ArrowRight,
-  Copy
+  Copy,
+  SlidersHorizontal,
+  Search
 } from 'lucide-react';
 
 export const ContentPublishedView: React.FC = () => {
@@ -56,6 +61,46 @@ export const ContentPublishedView: React.FC = () => {
     content => ({ date: content.publishInfo?.date, time: content.publishInfo?.time, published: true }),
   );
 
+  /**
+   * فیلترهای همین صفحه (دور ۸۷): نوع محتوا، ناشر و بازهٔ تاریخ انتشار.
+   *
+   * بخش فیلتر بازشو است تا فهرست منتشرشده‌ها در حالت عادی شلوغ نشود؛ همهٔ
+   * مقایسه‌های تاریخ با کلید میلادیِ نرمال‌شده انجام می‌شود تا تاریخ‌های شمسی
+   * ثبت‌شده در دادهٔ قدیمی هم در بازه بیایند.
+   */
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [publisherFilter, setPublisherFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const publishers = users.filter(user => contents.some(content => content.status === 'published' && content.publisherId === user.id));
+  const filteredContents = publishedContents.filter(content => {
+    const needle = query.trim().toLowerCase();
+    if (needle) {
+      const haystack = `${content.title} ${content.code || ''}`.toLowerCase();
+      if (!haystack.includes(needle)) return false;
+    }
+    if (typeFilter !== 'all' && content.type !== typeFilter) return false;
+    if (publisherFilter !== 'all' && String(content.publisherId || '') !== publisherFilter) return false;
+    if (dateFrom || dateTo) {
+      const day = toIsoDateKey(content.publishInfo?.date);
+      if (!day) return false;
+      if (dateFrom && day < dateFrom) return false;
+      if (dateTo && day > dateTo) return false;
+    }
+    return true;
+  });
+  const activeFilterCount = [Boolean(query.trim()), typeFilter !== 'all', publisherFilter !== 'all', Boolean(dateFrom), Boolean(dateTo)].filter(Boolean).length;
+  const resetFilters = () => {
+    setQuery('');
+    setTypeFilter('all');
+    setPublisherFilter('all');
+    setDateFrom('');
+    setDateTo('');
+  };
+
   const handleOpenContent = (id: string) => {
     setSelectedContentId(id);
     setActiveView('content-detail');
@@ -72,12 +117,56 @@ export const ContentPublishedView: React.FC = () => {
           <div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">محتوای منتشرشده</h1>
             <p className="text-sm text-slate-500 mt-1 font-medium">
-              {publishedContents.length} محتوای منتشرشده در سامانه
+              {activeFilterCount > 0
+                ? `${filteredContents.length} از ${publishedContents.length} محتوای منتشرشده`
+                : `${publishedContents.length} محتوای منتشرشده در سامانه`}
             </p>
           </div>
         </div>
 
+        <button
+          type="button"
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen(value => !value)}
+          className="ui-button ui-button-secondary text-xs"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          فیلترها
+          {activeFilterCount > 0 && <span className="rounded-full bg-emerald-600 px-1.5 text-[9px] font-black text-white">{activeFilterCount.toLocaleString('fa-IR')}</span>}
+        </button>
       </div>
+
+      <Collapsible open={filtersOpen}>
+        <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="فیلتر محتواهای منتشرشده">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs font-black text-slate-700"><SlidersHorizontal className="h-4 w-4 text-emerald-600" />فیلتر محتواهای منتشرشده</div>
+            <span className="text-[11px] text-slate-500">{filteredContents.length.toLocaleString('fa-IR')} نتیجه</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="text-[11px] font-bold text-slate-600">
+              <span className="inline-flex items-center gap-1"><Search className="h-3.5 w-3.5 text-slate-400" />جست‌وجوی عنوان یا کد</span>
+              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="بخشی از عنوان یا کد محتوا" className="ui-input mt-1.5 text-xs" />
+            </label>
+            <label className="text-[11px] font-bold text-slate-600">نوع محتوا
+              <select value={typeFilter} onChange={event => setTypeFilter(event.target.value)} className="ui-input mt-1.5 text-xs">
+                <option value="all">همه انواع</option>
+                {contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+              </select>
+            </label>
+            <label className="text-[11px] font-bold text-slate-600">ناشر
+              <select value={publisherFilter} onChange={event => setPublisherFilter(event.target.value)} className="ui-input mt-1.5 text-xs">
+                <option value="all">همه ناشران</option>
+                {publishers.map(user => <option key={user.id} value={user.id}>{user.name} {user.family || ''}</option>)}
+              </select>
+            </label>
+            <div className="text-[11px] font-bold text-slate-600">از تاریخ انتشار<PersianDatePicker className="mt-1.5" value={dateFrom} onChange={setDateFrom} placeholder="از تاریخ شمسی…" /></div>
+            <div className="text-[11px] font-bold text-slate-600">تا تاریخ انتشار<PersianDatePicker className="mt-1.5" value={dateTo} onChange={setDateTo} placeholder="تا تاریخ شمسی…" /></div>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button type="button" onClick={resetFilters} disabled={activeFilterCount === 0} className="ui-button ui-button-secondary text-[11px] disabled:opacity-50">پاک کردن فیلترها</button>
+          </div>
+        </section>
+      </Collapsible>
 
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
@@ -92,15 +181,15 @@ export const ContentPublishedView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {publishedContents.length === 0 ? (
+              {filteredContents.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="p-10 text-center">
                     <CheckCircle2 className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                    <p className="text-sm font-bold text-slate-500">هنوز محتوایی منتشر نشده است.</p>
+                    <p className="text-sm font-bold text-slate-500">{publishedContents.length === 0 ? 'هنوز محتوایی منتشر نشده است.' : 'هیچ محتوای منتشرشده‌ای با این فیلترها پیدا نشد.'}</p>
                   </td>
                 </tr>
               ) : (
-                publishedContents.map(content => {
+                filteredContents.map(content => {
                   // رنگ نشانگر نوع محتوا از تنظیمات همان نوع می‌آید، نه یک رنگ ثابت.
                   const typeSetting = contentTypes.find(ct => ct.id === content.type);
                   const typeName = typeSetting?.name || content.type;

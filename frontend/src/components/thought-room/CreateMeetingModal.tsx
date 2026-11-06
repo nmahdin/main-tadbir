@@ -6,6 +6,7 @@ import { googleServiceEnabled } from '../../utils/googleWorkspace';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 import { useModalExit } from '../common/useModalExit';
+import { todayLocalISO } from '../../utils/date';
 
 interface CreateMeetingModalProps {
   isOpen: boolean;
@@ -24,7 +25,9 @@ export const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({ isOpen, 
   const [submitError, setSubmitError] = useState('');
   const [description, setDescription] = useState(meeting?.description || '');
   const [projectId, setProjectId] = useState(meeting?.projectId || initialProjectId || '');
-  const [date, setDate] = useState(meeting?.date || new Date().toISOString().split('T')[0]);
+  // تاریخ پیش‌فرض همان «امروزِ محلی» است؛ `toISOString` در تهران تا ۰۳:۳۰ بامداد
+  // روز قبل را می‌داد و جلسه‌های بامدادی یک روز عقب ثبت می‌شدند.
+  const [date, setDate] = useState(meeting?.date || todayLocalISO());
   const [time, setTime] = useState(meeting?.time || '۱۰:۰۰');
   const [duration, setDuration] = useState(meeting?.duration || `${googleMeetSettings.defaultDurationMinutes.toLocaleString('fa-IR')} دقیقه`);
   const [locationType, setLocationType] = useState<'in_person' | 'online' | 'hybrid'>(meeting?.locationType || 'in_person');

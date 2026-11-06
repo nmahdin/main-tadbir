@@ -5,6 +5,7 @@ import { CalendarKindLegend } from '../calendar/CalendarKindIcon';
 import { CalendarEventCard, type CalendarEventStatus } from '../calendar/CalendarEventCard';
 import { CalendarDayModal } from '../calendar/CalendarDayModal';
 import { contentStatusColor, contentStatusLabel } from '../../utils/statusBadges';
+import { publicationDisplayStatus } from '../../utils/publicationReadiness';
 import { calendarTimeLabel, calendarDueInfo, sortCalendarEventsByTime, type CalendarDueInfo } from '../../utils/calendarTone';
 import {
   CALENDAR_RANGE_MODES,
@@ -144,7 +145,10 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
         date,
         time: publishDate ? content.publishInfo?.time : undefined,
         color: publishDate ? '#7c3aed' : '#e11d48',
-        status: contentStatusOf(content.status),
+        // برچسب از همان قرارداد «آماده انتشار» می‌آید؛ پرونده‌ای که همهٔ
+        // مرحله‌هایش تمام شده، حتی اگر وضعیت خامش هنوز عوض نشده باشد، در تقویم
+        // «آماده انتشار» دیده می‌شود.
+        status: contentStatusOf(publicationDisplayStatus(content)),
         due: calendarDueInfo(date, { settled: SETTLED_CONTENT_STATUSES.includes(String(content.status)) }),
         meta: detail || undefined,
         ownerName: userName(content.ownerId),
