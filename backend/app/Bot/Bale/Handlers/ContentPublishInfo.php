@@ -171,7 +171,10 @@ final class ContentPublishInfo
         $taskId = (int) ($record->payload['linkTaskId'] ?? 0);
         if ($taskId > 0) {
             $task = Task::whereKey($taskId)->where('assignee_id', $user->id)->first();
-            if (! $task || ! $this->publishContent($task)) {
+            // پروندهٔ همین وظیفه؛ پیش‌تر متغیرِ `$content` تعریف نشده بود و
+            // ساختنِ دکمه با خطای نوع شکست می‌خورد.
+            $content = $task ? $this->publishContent($task) : null;
+            if (! $content) {
                 return [];
             }
 
@@ -356,7 +359,7 @@ final class ContentPublishInfo
                 '_file_path' => (string) $item['path'],
                 '_file_name' => (string) $item['name'],
                 'caption' => mb_substr('خروجی انتشار: '.$content->title, 0, 900),
-            ], $link, 'task', $task?->id);
+            ], $link, $task ? 'task' : null, $task?->id);
 
             return;
         }
@@ -394,6 +397,6 @@ final class ContentPublishInfo
         app(Outbox::class)->enqueue($key, $chat, [
             'text' => $text,
             'reply_markup' => ['inline_keyboard' => [...$rows, ...MenuNavigation::rows($link)]],
-        ], $link, 'task', $task?->id);
+        ], $link, $task ? 'task' : null, $task?->id);
     }
 }

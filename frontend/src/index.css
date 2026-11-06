@@ -162,46 +162,36 @@ button.ui-check-circle,
 }
 
 /*
- * دکمه‌های فقط-موبایل.
- *
- * قاعده‌های پایهٔ `.ui-tap`/`.ui-button`/`.ui-icon-button` بیرون از لایهٔ
- * utilities نوشته شده‌اند و `display` صریح دارند؛ بنابراین `hidden`/
- * `sm:hidden`/`md:hidden`/`lg:hidden` تیلویند را خنثی می‌کردند و دکمهٔ منو،
- * جست‌وجوی موبایل و «بازگشت به فهرست گفتگوها» روی نمایشگر دسکتاپ هم دیده
- * می‌شدند. اینجا همان کلاس‌ها با همان شکست‌ها صریح می‌شوند؛ دکمه فقط زیر
- * شکست مربوط پنهان است و هیچ کلاس دیگری عوض نمی‌شود.
- */
-.ui-tap.hidden, .ui-button.hidden, .ui-icon-button.hidden, .permission-toggle.hidden { display: none !important; }
-@media (min-width: 640px) {
-  .ui-tap.sm\:hidden, .ui-button.sm\:hidden, .ui-icon-button.sm\:hidden, .permission-toggle.sm\:hidden { display: none !important; }
-  /* نام معنادار و مستقل از کلاس‌های تیلویند برای کنترل‌های تمام‌عرض‌نما. */
-  .ui-mobile-only { display: none !important; }
-}
-@media (min-width: 768px) {
-  .ui-tap.md\:hidden, .ui-button.md\:hidden, .ui-icon-button.md\:hidden, .permission-toggle.md\:hidden { display: none !important; }
-}
-@media (min-width: 1024px) {
-  .ui-tap.lg\:hidden, .ui-button.lg\:hidden, .ui-icon-button.lg\:hidden, .permission-toggle.lg\:hidden { display: none !important; }
-  .ui-compact-only { display: none !important; }
-}
-@media (min-width: 1280px) {
-  .ui-tap.xl\:hidden, .ui-button.xl\:hidden, .ui-icon-button.xl\:hidden, .permission-toggle.xl\:hidden { display: none !important; }
-}
-
-/*
  * سطح لمس آیکون‌های نوار بالا (منو، جست‌وجو، اعلان، پروفایل).
  * روی موبایل حداقل ۳۶px لازم است و این دکمه‌ها هرگز نباید در فشار عرض
  * کوچک شوند؛ پیش‌تر آیکون جست‌وجو می‌توانست از کادر بیرون برود و «باکس
  * سرچ» در موبایل باز نشود.
  */
+/*
+ * «نمایش» کنترل‌ها در لایهٔ base تعریف می‌شود، نه بیرون از لایه‌ها.
+ *
+ * در تیلویند ۴ هر CSSای که بیرون از لایه‌ها نوشته شود بر utilities غلبه
+ * می‌کند؛ پس `display: inline-flex` روی این کلاس‌ها، `hidden`/`sm:hidden`/
+ * `lg:hidden` را خنثی می‌کرد و دکمهٔ منو و جست‌وجوی موبایل روی نمایشگر
+ * دسکتاپ هم دیده می‌شدند. راه‌حلِ درست همان چیزی است که تیلویند می‌خواهد:
+ * نمایش در لایهٔ base، پنهان‌سازی با utilities — بدون کلاس موازی و بدون
+ * `!important`.
+ */
+@layer base {
+  .ui-tap,
+  .ui-button,
+  .ui-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
 .ui-tap {
   box-sizing: border-box;
   min-width: var(--button-height);
   min-height: var(--button-height);
   flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 /*
@@ -348,7 +338,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 button > svg, [role='button'] > svg { flex: 0 0 auto; }
 
 .ui-button {
-  min-height: var(--button-height); display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  min-height: var(--button-height); gap: .5rem;
   padding: .5rem 1rem; border: 1px solid transparent; border-radius: var(--radius-md); font-size: .8125rem; line-height: 1.25rem;
   font-weight: 800; cursor: pointer;
 }

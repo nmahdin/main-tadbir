@@ -91,16 +91,15 @@ test('پیام‌های گفتگو ورود و خروج نرم دارند', () =
 });
 
 test('دکمه‌های فقط-موبایل روی دسکتاپ پنهان می‌شوند', () => {
-  // قاعدهٔ پایهٔ دکمه‌ها بیرون از لایهٔ utilities است و `display` صریح دارد؛
-  // پس `hidden`/`sm:hidden`/`md:hidden`/`lg:hidden` باید صریح هم بشوند.
-  assert.match(css, /\.ui-button\.md\\:hidden/);
-  assert.match(css, /\.ui-icon-button\.lg\\:hidden/);
-  assert.match(css, /\.ui-mobile-only \{ display: none !important; \}/);
-  assert.match(css, /\.ui-compact-only \{ display: none !important; \}/);
-  assert.match(navbar, /ui-tap ui-compact-only/);
-  assert.match(navbar, /ui-tap ui-mobile-only/);
-  assert.match(navbar, /lg:hidden/);
-  assert.match(navbar, /sm:hidden/);
+  // نمایشِ `.ui-tap`/`.ui-button`/`.ui-icon-button`/`.permission-toggle` در
+  // لایهٔ base است؛ در تیلویند ۴ CSSای که بیرون از لایه‌ها باشد بر utilities
+  // غلبه می‌کند و `hidden`/`lg:hidden` را خنثی می‌کرد.
+  assert.match(css, /@layer base \{[\s\S]*?\.ui-tap,[\s\S]*?display: inline-flex;/);
+  // هیچ قاعدهٔ موازی و هیچ کلاس دست‌ساز «فقط موبایل» نباید لازم باشد.
+  assert.doesNotMatch(css, /\.ui-(mobile|compact)-only/);
+  assert.doesNotMatch(css, /\.ui-tap\.hidden, /);
+  assert.match(navbar, /ui-tap hidden[^"]*lg:inline-flex/);
+  assert.match(navbar, /ui-tap hidden[^"]*sm:inline-flex/);
 });
 
 test('مدال جست‌وجو با انیمیشن باز و بسته می‌شود', () => {

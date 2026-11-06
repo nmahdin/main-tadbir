@@ -189,7 +189,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           <button
             id="mobile-sidebar-toggle"
             onClick={onOpenSidebar}
-            className="ui-tap ui-compact-only shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+            className="ui-tap hidden shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 lg:inline-flex"
             aria-label="باز کردن منو"
           >
             <Menu className="w-5 h-5" />
@@ -248,7 +248,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           title="جست‌وجوی سراسری"
           aria-label="جست‌وجوی سراسری"
           aria-haspopup="dialog"
-          className="ui-tap ui-mobile-only shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 sm:hidden"
+          className="ui-tap hidden shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 sm:inline-flex"
         >
           <Search className="h-5 w-5" />
         </button>

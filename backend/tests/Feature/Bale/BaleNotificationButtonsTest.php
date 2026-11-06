@@ -4,6 +4,7 @@ namespace Tests\Feature\Bale;
 
 use App\Bot\Bale\Notifications\NotificationDelivery;
 use App\Models\BaleConversation;
+use App\Models\BaleUserLink;
 use App\Models\Content;
 use App\Models\DomainRecord;
 use App\Models\Permission;
@@ -208,8 +209,14 @@ class BaleNotificationButtonsTest extends TestCase
         $this->assertContains('🗂 باز کردن محتوا', $labels);
 
         // دکمهٔ «دریافت اطلاعات انتشار» همان پرونده را نشان می‌دهد، بدون وظیفه.
+        // مسیر عمداً از همان پولینگ می‌گذرد: پاسخِ بی‌وظیفه پیش‌تر «موضوعِ
+        // وظیفه» می‌گرفت، صفِ ارسال آن را «دسترسی لغوشده» می‌دید و بی‌صدا
+        // دورش می‌ریخت — کاربر دکمه را می‌زد و هیچ پیامی نمی‌آمد.
         $this->sent = [];
         $this->tick([$this->buttonUpdate(9, 'pubinfo:content:'.$content->id)]);
-        $this->assertStringContainsString('اطلاعات انتشار محتوا', (string) ($this->sent[0]['text'] ?? ''));
+        $this->assertNotEmpty($this->sent, 'دکمهٔ اطلاعات انتشار باید پاسخ بدهد.');
+        $reply = (string) ($this->sent[0]['text'] ?? '');
+        $this->assertStringContainsString('اطلاعات انتشار محتوا', $reply);
+        $this->assertStringContainsString('انتشار جامانده', $reply);
     }
 }
