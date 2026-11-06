@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { runtime } from '../../config/runtime';
 import { isChunkLoadError } from '../../utils/chunkLoadError';
 import { AlertTriangle, CheckCircle2, Info, Loader2, RefreshCw, WifiOff, X, XCircle } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
+import { useApp, type AppToast } from '../../context/AppContext';
 
 /**
  * اجزای مشترک «حالت لودینگ» و «نمایش خطا» در سراسر سامانه تدبیر.
@@ -226,20 +226,50 @@ const TOAST_STYLES = {
   info: { container: 'border-indigo-200 bg-indigo-50', icon: <Info className="w-4.5 h-4.5 text-indigo-600" />, title: 'text-indigo-900' },
 } as const;
 
+/**
+ * انیمیشن خروج توست.
+ *
+ * `dismissToast` ردیف را همان لحظه از فهرست حذف می‌کرد و پیام بدون هیچ
+ * انتقالی ناپدید می‌شد. اینجا ردیفِ حذف‌شده تا پایان انیمیشن کوتاه خروج در
+ * صفحه می‌ماند (`data-state="closing"`) و بعد برداشته می‌شود؛ ورود هم همان
+ * انیمیشن قبلی است. ترتیب فهرست و رفتار بستن دست‌نخورده می‌ماند.
+ */
+export const TOAST_EXIT_MS = 180;
+
 export const ToastViewport: React.FC = () => {
   const { toasts, dismissToast } = useApp();
+  const [visible, setVisible] = useState<Array<{ toast: AppToast; closing: boolean }>>([]);
 
-  if (toasts.length === 0) return null;
+  useEffect(() => {
+    setVisible(previous => {
+      const incoming = new Map(toasts.map(toast => [toast.id, toast]));
+      const next = previous.map(item => {
+        const fresh = incoming.get(item.toast.id);
+        if (fresh) return { toast: fresh, closing: false };
+        return item.closing ? item : { ...item, closing: true };
+      });
+      for (const toast of toasts) {
+        if (!previous.some(item => item.toast.id === toast.id)) next.push({ toast, closing: false });
+      }
+      return next;
+    });
+    const timer = window.setTimeout(() => setVisible(previous => previous.filter(item => !item.closing)), TOAST_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [toasts]);
+
+  if (visible.length === 0) return null;
 
   return (
     <div className="fixed bottom-4 left-4 z-[100] flex flex-col gap-2 w-80 max-w-[calc(100vw-2rem)]" dir="rtl" aria-live="polite">
-      {toasts.map(toast => {
+      {visible.map(({ toast, closing }) => {
         const style = TOAST_STYLES[toast.type];
         return (
           <div
             key={toast.id}
+            data-state={closing ? 'closing' : 'open'}
             role={toast.type === 'error' ? 'alert' : 'status'}
-            className={`p-3 rounded-2xl border shadow-lg flex items-start gap-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200 ${style.container}`}
+            aria-hidden={closing || undefined}
+            className={`p-3 rounded-2xl border shadow-lg flex items-start gap-2.5 ${closing ? 'ui-toast-out' : 'ui-toast-in'} ${style.container}`}
           >
             <span className="shrink-0 mt-0.5">{style.icon}</span>
             <div className="flex-1 min-w-0">

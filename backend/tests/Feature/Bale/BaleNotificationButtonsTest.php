@@ -9,7 +9,9 @@ use App\Models\DomainRecord;
 use App\Models\Permission;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\PublicationReminders;
 use App\Services\TaskAssignmentNotifications;
+use App\Support\OrganizationTime;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -170,5 +172,44 @@ class BaleNotificationButtonsTest extends TestCase
         app(NotificationDelivery::class)->created($record);
 
         $this->assertSame([], $this->callbacks());
+    }
+
+    /**
+     * یادآوری «انتشار عقب‌افتاده»ی بدون وظیفه، در بله دو دکمه دارد:
+     * «دریافت اطلاعات انتشار» و «باز کردن محتوا»؛ و وضعیت پرونده در متن می‌آید.
+     */
+    public function test_overdue_publication_reminder_has_two_buttons_and_the_content_status(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->grant($user, ['content.view']);
+        $this->link($user);
+        $past = app(OrganizationTime::class)->today()->subDays(2)->toDateString();
+        $content = Content::create([
+            'title' => 'انتشار جامانده',
+            'type' => 'article',
+            'status' => 'ready_to_publish',
+            'owner_id' => $user->id,
+            'payload' => ['publishInfo' => ['date' => $past]],
+        ]);
+
+        app(PublicationReminders::class)->run();
+
+        $this->assertNotEmpty($this->sent, 'یادآوری انتشار باید در بله فرستاده شود.');
+        $text = (string) ($this->sent[0]['text'] ?? '');
+        $this->assertStringContainsString('انتشار جامانده', $text);
+        $this->assertStringContainsString('وضعیت فعلی:', $text);
+        $this->assertStringContainsString('آماده انتشار', $text);
+
+        $rows = $this->sent[0]['reply_markup']['inline_keyboard'] ?? [];
+        $callbacks = collect($rows)->flatten(1)->pluck('callback_data')->filter()->all();
+        $labels = collect($rows)->flatten(1)->pluck('text')->all();
+        $this->assertContains('pubinfo:content:'.$content->id, $callbacks);
+        $this->assertContains('🗂 باز کردن محتوا', $labels);
+
+        // دکمهٔ «دریافت اطلاعات انتشار» همان پرونده را نشان می‌دهد، بدون وظیفه.
+        $this->sent = [];
+        $this->tick([$this->buttonUpdate(9, 'pubinfo:content:'.$content->id)]);
+        $this->assertStringContainsString('اطلاعات انتشار محتوا', (string) ($this->sent[0]['text'] ?? ''));
     }
 }

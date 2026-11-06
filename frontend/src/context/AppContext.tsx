@@ -39,7 +39,7 @@ interface AppContextType {
   workflows: Workflow[];
   contents: Content[];
   publishingContentIds: string[];
-  publishContentNow: (id: string, expectedVersion?: string) => Promise<boolean>;
+  publishContentNow: (id: string, expectedVersion?: string, publishAt?: { date?: string; time?: string }) => Promise<boolean>;
   unpublishContent: (id: string) => Promise<boolean>;
   scheduleContentPublication: (id: string, data: Omit<PublicationSettings, 'expectedVersion'>) => Promise<Content>;
   createPublicationTask: (id: string, data: PublicationTaskInput) => Promise<Task>;
@@ -257,8 +257,8 @@ interface AppContextType {
   inviteMember: (memberData: Omit<User, 'id' | 'activeProjectsCount' | 'completedTasksCount' | 'workloadPercentage'>) => User;
 
   // Notification Operations
-  markNotificationAsRead: (id: string) => void;
-  markAllNotificationsAsRead: () => void;
+  markNotificationAsRead: (id: string) => Promise<void>;
+  markAllNotificationsAsRead: () => Promise<void>;
   clearNotification: (id: string) => void;
   sendNotification: (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => void;
 
@@ -1920,13 +1920,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error) { notifyApiError('publication-settings', error, 'برنامهٔ انتشار ذخیره نشد'); }
   };
 
-  const runPublicationCommand = async (contentId: string, action: 'publish' | 'unpublish', expectedVersion?: string): Promise<boolean> => {
+  const runPublicationCommand = async (contentId: string, action: 'publish' | 'unpublish', expectedVersion?: string, publishAt?: { date?: string; time?: string }): Promise<boolean> => {
     if (publicationInFlight.current.has(contentId)) return false;
     publicationInFlight.current.add(contentId);
     setPublishingContentIds([...publicationInFlight.current]);
     try {
       const response = await withPublicationConflictRefresh(
-        async () => contentsApi[action](contentId, expectedVersion || await publicationVersion(contentId)),
+        // تاریخ/ساعتِ انتخاب‌شده فقط برای «ثبت انتشار» معنا دارد؛ لغو انتشار همان
+        // فرمان قبلی است.
+        async () => contentsApi[action](contentId, expectedVersion || await publicationVersion(contentId), action === 'publish' ? publishAt : undefined),
         () => refreshPublicationContent(contentId),
       );
       setContents(prev => prev.map(c => c.id === contentId ? response.data.content : c));
@@ -1945,7 +1947,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const publishContentNow = (contentId: string, expectedVersion?: string): Promise<boolean> => runPublicationCommand(contentId, 'publish', expectedVersion);
+  /**
+   * ثبت انتشار با تاریخ/ساعت دلخواه.
+   *
+   * `publishAt` اختیاری است؛ اگر نیاید، سرور همان «همین حالا» را با ساعت سازمان
+   * ثبت می‌کند (رفتار پیشین). فرم انتشار همیشه مقدار پیش‌فرض «همین حالا» را
+   * نشان می‌دهد تا کاربر لازم نباشد چیزی تایپ کند.
+   */
+  const publishContentNow = (contentId: string, expectedVersion?: string, publishAt?: { date?: string; time?: string }): Promise<boolean> => runPublicationCommand(contentId, 'publish', expectedVersion, publishAt);
   const unpublishContent = (contentId: string): Promise<boolean> => runPublicationCommand(contentId, 'unpublish');
 
   const addContentComment = async (contentId: string, text: string, replyToId?: string): Promise<boolean> => {

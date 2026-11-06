@@ -59,7 +59,7 @@ final class PanelLinks
      * «مشاهدهٔ همین تسک در سامانه» فقط او را به صفحه‌ای می‌برد که در بات قابل
      * انجام نیست.
      */
-    public function buttons(?BaleUserLink $link, ?string $subject = null, ?int $id = null): array
+    public function buttons(?BaleUserLink $link, ?string $subject = null, ?int $id = null, ?string $label = null): array
     {
         if (! $link || ! $this->base() || ! in_array($subject, ['task', 'content'], true) || ! $id || $id < 1) {
             return [];
@@ -67,8 +67,8 @@ final class PanelLinks
 
         return [
             $subject === 'content'
-                ? [$this->placeholder('📄 باز کردن همین محتوا در سامانه', 'mini_app', 'content:'.$id)]
-                : [$this->placeholder('مشاهدهٔ همین تسک در سامانه', 'mini_app', 'task:'.$id)],
+                ? [$this->placeholder($label ?? '📄 باز کردن همین محتوا در سامانه', 'mini_app', 'content:'.$id)]
+                : [$this->placeholder($label ?? 'مشاهدهٔ همین تسک در سامانه', 'mini_app', 'task:'.$id)],
         ];
     }
 

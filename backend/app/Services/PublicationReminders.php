@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Bot\Bale\Support\ContentLabels;
 use App\Models\Content;
 use App\Models\Department;
 use App\Models\DomainRecord;
@@ -29,6 +30,16 @@ final class PublicationReminders
 {
     /** وضعیت‌هایی که یادآوری انتشار برایشان بی‌معناست. */
     public const SETTLED = ['published', 'archived', 'cancelled', 'suspended'];
+
+    /**
+     * فاصلهٔ تکرار یادآوریِ «انتشار عقب‌افتاده» به ساعت.
+     *
+     * پرونده‌ای که از تاریخ انتشارش گذشته و هنوز منتشر نشده، تنها یک یادآوری
+     * نمی‌گیرد: هر چند ساعت یک‌بار همان اعلان به ناشر برگردانده می‌شود تا در
+     * شلوغی کار از قلم نیفتد. کلید اعلان یک «سبدِ ساعتی» دارد، پس در هر بازه
+     * فقط یک اعلان ساخته می‌شود و تکرارِ اجرا اعلان تکراری نمی‌سازد.
+     */
+    public const OVERDUE_REPEAT_HOURS = 4;
 
     /**
      * @return array{scanned:int, reminders:int, recipients:list<int>}
@@ -73,13 +84,16 @@ final class PublicationReminders
             $time = $this->publishTime($content);
             $overdue = $date < $todayIso;
             $title = $overdue ? 'انتشار عقب‌افتاده' : 'یادآوری انتشار';
+            // وضعیت واقعی پرونده در متن اعلان می‌آید تا گیرنده بداند کار در چه
+            // مرحله‌ای است، نه فقط اینکه تاریخ گذشته است.
+            $status = $this->statusLabel($content);
             $message = $overdue
-                ? sprintf('تاریخ انتشار محتوای «%s» (%s) گذشته است و پرونده هنوز منتشر نشده است.', (string) $content->title, $this->stamp($date, $time))
-                : sprintf('محتوای «%s» برای انتشار در %s زمان‌بندی شده است.', (string) $content->title, $this->stamp($date, $time));
+                ? sprintf('تاریخ انتشار محتوای «%s» (%s) گذشته است و پرونده هنوز منتشر نشده است. وضعیت فعلی: %s.', (string) $content->title, $this->stamp($date, $time), $status)
+                : sprintf('محتوای «%s» برای انتشار در %s زمان‌بندی شده است. وضعیت فعلی: %s.', (string) $content->title, $this->stamp($date, $time), $status);
 
             foreach ($this->audience($content) as $recipient) {
                 if ($this->remind(
-                    'publish:content:'.$content->id.':'.$date.($overdue ? ':overdue' : ':due'),
+                    'publish:content:'.$content->id.':'.$date.($overdue ? ':overdue:'.$this->bucket($now) : ':due'),
                     $recipient,
                     $title,
                     $message,
@@ -96,6 +110,30 @@ final class PublicationReminders
         }
 
         return ['scanned' => $scanned, 'reminders' => count($recipients), 'recipients' => array_values(array_unique($recipients))];
+    }
+
+    /**
+     * برچسب فارسی وضعیت پرونده، از همان تنظیمات سازمان که پنل و بات می‌خوانند.
+     */
+    private function statusLabel(Content $content): string
+    {
+        return app(ContentLabels::class)->status($content->status);
+    }
+
+    /**
+     * شمارهٔ «سبدِ ساعتی» برای تکرار یادآوری.
+     *
+     * ساعت سازمان بر فاصلهٔ تکرار تقسیم می‌شود؛ پس در بازهٔ ۰-۴، ۴-۸، … یک
+     * کلید ثابت می‌ماند و در بازهٔ بعد کلید تازه می‌شود.
+     */
+    private function bucket(?Carbon $now): int
+    {
+        // بازه‌ها از مبنای مطلق زمان ساخته می‌شوند تا گذشتن از نیمه‌شب یا تغییر
+        // ساعت، دو یادآوریِ پشت‌سرهم نسازد.
+        $hours = max(1, self::OVERDUE_REPEAT_HOURS);
+        $moment = $now ? $now->copy() : Carbon::now(app(OrganizationTime::class)->zone());
+
+        return intdiv($moment->getTimestamp(), $hours * 3600);
     }
 
     /** تاریخ انتشار ثبت‌شده (`YYYY-MM-DD`) یا null. */

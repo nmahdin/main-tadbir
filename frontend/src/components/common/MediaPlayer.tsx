@@ -387,6 +387,10 @@ export function MediaPlayer({
             setReady(true);
             onReady?.();
           }}
+          // اولین فریمِ تصویر هم «آماده» حساب می‌شود؛ بعضی مرورگرها با
+          // `preload=none` رویداد metadata را دیر می‌فرستند و پیام لودینگ
+          // بی‌دلیل روی تصویرِ آماده می‌ماند.
+          onLoadedData={() => { setReady(true); onReady?.(); }}
           onCanPlay={() => { setReady(true); onReady?.(); }}
           onPlaying={() => { setPlaying(true); setBuffering(false); setStarted(true); setReady(true); }}
           onPlay={() => setPlaying(true)}

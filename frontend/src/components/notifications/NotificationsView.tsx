@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Bell,
   BellRing,
+  LoaderCircle,
   CalendarDays,
   CheckCheck,
   CheckCircle2,
@@ -71,6 +72,25 @@ export const NotificationsView: React.FC = () => {
     setSelectedTaskId, setSelectedProjectId, setSelectedIdeaId, setSelectedContentId,
     setSelectedLetterId, setSelectedResolutionId, setActiveView, notify,
   } = useApp();
+  /**
+   * وضعیت «در حال خواندن»، جدا برای «همه» و برای یک اعلان.
+   *
+   * ثبت خوانده‌شدن یک درخواست شبکه‌ای است؛ پیش‌تر دکمه بی‌هیچ بازخوردی می‌ماند و
+   * کاربر نمی‌دانست کلیکش اثر کرده یا نه (و دوباره می‌زد). حالا نشانگر چرخان
+   * همان دکمه تا پایان درخواست دیده می‌شود.
+   */
+  const [markingAll, setMarkingAll] = useState(false);
+  const [markingId, setMarkingId] = useState<string | null>(null);
+  const markOne = async (id: string) => {
+    if (markingId || markingAll) return;
+    setMarkingId(id);
+    try { await markNotificationAsRead(id); } finally { setMarkingId(null); }
+  };
+  const markAllRead = async () => {
+    if (markingAll) return;
+    setMarkingAll(true);
+    try { await markAllNotificationsAsRead(); } finally { setMarkingAll(false); }
+  };
   const [status, setStatus] = useState<StatusFilter>('all');
   const [category, setCategory] = useState<CategoryFilter>('all');
   const unreadCount = notifications.filter(notification => !notification.read).length;
@@ -118,7 +138,16 @@ export const NotificationsView: React.FC = () => {
   return <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8" dir="rtl">
     <header className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
       <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600"><Bell className="h-5 w-5" /></span><div><h1 className="text-xl font-black text-slate-900">مرکز اعلان‌ها</h1><p className="mt-0.5 text-xs text-slate-500">{unreadCount ? `${unreadCount.toLocaleString('fa-IR')} اعلان خوانده‌نشده دارید` : 'همه اعلان‌ها خوانده شده‌اند'}</p></div></div>
-      {unreadCount > 0 && <button onClick={markAllNotificationsAsRead} className="ui-button ui-button-secondary w-fit text-xs"><CheckCheck className="h-4 w-4" />خواندن همه</button>}
+      {unreadCount > 0 && <button
+        type="button"
+        onClick={() => void markAllRead()}
+        disabled={markingAll || markingId !== null}
+        aria-busy={markingAll || undefined}
+        className="ui-button ui-button-secondary w-fit text-xs inline-flex items-center gap-1.5 disabled:cursor-wait"
+      >
+        {markingAll ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" />}
+        {markingAll ? 'در حال علامت‌گذاری…' : 'خواندن همه'}
+      </button>}
     </header>
 
     <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
@@ -135,7 +164,15 @@ export const NotificationsView: React.FC = () => {
           <div className="min-w-0 flex-1"><div className="mb-1 flex flex-wrap items-center gap-2"><p className="text-sm font-bold text-slate-900">{notification.title}</p>{!notification.read && <span className="h-2 w-2 rounded-full bg-indigo-600" />}<span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-500">{categoryConfig.label}</span></div><p className="whitespace-pre-line text-xs leading-6 text-slate-600">{notification.message}</p><time className="mt-1.5 block text-[10px] text-slate-400" dateTime={notification.timestamp}>{formatPersianIsoDateTime(notification.timestamp) || '—'}</time></div>
           <div className="flex shrink-0 items-center gap-1">
             {hasLink(notification) && <button type="button" onClick={() => openNotification(notification)} className="ui-button ui-button-ghost !min-h-9 !px-2.5 text-[10px]" title={actionLabel(notification)} aria-label={actionLabel(notification)}><ExternalLink className="h-3.5 w-3.5" /><span className="hidden sm:inline">{actionLabel(notification)}</span></button>}
-            {!notification.read && <button onClick={() => markNotificationAsRead(notification.id)} className="ui-button ui-button-ghost ui-icon-button text-emerald-600" title="خوانده‌شده" aria-label="علامت‌گذاری به‌عنوان خوانده‌شده"><CheckCircle2 className="h-4 w-4" /></button>}
+            {!notification.read && <button
+              type="button"
+              onClick={() => void markOne(notification.id)}
+              disabled={markingId === notification.id || markingAll}
+              aria-busy={markingId === notification.id || undefined}
+              className="ui-button ui-button-ghost ui-icon-button text-emerald-600 disabled:cursor-wait"
+              title="خوانده‌شده"
+              aria-label="علامت‌گذاری به‌عنوان خوانده‌شده"
+            >{markingId === notification.id ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCircle2 className="h-4 w-4" />}</button>}
             <button onClick={() => clearNotification(notification.id)} className="ui-button ui-button-ghost ui-icon-button text-slate-400 hover:text-rose-600" title="حذف اعلان" aria-label="حذف اعلان"><Trash2 className="h-4 w-4" /></button>
           </div>
         </article>;

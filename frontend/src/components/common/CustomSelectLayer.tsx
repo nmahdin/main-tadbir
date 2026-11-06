@@ -65,6 +65,23 @@ const commitValue = (select: HTMLSelectElement, value: string) => {
   select.dispatchEvent(new Event('change', { bubbles: true }));
 };
 
+/**
+ * قاب دیدِ واقعی کاربر.
+ *
+ * `window.innerHeight` روی موبایل با کیبورد باز، یا در مینی‌اپ و مرورگرهای
+ * دارای نوار آدرس پویا، با آنچه واقعاً دیده می‌شود یکی نیست؛ پیش‌تر همین
+ * تفاوت باعث می‌شد فهرست «تعداد در صفحه» در پایین جدول جایی باز شود که بیرون
+ * از قاب دید بود. منبع حقیقت `visualViewport` است و در نبودِ آن، پنجره.
+ */
+const visualFrame = () => {
+  const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+  const offsetTop = vv?.offsetTop ?? 0;
+  const offsetLeft = vv?.offsetLeft ?? 0;
+  const height = vv?.height ?? window.innerHeight;
+  const width = vv?.width ?? window.innerWidth;
+  return { top: offsetTop, bottom: offsetTop + height, left: offsetLeft, right: offsetLeft + width, height, width };
+};
+
 export const CustomSelectLayer: React.FC = () => {
   const [menu, setMenu] = useState<HTMLSelectElement | null>(null);
   const [items, setItems] = useState<SelectItem[]>([]);
@@ -105,41 +122,42 @@ export const CustomSelectLayer: React.FC = () => {
   /**
    * جای‌گذاری فهرست.
    *
-   * قاعدهٔ دور ۸۵: فهرست هرگز بیرون از قاب دید کاربر باز نمی‌شود. پیش‌تر
-   * وقتی پایین فیلد جای کافی نبود، فهرست «بالا» باز می‌شد اما با
-   * `translateY(-100%)` و ارتفاع حداقل ۱۲۰ پیکسل — در جدولی که نزدیک لبهٔ
-   * پایین صفحه است، همین باعث می‌شد بخشی از فهرست بیرون از نمایشگر بیفتد و
-   * انتخابگر «تعداد در صفحه» عملاً دیده نشود. حالا:
-   *   ۱) اگر جای پایین کم باشد و بالای فیلد بیشتر باشد، فهرست بالای فیلد
-   *      باز می‌شود؛
+   * قاعدهٔ دور ۸۵ (و تثبیت آن در دور ۸۶): فهرست هرگز بیرون از قاب دید کاربر باز
+   * نمی‌شود.
+   *   ۱) اگر جای پایین کم باشد و بالای فیلد بیشتر باشد، فهرست بالای فیلد باز
+   *      می‌شود؛
    *   ۲) ارتفاع فهرست از همان فضای موجود بیشتر نمی‌شود (اسکرول داخلی)؛
-   *   ۳) مختصات نهایی در محدودهٔ نمایشگر بسته می‌شود، پس هیچ بخشی گم نمی‌شود.
+   *   ۳) مختصات نهایی در محدودهٔ همان قاب دید بسته می‌شود، پس هیچ بخشی گم
+   *      نمی‌شود.
+   * محاسبه با قاب دیدِ تصویری انجام می‌شود تا کیبورد موبایل و نوار آدرسِ
+   * پویا هم درست حساب شوند.
    */
   const place = useCallback((select: HTMLSelectElement, count: number, groups = 0) => {
     const rect = select.getBoundingClientRect();
+    const frame = visualFrame();
     const minWidth = Math.min(MENU_MAX_WIDTH, Math.max(MENU_MIN_WIDTH, rect.width));
     // سرگروه‌های `optgroup` هم ارتفاع می‌گیرند؛ در محاسبهٔ فضای لازم شمرده می‌شوند.
     const needed = Math.min(count * ITEM_HEIGHT + groups * ITEM_GROUP_HEIGHT + 12, MENU_MAX_HEIGHT);
-    const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - MENU_MARGIN);
-    const spaceAbove = Math.max(0, rect.top - MENU_MARGIN);
+    const spaceBelow = Math.max(0, frame.bottom - rect.bottom - MENU_MARGIN);
+    const spaceAbove = Math.max(0, rect.top - frame.top - MENU_MARGIN);
     const above = spaceBelow < needed && spaceAbove > spaceBelow;
     const available = above ? spaceAbove : spaceBelow;
     // ارتفاع دقیق، نه «حداقل»؛ با ارتفاع ثابت، فهرست هرگز از قاب بیرون نمی‌زند.
-    const height = Math.max(Math.min(needed, available), MIN_MENU_HEIGHT);
-    const clampedHeight = Math.min(height, Math.max(available, MIN_MENU_HEIGHT));
-    const top = above ? Math.max(MENU_MARGIN, rect.top - 6 - clampedHeight) : rect.bottom + 6;
-    const width = Math.min(MENU_MAX_WIDTH, Math.max(minWidth, Math.min(rect.width, window.innerWidth - 2 * MENU_MARGIN)));
-    const left = Math.min(
-      Math.max(MENU_MARGIN, rect.right - width),
-      Math.max(MENU_MARGIN, window.innerWidth - width - MENU_MARGIN),
-    );
+    // سقفِ ۹۶ فقط وقتی اعمال می‌شود که قاب دید خودش جای بیشتری داشته باشد.
+    const floor = Math.min(MIN_MENU_HEIGHT, Math.max(0, frame.height - 2 * MENU_MARGIN));
+    const height = Math.max(Math.min(needed, available), Math.min(floor, available));
+    const top = above ? rect.top - 6 - height : rect.bottom + 6;
+    const width = Math.min(MENU_MAX_WIDTH, Math.max(minWidth, Math.min(rect.width, frame.width - 2 * MENU_MARGIN)));
+    // فهرست در RTL به لبهٔ راستِ فیلد می‌چسبد و از چپ هم داخل قاب می‌ماند.
+    const rightAligned = rect.right - width;
+    const left = Math.min(Math.max(frame.left + MENU_MARGIN, rightAligned), Math.max(frame.left + MENU_MARGIN, frame.right - width - MENU_MARGIN));
     setPosition({
-      top: Math.max(MENU_MARGIN, Math.min(top, window.innerHeight - clampedHeight - MENU_MARGIN)),
+      top: Math.max(frame.top + MENU_MARGIN, Math.min(top, frame.bottom - height - MENU_MARGIN)),
       left,
       minWidth,
       width,
-      height: clampedHeight,
-      maxHeight: clampedHeight,
+      height,
+      maxHeight: height,
       above,
     });
   }, []);
@@ -241,6 +259,35 @@ export const CustomSelectLayer: React.FC = () => {
       window.removeEventListener('scroll', dismiss, true);
     };
   }, [close, menu]);
+
+  /**
+   * اصلاح مختصات پس از رندر.
+   *
+   * مدال‌ها و منوها با انیمیشنِ مقیاس باز می‌شوند؛ اگر کاربر در همان لحظه
+   * انتخابگر داخل مدال را باز کند، `getBoundingClientRect` اندازهٔ میانِ
+   * انیمیشن را می‌دهد و فهرست در جای نادرست می‌نشیند. یک اندازه‌گیری دوباره در
+   * فریم بعد و یکی پس از پایان انیمیشن، این حالت و همچنین تغییر ارتفاعِ قاب
+   * دید (کیبورد موبایل) را می‌پوشاند.
+   */
+  useEffect(() => {
+    if (!menu) return;
+    const reposition = () => {
+      if (targetRef.current === menu) {
+        place(menu, items.length, new Set(items.map(item => item.group).filter(Boolean)).size);
+      }
+    };
+    const frame = window.requestAnimationFrame(reposition);
+    const settle = window.setTimeout(reposition, 200);
+    const viewport = window.visualViewport;
+    viewport?.addEventListener('resize', reposition);
+    viewport?.addEventListener('scroll', reposition);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settle);
+      viewport?.removeEventListener('resize', reposition);
+      viewport?.removeEventListener('scroll', reposition);
+    };
+  }, [items, menu, place]);
 
   if (!menu || !position) return null;
 

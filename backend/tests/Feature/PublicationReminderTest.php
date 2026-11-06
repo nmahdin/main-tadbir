@@ -125,6 +125,39 @@ class PublicationReminderTest extends TestCase
         $this->assertGreaterThanOrEqual(1, $response->json('meta.unread_count'));
     }
 
+    /**
+     * یادآوری «انتشار عقب‌افتاده» هر چند ساعت تکرار می‌شود.
+     *
+     * پیش‌تر کلید اعلان فقط «پرونده + تاریخ» بود؛ یعنی یک پروندهٔ جامانده
+     * همیشه فقط یک یادآوری می‌گرفت و در شلوغی کار از قلم می‌افتاد.
+     */
+    public function test_an_overdue_publication_is_reminded_again_after_the_repeat_window(): void
+    {
+        $owner = $this->actor();
+        $zone = app(OrganizationTime::class)->zone();
+        $now = \Illuminate\Support\Carbon::now($zone)->setTime(10, 0);
+        $past = $now->copy()->subDays(3)->toDateString();
+        $content = $this->content('انتشار جامانده', $past, 'ready_to_publish', $owner);
+
+        $service = app(PublicationReminders::class);
+        $first = $service->run($now);
+        $this->assertSame(1, $first['reminders']);
+        // در همان بازهٔ ساعتی، اجرای دوباره اعلان تکراری نمی‌سازد.
+        $this->assertSame(0, $service->run($now->copy()->addMinutes(30))['reminders']);
+        // پس از یک بازهٔ کامل، یادآوری دوباره فرستاده می‌شود.
+        $repeat = $service->run($now->copy()->addHours(PublicationReminders::OVERDUE_REPEAT_HOURS));
+        $this->assertSame(1, $repeat['reminders']);
+
+        $messages = DomainRecord::where('domain', DomainRecord::DOMAIN_NOTIFICATION)
+            ->get()->pluck('payload.message')->all();
+        $this->assertCount(2, $messages);
+        // وضعیت واقعی پرونده در متن هر یادآوری می‌آید.
+        $this->assertTrue(collect($messages)->every(
+            fn ($message) => str_contains((string) $message, 'وضعیت فعلی:') && str_contains((string) $message, 'آماده انتشار'),
+        ));
+        $this->assertSame((string) $content->id, (string) DomainRecord::where('domain', DomainRecord::DOMAIN_NOTIFICATION)->first()->payload['linkContentId']);
+    }
+
     /** ناشر غیرفعال: یادآوری برای مالک پرونده ساخته می‌شود و از بین نمی‌رود. */
     public function test_an_inactive_publisher_falls_back_to_the_content_owner(): void
     {

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { request } from '../../api/client';
 import { useApp } from '../../context/AppContext';
+import { useExitPresence } from '../common/useExitPresence';
 import type { Priority, ProjectStatus, TaskStatus } from '../../types';
 import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../common/PriorityPill';
 
@@ -52,16 +53,27 @@ export const GlobalSearchModal: React.FC = () => {
     currentUser,
   } = useApp();
   const [, setSearchParams] = useSearchParams();
+  /**
+   * انیمیشن باز و بسته شدن مدال جست‌وجو.
+   *
+   * پیش‌تر با `isSearchOpen=false` مدال همان لحظه از DOM حذف می‌شد و فقط یک
+   * ظاهر شدن ناگهانی دیده می‌شد. `useExitPresence` مدال را تا پایان انیمیشن
+   * خروج نگه می‌دارد؛ ورود و خروج هر دو از همان کلاس‌های مشترک مدال می‌آیند.
+   */
+  const presence = useExitPresence(isSearchOpen);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!isSearchOpen) {
+    // پاک‌سازی پس از پایان انیمیشن خروج انجام می‌شود تا محتوای نتایج در همان
+    // ۱۴۰ میلی‌ثانیهٔ محوشدن ناگهان به «حداقل دو حرف وارد کنید» نپرد.
+    if (!presence.visible) {
       setQuery('');
       setDebouncedQuery('');
       return;
     }
+    if (!isSearchOpen) return;
     /*
      * فوکوس باید در همان چرخهٔ رندر بعد از ضربه انجام شود؛ روی موبایل اگر
      * فوکوس با تأخیر (فریم‌های بعدی) صدا زده شود، iOS آن را «بدون اشارهٔ
@@ -71,7 +83,7 @@ export const GlobalSearchModal: React.FC = () => {
     inputRef.current?.focus({ preventScroll: true });
     const frame = window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
     return () => window.cancelAnimationFrame(frame);
-  }, [isSearchOpen]);
+  }, [isSearchOpen, presence.visible]);
 
   useEffect(() => {
     const normalized = query.trim();
@@ -86,7 +98,7 @@ export const GlobalSearchModal: React.FC = () => {
     staleTime: 20_000,
   });
 
-  if (!isSearchOpen) return null;
+  if (!presence.visible) return null;
 
   const projects = search.data?.data.projects ?? [];
   const tasks = search.data?.data.tasks ?? [];
@@ -118,7 +130,8 @@ export const GlobalSearchModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[130] flex items-start justify-center bg-slate-900/50 px-2 pt-3 backdrop-blur-xs sm:px-4 sm:pt-24"
+      data-state={presence.state}
+      className="ui-modal-overlay fixed inset-0 z-[130] flex items-start justify-center bg-slate-900/50 px-2 pt-3 backdrop-blur-xs sm:px-4 sm:pt-24"
       onMouseDown={event => {
         if (event.currentTarget === event.target) setIsSearchOpen(false);
       }}
@@ -127,7 +140,8 @@ export const GlobalSearchModal: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-label="جست‌وجوی سراسری"
-        className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-right shadow-2xl sm:max-h-[80dvh] sm:rounded-3xl"
+        data-state={presence.state}
+        className="ui-modal-panel flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-right shadow-2xl sm:max-h-[80dvh] sm:rounded-3xl"
         dir="rtl"
       >
         <div className="flex items-center gap-3 border-b border-slate-200 p-4">

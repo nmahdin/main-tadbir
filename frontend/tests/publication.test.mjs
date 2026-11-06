@@ -18,7 +18,10 @@ test('publish API requires a server version but not an external link', async () 
   const api = await source('../src/api/contents.ts');
   const publish = api.slice(api.indexOf('  publish:'), api.indexOf('  unpublish:'));
   assert.match(publish, /\/publish/);
-  assert.match(publish, /body: \{ expectedVersion \}/);
+  // دور ۸۶: تاریخ و ساعت ثبت انتشار اختیاری اضافه شد؛ نسخهٔ سروری همچنان
+  // اجباری است و هر دو مقدار فقط وقتی فرستاده می‌شوند که کاربر تعیین کرده باشد.
+  assert.match(publish, /body: \{ expectedVersion, \.\.\.\(publishAt\?\.date \? \{ publishDate: publishAt\.date \} : \{\}\)/);
+  assert.match(publish, /publishAt\?\.time \? \{ publishTime: publishAt\.time \} : \{\}/);
   assert.doesNotMatch(publish, /url|link|publishUrl/i);
 });
 

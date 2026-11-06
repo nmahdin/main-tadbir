@@ -27,7 +27,8 @@ import {
   Building2,
   X,
   AlarmClock,
-  ExternalLink
+  ExternalLink,
+  LoaderCircle,
 } from 'lucide-react';
 
 export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSidebar }) => {
@@ -188,7 +189,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           <button
             id="mobile-sidebar-toggle"
             onClick={onOpenSidebar}
-            className="ui-tap shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+            className="ui-tap ui-compact-only shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 lg:hidden"
             aria-label="باز کردن منو"
           >
             <Menu className="w-5 h-5" />
@@ -247,7 +248,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           title="جست‌وجوی سراسری"
           aria-label="جست‌وجوی سراسری"
           aria-haspopup="dialog"
-          className="ui-tap shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 sm:hidden"
+          className="ui-tap ui-mobile-only shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 sm:hidden"
         >
           <Search className="h-5 w-5" />
         </button>
@@ -291,10 +292,14 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                 </div>
                 {unreadCount > 0 && (
                   <button
-                    onClick={markAllNotificationsAsRead} disabled={readMutation.isPending}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
+                    type="button"
+                    onClick={markAllNotificationsAsRead}
+                    disabled={readMutation.isPending}
+                    aria-busy={readMutation.isPending || undefined}
+                    className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer disabled:cursor-wait disabled:opacity-70"
                   >
-                    علامت‌گذاری همه به عنوان خوانده‌شده
+                    {readMutation.isPending && <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />}
+                    {readMutation.isPending ? 'در حال علامت‌گذاری…' : 'علامت‌گذاری همه به عنوان خوانده‌شده'}
                   </button>
                 )}
               </div>
@@ -386,9 +391,13 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           <button
             id="top-user-avatar-btn"
             onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
-            // دور ۸۵: مانند بقیهٔ دکمه‌های سربرگ، گوشهٔ گردِ معمولی (نه کپسولی)؛
-            // در حالت عادی بدون پس‌زمینه و فقط با هاور کمی خاکستری می‌شود.
-            className="ui-tap flex shrink-0 items-center gap-2 rounded-xl border border-transparent p-1 pr-1.5 transition-colors hover:bg-slate-100"
+            // دور ۸۵/۸۶: مانند بقیهٔ دکمه‌های سربرگ، گوشهٔ گردِ معمولی (نه کپسولی)؛
+            // در حالت عادی بدون پس‌زمینه و بدون حاشیه، و فقط با هاور کمی خاکستری
+            // می‌شود. `!rounded-xl` تضمین می‌کند قاعدهٔ سراسریِ گردیِ دکمه‌ها
+            // (که بیرون از لایهٔ utilities است) دوباره آن را کپسولی نکند.
+            className="ui-tap flex shrink-0 items-center gap-2 !rounded-xl border-0 bg-transparent p-1 pr-1.5 transition-colors hover:bg-slate-100"
+            aria-haspopup="menu"
+            aria-expanded={isUserDropdownOpen}
           >
             <Avatar user={currentUser} size="sm" />
             <span className="hidden md:inline-block text-xs font-bold text-slate-800 max-w-[100px] truncate">

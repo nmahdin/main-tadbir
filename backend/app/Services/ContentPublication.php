@@ -101,11 +101,23 @@ final class ContentPublication
         });
     }
 
-    public function publish(User $actor, Content $content, string $expected): Content
+    /**
+     * ثبت انتشار.
+     *
+     * `$publishDate`/`$publishTime` اختیاری‌اند: کاربر می‌تواند تاریخ و ساعتی را
+     * که واقعاً منتشر شده ثبت کند (مثلاً انتشارِ دیروز که امروز در سامانه ثبت
+     * می‌شود). پیش‌فرض همان «همین حالا» با ساعت سازمان است. مقدار نامعتبر نادیده
+     * گرفته می‌شود تا فرمت ذخیره‌شده هرگز خراب نشود و متن اعلان‌ها نشکند.
+     */
+    public function publish(User $actor, Content $content, string $expected, ?string $publishDate = null, ?string $publishTime = null): Content
     {
         $actor = $this->authorize($actor);
+        $recordedDate = is_string($publishDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($publishDate)) === 1
+            ? trim($publishDate) : null;
+        $recordedTime = is_string($publishTime) && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', trim($publishTime)) === 1
+            ? trim($publishTime) : null;
 
-        return DB::transaction(function () use ($actor, $content, $expected): Content {
+        return DB::transaction(function () use ($actor, $content, $expected, $recordedDate, $recordedTime): Content {
             $content = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
             abort_unless(app(ContentAccess::class)->canView($actor, $content), 403);
             // Repeated clicks, including a retry after a lost HTTP response, are no-ops.
@@ -126,8 +138,11 @@ final class ContentPublication
             $scheduled = is_array($payload['publishInfo'] ?? null) ? $payload['publishInfo'] : [];
             $scheduledDate = is_string($scheduled['date'] ?? null) ? $scheduled['date'] : null;
             $scheduledTime = is_string($scheduled['time'] ?? null) ? $scheduled['time'] : null;
+            // تاریخ/ساعتِ ثبت‌شده همان چیزی است که کاربر انتخاب کرده؛ اگر چیزی
+            // انتخاب نشده باشد، زمان سازمان همان لحظه ثبت می‌شود. برنامهٔ قبلی در
+            // `scheduledDate`/`scheduledTime` دست‌نخورده می‌ماند.
             $payload['publishInfo'] = [...$scheduled, 'status' => 'published',
-                'date' => $clock->date($moment), 'time' => $clock->time($moment),
+                'date' => $recordedDate ?? $clock->date($moment), 'time' => $recordedTime ?? $clock->time($moment),
                 'scheduledDate' => $scheduledDate, 'scheduledTime' => $scheduledTime];
             $payload['status'] = 'published';
             $payload['_publication'] = ['event_id' => $eventId, 'actor_id' => $actor->id, 'task_ids' => $taskIds,

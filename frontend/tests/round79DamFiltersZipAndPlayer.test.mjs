@@ -94,7 +94,10 @@ test('نوع خروجی روی کارت، فرمت واقعی فایل یا «م
   assert.match(stage, /mimeType\?: string;/);
   assert.match(stage, /isTextAsset\?: boolean;/);
   // پسوند/MIME واقعی دارایی جای پسوند نامعلوم ردیف خروجی می‌نشیند.
-  assert.match(stage, /const mime = \(view\.mimeType \|\| meta\?\.mimeType \|\| ''\)\.toLowerCase\(\);/);
+  // دور ۸۶: `mimeOf` پسوندِ خالی مانند «mp4»/«pdf» را هم به MIME واقعی تبدیل
+  // می‌کند؛ پیش‌تر چنین مقداری نه آیکون درست می‌گرفت و نه برچسب نوع فایل.
+  assert.match(stage, /const mimeOf = \(view: StageAssetView\): string => \{/);
+  assert.match(stage, /const mime = mimeOf\(\{ \.\.\.view, mimeType: view\.mimeType \|\| meta\?\.mimeType \}\);/);
   assert.match(stage, /const ext = extensionOf\(view\) \|\| \(meta\?\.extension \|\| ''\)\.toLowerCase\(\);/);
   // متن خروجی کوتاه نمایش داده می‌شود و فقط از خود ردیف خروجی می‌آید.
   // دور ۸۲: هیچ درخواستی برای متن دارایی از کارت فرستاده نمی‌شود.

@@ -27,8 +27,12 @@ const taskController = backend('app/Http/Controllers/Api/V1/TaskController.php')
 test('فهرست انتخابگر هرگز بیرون از قاب دید باز نمی‌شود و در صورت نیاز بالای فیلد می‌آید', () => {
   // جای‌گذاری بر پایهٔ فضای واقعی بالا/پایین، با ارتفاع دقیق (نه حداقل ۱۲۰px).
   assert.match(selectLayer, /const above = spaceBelow < needed && spaceAbove > spaceBelow;/);
-  assert.match(selectLayer, /const height = Math\.max\(Math\.min\(needed, available\), MIN_MENU_HEIGHT\);/);
-  assert.match(selectLayer, /top: Math\.max\(MENU_MARGIN, Math\.min\(top, window\.innerHeight - clampedHeight - MENU_MARGIN\)\)/);
+  // کفِ ۹۶ فقط وقتی اعمال می‌شود که قاب دید خودش جا داشته باشد؛ وگرنه فهرست
+  // از همان فضای موجود بیرون نمی‌زند (دور ۸۶: بستن روی قاب دید تصویری).
+  assert.match(selectLayer, /const floor = Math\.min\(MIN_MENU_HEIGHT, Math\.max\(0, frame\.height - 2 \* MENU_MARGIN\)\);/);
+  assert.match(selectLayer, /const height = Math\.max\(Math\.min\(needed, available\), Math\.min\(floor, available\)\);/);
+  // مختصات نهایی با همان قاب دیدِ تصویری بسته می‌شود (نه فقط پنجره).
+  assert.match(selectLayer, /top: Math\.max\(frame\.top \+ MENU_MARGIN, Math\.min\(top, frame\.bottom - height - MENU_MARGIN\)\)/);
   // دیگر با `translateY(-100%)` جابه‌جا نمی‌شود؛ همان مختصات محاسبه‌شده اعمال می‌شود.
   assert.doesNotMatch(selectLayer, /transform: position\.above \? 'translateY\(-100%\)'/);
   assert.match(selectLayer, /data-placement=\{position\.above \? 'above' : 'below'\}/);
@@ -65,7 +69,8 @@ test('دکمهٔ ذخیرهٔ مدال‌ها هنگام کلیک نشانگر �
 });
 
 test('دکمهٔ منوی پروفایل در سربرگ کپسولی نیست', () => {
-  assert.match(navbar, /className="ui-tap flex shrink-0 items-center gap-2 rounded-xl border border-transparent p-1 pr-1\.5 transition-colors hover:bg-slate-100"/);
+  // دور ۸۶: هیچ کادر و پس‌زمینه‌ای تا هاور ندارد؛ فقط گردی و فاصلهٔ داخلی.
+  assert.match(navbar, /className="ui-tap flex shrink-0 items-center gap-2 !rounded-xl border-0 bg-transparent p-1 pr-1\.5 transition-colors hover:bg-slate-100"/);
   assert.doesNotMatch(navbar, /rounded-full border border-transparent p-1 pr-1\.5/);
 });
 
@@ -77,8 +82,9 @@ test('تب «تسک‌های مربوط» همهٔ وظایف همان پرون�
 });
 
 test('دکمه‌های خروجی (پیش‌نمایش/تأیید/اصلاح) با دکمه‌های سامانه یکپارچه‌اند', () => {
-  // پیش‌نمایش کارت خروجی: همان Button استاندارد، نه دکمهٔ دست‌ساز.
-  assert.match(stages, /<Button variant="secondary" onClick=\{\(\) => onPreview\(view\)\} title="پیش‌نمایش این خروجی"><Eye className="h-4 w-4" aria-hidden \/>پیش‌نمایش<\/Button>/);
+  // پیش‌نمایش کارت خروجی: همان Button استاندارد، نه دکمهٔ دست‌ساز. از دور ۸۶
+  // این دکمه بدون کادر و پس‌زمینه است (کارت خودش کلیک‌پذیر است).
+  assert.match(stages, /<Button variant="ghost" onClick=\{\(\) => onPreview\(view\)\} title="پیش‌نمایش این خروجی" className="!border-0 !bg-transparent[^"]*"><Eye className="h-4 w-4" aria-hidden \/>پیش‌نمایش<\/Button>/);
   assert.match(stages, /import \{ Button, Modal \} from '\.\.\/common\/Primitives';/);
   // دکمه‌های مرحله: شروع/ارسال/تأیید/اصلاح با Button و نشانگر لودینگ.
   assert.match(detail, /<Button\s+variant="primary"\s+loading=\{stageActionKey === `start:\$\{stage\.id\}`\}/);

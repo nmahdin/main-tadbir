@@ -25,7 +25,8 @@ import {
   TrendingUp,
   FileText,
   Edit3,
-  Download
+  Download,
+  LoaderCircle,
 } from 'lucide-react';
 import { Idea, IdeaStatus, IdeaVoteOption, Priority } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -296,7 +297,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                   <p className="mt-1 text-[11px] text-slate-500">پیشروی ایده طبق همین مراحل ثبت‌شده انجام می‌شود.</p>
                 </div>
                 {hasPermission('thinktank.edit_idea') && idea.flowStages.some(stage => stage.status !== 'completed') && (
-                  <button type="button" disabled={workflowBusy} onClick={() => void advanceWorkflow()} className="ui-button ui-button-primary text-xs">
+                  <button type="button" aria-busy={workflowBusy || undefined} disabled={workflowBusy} onClick={() => void advanceWorkflow()} className="ui-button ui-button-primary inline-flex items-center gap-1.5 text-xs disabled:cursor-wait">
+                    {workflowBusy && <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />}
                     {workflowBusy ? 'در حال ثبت…' : 'تکمیل مرحله جاری و ادامه'}
                   </button>
                 )}

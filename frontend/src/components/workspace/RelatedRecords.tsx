@@ -21,7 +21,11 @@ export function RelatedRecords({module, scope, variant = 'table'}: {module:'task
   const search = (params.get(prefix+'search') || '').slice(0,120);
   const [draft,setDraft] = useState(search); useEffect(()=>setDraft(search),[search]);
   const allowed = hasPermission(module === 'contents' ? 'content.view' : `${module}.view`);
-  const query = useWorkspacePage(module,{...scope,page,per_page:20, ...((status in labels || (module === 'tasks' && status === 'open')) ? {status} : {}), ...(search ? {search} : {}),...scope}, allowed);
+  // تب «تسک‌های مربوط» ۵۰ ردیف می‌گیرد: وظایف مرحله‌ها همگی یک‌جا ساخته
+  // می‌شوند و وظیفهٔ تکمیل‌شده معمولاً قدیمی‌ترین ردیف است؛ با ۲۰ ردیف، زیر
+  // صفحه‌بندی پنهان می‌ماند و کاربر فکر می‌کرد وظایف انجام‌شده نمایش داده نمی‌شوند.
+  const perPage = module === 'tasks' && variant === 'task-list' ? 50 : 20;
+  const query = useWorkspacePage(module,{...scope,page,per_page:perPage, ...((status in labels || (module === 'tasks' && status === 'open')) ? {status} : {}), ...(search ? {search} : {}),...scope}, allowed);
   const update = (key:string,value:string) => { const next=new URLSearchParams(params); if(value)next.set(prefix+key,value);else next.delete(prefix+key);if(key!=='page')next.delete(prefix+'page');setParams(next); };
   useEffect(()=>{
     const last=query.data?.meta?.last_page;

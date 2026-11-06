@@ -188,7 +188,15 @@ class ContentController extends Controller
     public function publish(PublicationCommandRequest $request, Content $content, ContentPublication $publication)
     {
         $data = $request->validated();
-        $content = $publication->publish($request->user(), $content, $data['expectedVersion']);
+        // تاریخ و ساعت انتخاب‌شدهٔ کاربر (اختیاری) همان‌جا ثبت می‌شود؛ نبودشان
+        // یعنی «همین حالا» با ساعت سازمان.
+        $content = $publication->publish(
+            $request->user(),
+            $content,
+            $data['expectedVersion'],
+            $data['publishDate'] ?? null,
+            $data['publishTime'] ?? null,
+        );
 
         return $this->publicationResponse($request, $content, $publication);
     }

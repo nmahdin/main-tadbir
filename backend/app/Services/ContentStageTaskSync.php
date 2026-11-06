@@ -53,6 +53,12 @@ class ContentStageTaskSync
 
             $stageId = (string) $stage['id'];
 
+            // پیش از هر تصمیم دیگری، «هویت» تسک‌های موجودِ همین مرحله با خودِ
+            // مرحله هم‌تراز می‌شود: مسئول اجرا، ارزیاب و مهلت. این کار حتی برای
+            // مرحلهٔ مسدود هم انجام می‌شود، چون تغییر مسئول یا مهلت مرحله باید
+            // روی کاری که از قبل در کارتابل است هم دیده شود.
+            $this->syncStageIdentity($content, $stage);
+
             // تسک مرحله‌ای که پیش‌نیازش تمام نشده ساخته نمی‌شود: نه تسک کار، نه
             // تسک ارزیابی و نه اعلان تخصیص. پیش‌نیاز از دادهٔ واقعی خودِ جریان
             // خوانده می‌شود (وابستگی اعلام‌شده، ورودی ارجاع‌شده یا مرحلهٔ قبلی).
@@ -216,6 +222,82 @@ class ContentStageTaskSync
         }
     }
 
+    /**
+     * هم‌ترازیِ تسک‌های بازِ یک مرحله با خودِ مرحله.
+     *
+     * قانون ساده است: هر تغییری که کاربر روی مرحله می‌دهد باید روی همان کاری
+     * که در کارتابل افراد است هم دیده شود.
+     * - تغییر «مسئول اجرا» تسک کار را به فرد تازه می‌دهد.
+     * - تغییر «ارزیاب» تسک ارزیابی را به ارزیاب تازه می‌دهد.
+     * - مهلت هر دو تسک دقیقاً همان مهلت مرحله است (و اگر مرحله مهلت نداشته
+     *   باشد، مهلت پرونده).
+     *
+     * تسک تکمیل/بایگانی‌شده دست‌نخورده می‌ماند و اگر مسئول مرحله خالی باشد،
+     * مسئولِ فعلیِ تسک پاک نمی‌شود.
+     *
+     * @param  array<string, mixed>  $stage
+     */
+    private function syncStageIdentity(Content $content, array $stage): void
+    {
+        $stageDeadline = $this->deadline($stage['deadline'] ?? null) ?? $content->deadline?->toDateString();
+        $workAssignee = $this->activeUserId($stage['assigneeId'] ?? null);
+        $reviewerId = $this->activeUserId(
+            $stage['reviewerId']
+                ?? $stage['approverId']
+                ?? ($content->payload['approverId'] ?? null)
+                ?? $content->owner_id
+        );
+        if (! $stageDeadline && ! $workAssignee && ! $reviewerId) {
+            return;
+        }
+
+        Task::query()
+            ->where('content_id', $content->id)
+            ->where('content_stage_id', (string) $stage['id'])
+            ->whereIn('kind', ['content_work', 'content_review'])
+            ->whereNotIn('status', ['completed', 'archived'])
+            ->get()
+            ->each(function (Task $task) use ($stageDeadline, $workAssignee, $reviewerId): void {
+                $assignee = $task->kind === 'content_review' ? $reviewerId : $workAssignee;
+                $changes = [];
+                if ($assignee && (string) $task->assignee_id !== (string) $assignee) {
+                    $changes['assignee_id'] = $assignee;
+                }
+                if ($stageDeadline && $task->deadline?->toDateString() !== $stageDeadline) {
+                    $changes['deadline'] = $stageDeadline;
+                }
+                if ($changes === []) {
+                    return;
+                }
+                $task->forceFill($changes)->save();
+                if (isset($changes['assignee_id'])) {
+                    // مسئول تازه باید از همان مسیر همیشگی خبردار شود.
+                    app(TaskAssignmentNotifications::class)->created($task);
+                }
+            });
+    }
+
+    /** شناسهٔ کاربرِ فعال؛ هر مقدار دیگری (خالی، ناموجود، غیرفعال) «نامعلوم» است. */
+    private function activeUserId(mixed $value): ?int
+    {
+        $id = $this->numericId($value);
+
+        return $id && User::query()->whereKey($id)->where('status', 'active')->exists() ? $id : null;
+    }
+
+    /**
+     * آیا مرحله به پایان رسیده است؟
+     *
+     * فقط برای تصمیم «بازکردن تسکِ بسته» استفاده می‌شود: مرحلهٔ تمام‌شده تسک
+     * تکمیل‌شدهٔ خودش را دست‌نخورده نگه می‌دارد.
+     *
+     * @param  array<string, mixed>  $stage
+     */
+    private function stageFinished(array $stage): bool
+    {
+        return in_array((string) ($stage['status'] ?? ''), self::FINISHED_STAGE_STATUSES, true);
+    }
+
     /** مهلت مرحله را به تاریخ معتبر تبدیل می‌کند؛ مقدار نامعتبر نادیده گرفته می‌شود. */
     private function deadline(mixed $value): ?string
     {
@@ -245,8 +327,33 @@ class ContentStageTaskSync
         $sourceKey = $cycle ? hash('sha256', 'review:'.$content->id.':'.$stage['id'].':'.$cycle) : null;
         $existing = Task::where('content_id', $content->id)->where('content_stage_id', (string) $stage['id'])
             ->where('kind', $kind)->where('source_key', $sourceKey)->first();
+
+        // مرجع‌های واقعیِ تسک از خودِ مرحله خوانده می‌شوند: مهلت مرحله (و اگر
+        // مرحله مهلت ندارد، مهلت پرونده) مهلت تسک است، پس مهلت تسک ارزیاب هم
+        // دقیقاً همان مهلت مرحله است.
+        $stageDeadline = $this->deadline($stage['deadline'] ?? null);
+        $contentDeadline = $content->deadline?->toDateString();
+        // تسک کار و تسک ارزیاب هر دو مهلت مرحله را می‌گیرند؛ فقط اگر مرحله
+        // مهلتی نداشته باشد به مهلت پرونده برمی‌گردیم.
+        $deadline = $stageDeadline ?? $contentDeadline;
+        $startDate = $this->deadline($stage['startDate'] ?? null) ?? app(OrganizationTime::class)->date();
+
         if ($existing && in_array($existing->status, ['completed', 'archived'], true)) {
-            return $existing;
+            // ردیفِ بسته با تغییرِ مسئول عوض نمی‌شود؛ اما دو حالت باید همان ردیف
+            // را دوباره باز کند:
+            //   ۱) مرحله دوباره برای بررسی فرستاده شده است (پیش‌تر پس از یک
+            //      «عودت برای اصلاح»، تسک ارزیابیِ تکمیل‌شده با همان کلید پیدا
+            //      می‌شد و مرحلهٔ بازگشته هیچ تسکی در کارتابل ارزیاب نداشت).
+            //   ۲) مسئول مرحله عوض شده ولی مرحله هنوز باز است؛ باید همان تسک
+            //      به مسئول تازه برسد، نه اینکه تسکِ بسته با مسئول قبلی بماند.
+            $waitingForReview = in_array((string) ($stage['status'] ?? ''), ['pending_approval', 'ready_for_review'], true);
+            $reopen = $kind === 'content_review'
+                ? $waitingForReview
+                : (! $this->stageFinished($stage) && (string) $existing->assignee_id !== (string) $assigneeId);
+            if (! $reopen) {
+                return $existing;
+            }
+            $existing->forceFill(['status' => 'backlog'])->save();
         }
         if (! $existing) {
             app(ActiveProjectGuard::class)->project($projectId);
@@ -265,8 +372,8 @@ class ContentStageTaskSync
                 'project_id' => $projectId,
                 'assignee_id' => $assigneeId,
                 'priority' => $kind === 'content_review' ? 'high' : 'medium',
-                'start_date' => $stage['startDate'] ?? app(OrganizationTime::class)->date(),
-                'deadline' => $stage['deadline'] ?? $content->deadline?->toDateString(),
+                'start_date' => $startDate,
+                'deadline' => $deadline,
                 'tags' => array_values(array_filter([
                     'محتوا',
                     $kind === 'content_review' ? 'تأیید ارزیاب' : 'مرحله تولید',
@@ -287,6 +394,22 @@ class ContentStageTaskSync
                     ];
                 })->filter(fn ($item) => $item['title'] !== '')->all();
             $task->update(['subtasks' => $checklist]);
+        }
+        // مرجع‌ها یک‌بار دیگر صریح نوشته می‌شوند: چه ردیف تازه باشد و چه از قبل
+        // باز بوده، مسئول/مهلت/تاریخ شروع باید همان چیزی باشد که الان روی مرحله
+        // است (تغییر مسئول یا مهلت مرحله، بدون باقی‌ماندن مقدار قبلی روی تسک).
+        $expected = ['assignee_id' => $assigneeId, 'start_date' => $startDate,
+            'deadline' => $deadline, 'project_id' => $projectId];
+        $refresh = [];
+        foreach ($expected as $field => $value) {
+            $current = $task->{$field};
+            $current = $current instanceof \DateTimeInterface ? $current->format('Y-m-d') : ($current === null ? null : (string) $current);
+            if ($current !== ($value === null ? null : (string) $value)) {
+                $refresh[$field] = $value;
+            }
+        }
+        if ($refresh !== []) {
+            $task->forceFill($refresh)->save();
         }
         if ($task->wasRecentlyCreated || (string) $existing?->assignee_id !== (string) $task->assignee_id) {
             app(TaskAssignmentNotifications::class)->created($task);

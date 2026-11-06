@@ -39,7 +39,10 @@ test('جست‌وجوی سراسری روی موبایل دکمهٔ مستقل �
   // کادر بیرون برود؛ حالا دکمهٔ ۳۶ پیکسلی در گروه اکشن‌هاست.
   assert.match(navbar, /id="top-search-btn"/);
   assert.match(navbar, /aria-label="جست‌وجوی سراسری"/);
-  assert.match(navbar, /className="ui-tap shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 sm:hidden"/);
+  // دور ۸۶: کلاس معنادار «فقط موبایل» هم اضافه شد تا پنهان‌شدن روی دسکتاپ
+  // به ترتیب قاعده‌های CSS وابسته نباشد.
+  assert.match(navbar, /className="ui-tap[^"]*sm:hidden"/);
+  assert.match(navbar, /ui-mobile-only/);
   assert.doesNotMatch(navbar, /<div className="flex-1 sm:hidden flex justify-end mx-2">/);
   // سطح لمس ۳۶ پیکسلی که در فشار عرض کوچک نمی‌شود.
   assert.match(css, /\.ui-tap \{\s*box-sizing: border-box;\s*min-width: var\(--button-height\);\s*min-height: var\(--button-height\);\s*flex: 0 0 auto;/);

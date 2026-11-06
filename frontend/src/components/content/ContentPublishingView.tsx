@@ -9,6 +9,7 @@ import { Avatar } from '../common/Avatar';
 import { PublicationDateChip } from '../common/PublicationDateChip';
 import { PublishingCalendar, type PublicationCalendarEntry } from './PublishingCalendar';
 import {
+  LoaderCircle,
   Share2,
   Calendar,
   Clock,
@@ -113,11 +114,19 @@ export const ContentPublishingView: React.FC = () => {
   const readyList = contents.filter(c => c.status === 'ready_to_publish' || c.publishInfo?.status === 'ready');
   const scheduledList = contents.filter(c => c.publishInfo?.status === 'planned' || c.publishInfo?.status === 'ready');
 
+  /** ساعت جاری همین دستگاه به شکل `HH:MM`؛ پیش‌فرضِ ثبت انتشار. */
+  const nowTimeValue = () => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  };
+
   const openScheduleModal = (c: PublicationCalendarEntry) => {
     setSchedulingContent(c);
     setScheduleError('');
+    // پیش‌فرض تاریخ و ساعت، «همین حالا» است؛ مقدار ذخیره‌شدهٔ قبلی اولویت دارد
+    // تا ویرایشِ یک زمان‌بندی، آن را جابه‌جا نکند.
     setScheduleDate(c.publishInfo?.date || todayStr);
-    setScheduleTime(c.publishInfo?.time || '18:00');
+    setScheduleTime(c.publishInfo?.time || nowTimeValue());
     // هیچ کانالی از پیش انتخاب نمی‌شود؛ فهرست کانال‌ها از تنظیمات سامانه می‌آید.
     setSelectedChannels(c.publishInfo?.channels || []);
     setScheduleCaption(c.publishInfo?.caption || '');
@@ -138,7 +147,8 @@ export const ContentPublishingView: React.FC = () => {
     setScheduleBusy(true); setScheduleError('');
     try {
       const saved = await saveSchedule();
-      if (action === 'publish' && !await publishContentNow(saved.id, saved.publicationVersion)) {
+      // ثبت انتشار با همان تاریخ و ساعتی که در فرم انتخاب شده است.
+      if (action === 'publish' && !await publishContentNow(saved.id, saved.publicationVersion, { date: scheduleDate, time: scheduleTime })) {
         setScheduleError('انتشار ثبت نشد. پیام خطا را بررسی کنید و دوباره تلاش کنید.');
         return;
       }
@@ -761,11 +771,14 @@ export const ContentPublishingView: React.FC = () => {
                 </button>}
                 <button data-button-action="save"
                   type="button"
+                  aria-busy={scheduleBusy || undefined}
                   disabled={scheduleBusy || !hasPermission('content.publish')}
                   onClick={() => void handleScheduleAction('save')}
-                  className="ui-form-action px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition-all cursor-pointer"
+                  className="ui-form-action inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition-all cursor-pointer disabled:cursor-wait"
                 >
-                  ذخیره زمان‌بندی
+                  {scheduleBusy
+                    ? <><LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />در حال ثبت انتشار…</>
+                    : 'ذخیره زمان‌بندی'}
                 </button>
               </div>
             </div>

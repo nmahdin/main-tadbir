@@ -142,7 +142,7 @@ const isImageView = (view: StageAssetView): boolean => {
   // اول قالب اعلام‌شده و نوع MIME؛ چون خروجی‌های مخزن آدرس `…/preview` دارند و
   // پسوند فایل در آدرس دیده نمی‌شود، تشخیص فقط با پسوند، تصویر را از دست می‌داد.
   if (view.outputType === 'image') return true;
-  if ((view.mimeType || '').toLowerCase().startsWith('image/')) return true;
+  if (mimeOf(view).startsWith('image/')) return true;
   const name = `${view.fileName || ''} ${view.url || ''}`.toLowerCase();
   if (IMAGE_EXT.test(name)) return true;
   if (view.assetId && view.fileName && IMAGE_EXT.test(view.fileName)) return true;
@@ -158,6 +158,35 @@ const EXT_LABEL: Record<string, string> = {
   png: 'PNG', jpg: 'JPG', jpeg: 'JPG', gif: 'GIF', webp: 'WebP', avif: 'AVIF', bmp: 'BMP', svg: 'SVG',
   mp3: 'MP3', wav: 'WAV', m4a: 'M4A', ogg: 'OGG', aac: 'AAC',
   mp4: 'MP4', mov: 'MOV', webm: 'WebM', mkv: 'MKV', avi: 'AVI',
+};
+
+/** نگاشت پسوند → MIME؛ برای خروجی‌هایی که فقط قالب کوتاه (`mp4`، `pdf`) دارند. */
+const EXT_MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain', md: 'text/markdown', csv: 'text/csv', json: 'application/json', xml: 'application/xml',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp', svg: 'image/svg+xml',
+  mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', ogg: 'audio/ogg', aac: 'audio/aac', flac: 'audio/flac', opus: 'audio/opus',
+  mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', avi: 'video/x-msvideo', m4v: 'video/mp4',
+  zip: 'application/zip', rar: 'application/vnd.rar', '7z': 'application/x-7z-compressed', tar: 'application/x-tar', gz: 'application/gzip',
+};
+
+/**
+ * MIME واقعی خروجی.
+ *
+ * `fileType` در برخی خروجی‌ها فقط «پسوند» است (`mp4`، `pdf`، `docx`) و در بعضی
+ * دیگر MIME کامل. تشخیص نوع فایل و آیکون کارت باید هر دو را یکسان بفهمد؛ وگرنه
+ * یک ویدیوی MP4 با آیکون «فایل» عمومی نمایش داده می‌شد.
+ */
+const mimeOf = (view: StageAssetView): string => {
+  const raw = (view.mimeType || '').toLowerCase().trim();
+  if (raw.includes('/')) return raw;
+  const fromToken = EXT_MIME[raw] || '';
+  if (fromToken) return fromToken;
+  const ext = extensionOf(view);
+  return EXT_MIME[ext] || '';
 };
 
 const extensionOf = (view: StageAssetView): string => {
@@ -185,7 +214,7 @@ export const stageAssetTypeLabel = (view: StageAssetView, meta?: {
   // نوع خروجی همیشه فرمت واقعی فایل را می‌نویسد؛ اگر ردیف خروجی پسوند/MIME
   // نداشته باشد (خروجی‌های بارگذاری‌شده از بله یا فرم)، از خود دارایی مخزن
   // خوانده می‌شود تا برچسب به «فایل» بی‌فرمت خلاصه نشود.
-  const mime = (view.mimeType || meta?.mimeType || '').toLowerCase();
+  const mime = mimeOf({ ...view, mimeType: view.mimeType || meta?.mimeType });
   const ext = extensionOf(view) || (meta?.extension || '').toLowerCase();
   if (isImageView(view)) {
     const label = EXT_LABEL[ext] || (mime.includes('svg') ? 'SVG' : mime.replace('image/', '').toUpperCase());
@@ -234,7 +263,7 @@ export type StageAssetVisualKind = 'image' | 'video' | 'audio' | 'pdf' | 'word' 
 
 export const stageAssetVisualKind = (view: StageAssetView): StageAssetVisualKind => {
   if (view.dataTable) return 'table';
-  const mime = (view.mimeType || '').toLowerCase();
+  const mime = mimeOf(view);
   const name = `${view.fileName || ''} ${view.url || ''}`.toLowerCase();
   const ext = extensionOf(view);
   if (isImageView(view)) return 'image';
@@ -332,9 +361,11 @@ export function StageAssetCard({ view, onPreview, actions }: {
         )}
       </button>
       <footer className="flex items-center justify-end gap-1 border-t border-slate-100 bg-slate-50/60 px-3 py-1.5">
-        {/* دکمهٔ پیش‌نمایش با همان دکمهٔ استاندارد سامانه (دور ۸۵) تا با
-            «نیازمند اصلاح»/«تأیید» و بقیهٔ دکمه‌ها یک‌شکل باشد. */}
-        <Button variant="secondary" onClick={() => onPreview(view)} title="پیش‌نمایش این خروجی"><Eye className="h-4 w-4" aria-hidden />پیش‌نمایش</Button>
+        {/* دکمهٔ پیش‌نمایش بدون کادر و بدون پس‌زمینه است (دور ۸۶): خودِ کارت
+            کلیک‌پذیر است و این دکمه فقط راهنمای «چطور ببینم» است؛ کادر سفید
+            کنار کارت، دکمه را از سطح جدا و شلوغ نشان می‌داد. هنگام هاور، پس‌زمینهٔ
+            ملایم برمی‌گردد تا کلیک‌پذیری‌اش معلوم بماند. */}
+        <Button variant="ghost" onClick={() => onPreview(view)} title="پیش‌نمایش این خروجی" className="!border-0 !bg-transparent hover:!bg-slate-200/70"><Eye className="h-4 w-4" aria-hidden />پیش‌نمایش</Button>
         {actions}
       </footer>
     </article>

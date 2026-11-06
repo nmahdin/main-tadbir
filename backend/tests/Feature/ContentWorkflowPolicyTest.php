@@ -700,4 +700,100 @@ class ContentWorkflowPolicyTest extends TestCase
         ])->assertOk();
         $this->assertSame('not_started', $content->fresh()->payload['stages'][1]['status']);
     }
+
+    /**
+     * تغییر «مسئول اجرا»ی مرحله باید همان تسک بازِ مرحله را به فرد تازه بدهد.
+     *
+     * پیش‌تر تسک با مسئول قبلی در کارتابل می‌ماند و فرد تازه هیچ کاری نمی‌دید.
+     */
+    public function test_changing_the_stage_assignee_reassigns_the_open_work_task(): void
+    {
+        $manager = $this->actor(['content.view', 'content.edit', 'content.workflow.manage', 'tasks.view']);
+        $next = User::factory()->create(['status' => 'active']);
+        $content = $this->content([
+            $this->stage('one', ['status' => 'in_progress', 'assigneeId' => (string) $manager->id,
+                'reviewerId' => (string) $manager->id, 'deadline' => '2026-03-20']),
+        ]);
+        app(ContentStageTaskSync::class)->sync($content);
+
+        $work = Task::where('content_id', $content->id)->where('content_stage_id', 'one')
+            ->where('kind', 'content_work')->firstOrFail();
+        $this->assertSame((string) $manager->id, (string) $work->assignee_id);
+
+        $stages = $content->fresh()->payload['stages'];
+        $stages[0]['assigneeId'] = (string) $next->id;
+        $this->patchJson('/api/v1/contents/'.$content->id, [
+            'stages' => $stages, 'reviewVersion' => $this->version($content),
+        ])->assertOk();
+
+        $work->refresh();
+        $this->assertSame((string) $next->id, (string) $work->assignee_id,
+            'تسک مرحله باید به مسئول اجرای تازه برسد.');
+        $this->assertSame('2026-03-20', $work->deadline?->toDateString());
+    }
+
+    /** تغییر «ارزیاب» مرحله هم باید تسک ارزیابی را به ارزیاب تازه بدهد. */
+    public function test_changing_the_stage_reviewer_reassigns_the_open_review_task(): void
+    {
+        $manager = $this->actor(['content.view', 'content.edit', 'content.workflow.manage', 'tasks.view']);
+        $reviewer = User::factory()->create(['status' => 'active']);
+        $content = $this->content([
+            $this->stage('one', ['status' => 'pending_approval', 'assigneeId' => (string) $manager->id,
+                'reviewerId' => (string) $manager->id, 'deadline' => '2026-03-21']),
+        ]);
+        app(ContentStageTaskSync::class)->sync($content);
+
+        $review = Task::where('content_id', $content->id)->where('content_stage_id', 'one')
+            ->where('kind', 'content_review')->firstOrFail();
+        $this->assertSame((string) $manager->id, (string) $review->assignee_id);
+
+        $stages = $content->fresh()->payload['stages'];
+        $stages[0]['reviewerId'] = (string) $reviewer->id;
+        $this->patchJson('/api/v1/contents/'.$content->id, [
+            'stages' => $stages, 'reviewVersion' => $this->version($content),
+        ])->assertOk();
+
+        $review->refresh();
+        $this->assertSame((string) $reviewer->id, (string) $review->assignee_id,
+            'تسک ارزیابی باید به ارزیاب تازه برسد.');
+    }
+
+    /**
+     * مهلت تسک ارزیاب باید دقیقاً همان مهلت مرحله باشد و با تغییر مهلت مرحله
+     * هم‌زمان به‌روز شود — نه مهلت پرونده و نه مقدار قبلی.
+     */
+    public function test_review_task_deadline_follows_the_stage_deadline(): void
+    {
+        $manager = $this->actor(['content.view', 'content.edit', 'content.workflow.manage', 'tasks.view']);
+        $content = $this->content([
+            $this->stage('one', ['status' => 'pending_approval', 'assigneeId' => (string) $manager->id,
+                'reviewerId' => (string) $manager->id, 'deadline' => '2026-03-21']),
+        ]);
+        // مهلت پرونده عمداً متفاوت است تا معلوم شود تسک ارزیاب مهلت مرحله را
+        // می‌گیرد، نه مهلت پرونده.
+        $content->update(['deadline' => '2026-05-01']);
+        app(ContentStageTaskSync::class)->sync($content);
+
+        $review = Task::where('content_id', $content->id)->where('content_stage_id', 'one')
+            ->where('kind', 'content_review')->firstOrFail();
+        $this->assertSame('2026-03-21', $review->deadline?->toDateString(),
+            'مهلت تسک ارزیاب باید مهلت مرحله باشد.');
+
+        $stages = $content->fresh()->payload['stages'];
+        $stages[0]['deadline'] = '2026-04-02';
+        $this->patchJson('/api/v1/contents/'.$content->id, [
+            'stages' => $stages, 'reviewVersion' => $this->version($content),
+        ])->assertOk();
+
+        $review->refresh();
+        $work = Task::where('content_id', $content->id)->where('content_stage_id', 'one')
+            ->where('kind', 'content_work')->firstOrFail();
+        $this->assertSame('2026-04-02', $review->deadline?->toDateString());
+        $this->assertSame('2026-04-02', $work->deadline?->toDateString());
+        $this->assertSame(
+            $content->fresh()->payload['stages'][0]['deadline'],
+            $review->deadline?->toDateString(),
+            'مهلت تسک ارزیاب و مهلت مرحله باید یکی بمانند.',
+        );
+    }
 }

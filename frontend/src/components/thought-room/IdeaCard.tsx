@@ -116,7 +116,9 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
 
   return (
     <div 
-      className="group bg-white rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden"
+      // کارت ایده کمی گردتر از قبل (دور ۸۵): گوشه‌ها با بقیهٔ کارت‌های سامانه
+      // هم‌خوان شدند و کارت‌های شبکه‌ای کنار هم یکدست دیده می‌شوند.
+      className="group bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden"
     >
       {/* Top Bar Header */}
       <div className="p-5 pb-3">

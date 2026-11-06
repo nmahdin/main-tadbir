@@ -11,7 +11,7 @@ import { ContentStatusBadge, DETAIL_BADGE_CLASS } from '../../utils/statusBadges
 import React, { useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import { deadlineDaysLabel, deadlineRelativeLabel, deadlineState, formatPersianDate, formatPersianDateTime } from '../../utils/date';
+import { deadlineDaysLabel, deadlineRelativeLabel, deadlineState, formatPersianDate, formatPersianDateTime, todayLocalISO } from '../../utils/date';
 import {
   PUBLICATION_ICON_TONE_CLASSES,
   PUBLICATION_SURFACE_TONE_CLASSES,
@@ -252,6 +252,22 @@ export const ContentDetailView: React.FC = () => {
   const [publicationSaving, setPublicationSaving] = useState(false);
   const [publicationDraft, setPublicationDraft] = useState({ publisherId: '', date: '', time: '', caption: '', channels: [] as string[] });
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
+  /**
+   * تاریخ و ساعتِ ثبت انتشار.
+   *
+   * پیش‌فرض هر دو «همین حالا» است (بر اساس ساعت همین دستگاه) تا کاربر لازم نباشد
+   * چیزی وارد کند؛ اما اگر انتشار واقعی چند ساعت/روز قبل انجام شده باشد، همان
+   * زمان را می‌توان ثبت کرد و در سوابق و اعلان‌ها همان دیده می‌شود.
+   */
+  const [publishDraft, setPublishDraft] = useState(() => ({ date: todayLocalISO(), time: '' }));
+  const openPublicationConfirm = () => {
+    const now = new Date();
+    setPublishDraft({
+      date: todayLocalISO(now),
+      time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+    });
+    setPublishConfirmOpen(true);
+  };
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEditWorkflowOpen, setIsEditWorkflowOpen] = useState(false);
   /** بازخورد کوتاه دکمهٔ «کپی کپشن»؛ فقط ظاهری و بدون ذخیره در سرویس. */
@@ -1262,7 +1278,7 @@ export const ContentDetailView: React.FC = () => {
                 </button>
               )}
               {(content.access?.edit ?? hasPermission('content.edit')) && <button type="button" onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"><Edit3 className="h-4 w-4 text-indigo-600" />ویرایش محتوا</button>}
-              {!isPublished && workflowReady && hasPermission('content.publish') && <button type="button" disabled={publishingContentIds.includes(content.id)} onClick={() => setPublishConfirmOpen(true)} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:opacity-50"><Zap className="h-4 w-4" />{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'انتشار'}</button>}
+              {!isPublished && workflowReady && hasPermission('content.publish') && <button type="button" disabled={publishingContentIds.includes(content.id)} onClick={openPublicationConfirm} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:opacity-50"><Zap className="h-4 w-4" />{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'انتشار'}</button>}
               {isPublished && hasPermission('content.publish') && <button type="button" disabled={publishingContentIds.includes(content.id)} onClick={() => { if (window.confirm('انتشار این محتوا لغو شود و به «آماده انتشار» بازگردد؟')) unpublishContent(content.id); }} className="flex items-center gap-1.5 rounded-xl bg-slate-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-slate-700 disabled:opacity-50"><RotateCcw className="h-4 w-4" />لغو انتشار</button>}
             </div>
           </div>
@@ -1809,7 +1825,7 @@ export const ContentDetailView: React.FC = () => {
               {!isPublished && workflowReady && hasPermission('content.publish') && (
                 <button
                   disabled={publishingContentIds.includes(content.id)}
-                onClick={() => setPublishConfirmOpen(true)}
+                onClick={openPublicationConfirm}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Zap className="w-4 h-4" />
@@ -1940,16 +1956,14 @@ export const ContentDetailView: React.FC = () => {
           <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h4 className="text-xs font-black text-slate-900">خروجی‌های ثبت‌شده</h4>
-              {publishOutputs.length > 0 && <button
-                type="button"
-                disabled={downloadingOutputs}
+              {publishOutputs.length > 0 && <Button
+                variant="secondary"
+                loading={downloadingOutputs}
                 onClick={() => void downloadAllOutputs()}
                 title="دریافت همهٔ خروجی‌های فایل‌دار روی دستگاه شما"
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-black text-slate-700 transition-colors hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-wait disabled:opacity-60"
               >
-                {downloadingOutputs ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                {downloadingOutputs ? 'در حال دریافت…' : 'دانلود خروجی‌ها'}
-              </button>}
+                <Download className="h-4 w-4" aria-hidden />{downloadingOutputs ? 'در حال دریافت…' : 'دانلود خروجی‌ها'}
+              </Button>}
             </div>
             {(content.stages || []).flatMap(stage => stage.outputs || []).length === 0 ? (
               <p className="rounded-xl border border-dashed border-slate-200 bg-white p-3 text-center text-[11px] text-slate-400">هنوز خروجی‌ای ثبت نشده است.</p>
@@ -1960,13 +1974,13 @@ export const ContentDetailView: React.FC = () => {
                   return <li key={`${out.id || idx}`} className="flex items-start gap-2 rounded-xl border border-slate-100 bg-white p-2.5 text-[11px]">
                     <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 text-[10px] font-black">{(idx+1).toLocaleString('fa-IR')}</span>
                     <span className="min-w-0 flex-1"><span className="block truncate font-bold text-slate-800">{out.title || out.fileName || 'خروجی بدون عنوان'}</span><span className="mt-0.5 block truncate text-[10px] text-slate-500">مرحله: {out.stage || '—'} {out.fileName ? `· فایل: ${out.fileName}` : ''} {String(out.value ?? '') ? `· ${String(out.value).slice(0, 80)}` : ''}</span></span>
-                    {downloadable && <button
-                      type="button"
-                      disabled={downloadingOutputs}
-                      onClick={() => void downloadOutput(out).catch(() => notify({ type: 'error', title: 'دریافت این خروجی انجام نشد', message: 'دوباره تلاش کنید؛ خروجی‌هایی که ردیف جدول اطلاعات هستند فایلی ندارند و در خود جدول دیده می‌شوند.', dedupeKey: `output-download-${out.id || idx}` }))}
+                    {downloadable && <Button
+                      variant="secondary"
+                      className="!min-h-8 shrink-0 !px-2"
                       title="دریافت همین خروجی روی دستگاه شما"
-                      className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-600 transition-colors hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-wait disabled:opacity-60"
-                    ><Download className="h-3.5 w-3.5" /></button>}
+                      aria-label="دریافت همین خروجی"
+                      onClick={() => void downloadOutput(out).catch(() => notify({ type: 'error', title: 'دریافت این خروجی انجام نشد', message: 'دوباره تلاش کنید؛ خروجی‌هایی که ردیف جدول اطلاعات هستند فایلی ندارند و در خود جدول دیده می‌شوند.', dedupeKey: `output-download-${out.id || idx}` }))}
+                    ><Download className="h-4 w-4" aria-hidden /></Button>}
                   </li>;
                 })}
               </ul>
@@ -1975,18 +1989,30 @@ export const ContentDetailView: React.FC = () => {
           <section className="space-y-2 rounded-2xl border border-slate-200 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h4 className="text-xs font-black text-slate-900">کپشن انتشار</h4>
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 onClick={() => void copyCaption()}
                 disabled={!content.publishInfo?.caption?.trim()}
                 title={content.publishInfo?.caption?.trim() ? 'کپی متن کپشن در حافظهٔ موقت' : 'کپشنی برای کپی ثبت نشده است'}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-black text-slate-700 transition-colors hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {captionCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                {captionCopied ? <Check className="h-4 w-4 text-emerald-600" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
                 {captionCopied ? 'کپی شد' : 'کپی کپشن'}
-              </button>
+              </Button>
             </div>
             <div className="rounded-xl bg-slate-50 p-3 text-[11px] leading-6 text-slate-700 whitespace-pre-wrap">{content.publishInfo?.caption?.trim() || 'کپشنی ثبت نشده است.'}</div>
+          </section>
+          <section className="space-y-3 rounded-2xl border border-slate-200 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-xs font-black text-slate-900">تاریخ و ساعت ثبت انتشار</h4>
+              <span className="text-[10px] font-bold text-slate-500">پیش‌فرض: همین حالا</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <PersianDatePicker label="تاریخ انتشار" value={publishDraft.date} onChange={date => setPublishDraft(previous => ({ ...previous, date }))} portal />
+              <FormField label="ساعت انتشار" htmlFor="content-publish-time">
+                <Input id="content-publish-time" type="time" dir="ltr" value={publishDraft.time} onChange={event => setPublishDraft(previous => ({ ...previous, time: event.target.value }))} />
+              </FormField>
+            </div>
+            <p className="text-[10px] leading-5 text-slate-500">همان زمانی که انتخاب می‌کنید در سوابق پرونده و در یادآوری‌های انتشار ثبت می‌شود؛ خالی‌گذاشتن ساعت یعنی زمانِ همین لحظه.</p>
           </section>
           <section className="space-y-2 rounded-2xl border border-slate-200 p-4">
             <h4 className="text-xs font-black text-slate-900">کانال‌های انتشار</h4>
@@ -2001,7 +2027,18 @@ export const ContentDetailView: React.FC = () => {
           </section>
           <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
             <Button variant="secondary" onClick={() => setPublishConfirmOpen(false)}>انصراف</Button>
-            <Button action="publish" loading={publishingContentIds.includes(content.id)} onClick={() => { setPublishConfirmOpen(false); void publishContentNow(content.id); }}><Zap className="h-4 w-4" />تأیید و ثبت انتشار</Button>
+            <Button
+              action="publish"
+              type="button"
+              loading={publishingContentIds.includes(content.id)}
+              onClick={() => {
+                // مدال تا پایان درخواست باز می‌ماند تا نشانگر چرخان دیده شود و
+                // فقط پس از ثبت موفق بسته شود.
+                void publishContentNow(content.id, undefined, { date: publishDraft.date, time: publishDraft.time }).then(ok => {
+                  if (ok) setPublishConfirmOpen(false);
+                });
+              }}
+            ><Zap className="h-4 w-4" />{publishingContentIds.includes(content.id) ? 'در حال ثبت انتشار…' : 'تأیید و ثبت انتشار'}</Button>
           </div>
         </div>
       </Modal>

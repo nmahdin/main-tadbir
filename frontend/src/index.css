@@ -162,6 +162,33 @@ button.ui-check-circle,
 }
 
 /*
+ * دکمه‌های فقط-موبایل.
+ *
+ * قاعده‌های پایهٔ `.ui-tap`/`.ui-button`/`.ui-icon-button` بیرون از لایهٔ
+ * utilities نوشته شده‌اند و `display` صریح دارند؛ بنابراین `hidden`/
+ * `sm:hidden`/`md:hidden`/`lg:hidden` تیلویند را خنثی می‌کردند و دکمهٔ منو،
+ * جست‌وجوی موبایل و «بازگشت به فهرست گفتگوها» روی نمایشگر دسکتاپ هم دیده
+ * می‌شدند. اینجا همان کلاس‌ها با همان شکست‌ها صریح می‌شوند؛ دکمه فقط زیر
+ * شکست مربوط پنهان است و هیچ کلاس دیگری عوض نمی‌شود.
+ */
+.ui-tap.hidden, .ui-button.hidden, .ui-icon-button.hidden, .permission-toggle.hidden { display: none !important; }
+@media (min-width: 640px) {
+  .ui-tap.sm\:hidden, .ui-button.sm\:hidden, .ui-icon-button.sm\:hidden, .permission-toggle.sm\:hidden { display: none !important; }
+  /* نام معنادار و مستقل از کلاس‌های تیلویند برای کنترل‌های تمام‌عرض‌نما. */
+  .ui-mobile-only { display: none !important; }
+}
+@media (min-width: 768px) {
+  .ui-tap.md\:hidden, .ui-button.md\:hidden, .ui-icon-button.md\:hidden, .permission-toggle.md\:hidden { display: none !important; }
+}
+@media (min-width: 1024px) {
+  .ui-tap.lg\:hidden, .ui-button.lg\:hidden, .ui-icon-button.lg\:hidden, .permission-toggle.lg\:hidden { display: none !important; }
+  .ui-compact-only { display: none !important; }
+}
+@media (min-width: 1280px) {
+  .ui-tap.xl\:hidden, .ui-button.xl\:hidden, .ui-icon-button.xl\:hidden, .permission-toggle.xl\:hidden { display: none !important; }
+}
+
+/*
  * سطح لمس آیکون‌های نوار بالا (منو، جست‌وجو، اعلان، پروفایل).
  * روی موبایل حداقل ۳۶px لازم است و این دکمه‌ها هرگز نباید در فشار عرض
  * کوچک شوند؛ پیش‌تر آیکون جست‌وجو می‌توانست از کادر بیرون برود و «باکس
@@ -294,6 +321,26 @@ button.ui-check-circle,
 aside button,
 [id^='nav-item-'],
 [data-button-flat] {
+  box-shadow: none !important;
+}
+
+/*
+ * تب فعال در همهٔ نوارهای تب سامانه یک سایهٔ بسیار کم دارد (دور ۸۵).
+ *
+ * قاعدهٔ بالا سایهٔ دکمه‌ها را صفر می‌کند تا نوار تب تخت بماند؛ اما تب فعال باید
+ * از همسایه‌هایش جدا دیده شود. همهٔ نوارهای تب با `role="tab"` و
+ * `aria-selected` ساخته می‌شوند، پس همین یک قاعده همه‌جا کافی است: یک سایهٔ
+ * یک‌پیکسلی بسیار ملایم، بدون حاشیهٔ اضافه و بدون تغییر اندازه.
+ */
+[role='tab'][aria-selected='true'],
+[role='tab'][data-state='active'],
+[data-tab-active='true'] {
+  box-shadow: 0 1px 2px rgb(15 23 42 / .08), 0 0 0 1px rgb(15 23 42 / .02) !important;
+}
+
+/* تب فعالِ تیره (نوار تب با زمینهٔ اصلی) به سایه نیازی ندارد. */
+[role='tab'][aria-selected='true'].bg-indigo-600,
+[role='tab'][aria-selected='true'].bg-indigo-700 {
   box-shadow: none !important;
 }
 
@@ -591,10 +638,47 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 .animate-out.fade-out { animation-name: ui-overlay-out; }
 .animate-out.fade-out.zoom-out-95 { animation-name: ui-panel-out; }
 
+/*
+ * ورود و خروج پیام‌های شناور (توست).
+ *
+ * پیش‌تر فقط انیمیشن ورود وجود داشت؛ با بستن، پیام همان لحظه از DOM حذف
+ * می‌شد. `ToastViewport` ردیف در حال خروج را تا پایان همین انیمیشن نگه
+ * می‌دارد، پس خروج هم نرم دیده می‌شود.
+ */
+.ui-toast-in { animation: ui-toast-in .2s cubic-bezier(.16, 1, .3, 1) both; }
+.ui-toast-out { animation: ui-toast-out .18s ease-in both; pointer-events: none; }
+@keyframes ui-toast-in {
+  from { opacity: 0; transform: translateY(10px) scale(.98) }
+  to { opacity: 1; transform: translateY(0) scale(1) }
+}
+@keyframes ui-toast-out {
+  from { opacity: 1; transform: translateY(0) scale(1) }
+  to { opacity: 0; transform: translateY(8px) scale(.98) }
+}
+
+/*
+ * ورود و خروج پیام‌های گفتگو (چت).
+ *
+ * پیش‌تر پیام‌ها بی‌درنگ روی صفحه می‌پریدند و حذف هم لحظه‌ای بود. حالا
+ * `MessageBubble` با `ui-msg-in` وارد می‌شود و پیش از حذف، ۱۸۰ میلی‌ثانیه
+ * `ui-msg-out` می‌گیرد تا ردیف نرم محو شود.
+ */
+.ui-msg-in { animation: ui-msg-in .22s cubic-bezier(.16, 1, .3, 1) both; }
+.ui-msg-out { animation: ui-msg-out .18s ease-in both; }
+@keyframes ui-msg-in {
+  from { opacity: 0; transform: translateY(10px) scale(.98) }
+  to { opacity: 1; transform: translateY(0) scale(1) }
+}
+@keyframes ui-msg-out {
+  from { opacity: 1; transform: translateY(0) scale(1) }
+  to { opacity: 0; transform: translateY(-6px) scale(.98) }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ui-modal-overlay, .ui-modal-panel,
   .ui-modal-overlay[data-state='closing'], .ui-modal-panel[data-state='closing'],
   .ui-layer-out, .ui-panel-out, .ui-pop, .ui-pop[data-state='closing'],
+  .ui-toast-in, .ui-toast-out, .ui-msg-in, .ui-msg-out,
   .animate-in, .animate-out { animation: none !important; }
 }
 

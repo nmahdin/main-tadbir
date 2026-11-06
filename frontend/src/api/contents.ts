@@ -21,7 +21,11 @@ export const contentsApi = {
   forwardOutput: (id: string, stage: string, output: string, expectedVersion: string) => request<ApiResponse<Content>>(`/contents/${id}/stages/${encodeURIComponent(stage)}/outputs/${encodeURIComponent(output)}/forward`, { method: 'POST', body: { expectedVersion } }).then(contentResponse),
   decide: (id: string, stage: string, body: {decision: 'approve'|'reject'; note?: string; expectedVersion: string; correctionAssigneeId?: string}) => request<ApiResponse<Content>>(`/contents/${id}/stages/${encodeURIComponent(stage)}/decision`, {method:'POST',body}).then(contentResponse),
   get: (id: string, signal?: AbortSignal) => request<ApiResponse<Content>>(`/contents/${id}`, { signal }).then(contentResponse),
-  publish: (id: string, expectedVersion: string) => request<ApiResponse<{ content: Content; tasks: Task[] }>>(`/contents/${id}/publish`, { method: 'POST', body: { expectedVersion } }).then(contentPairResponse),
+  /**
+   * ثبت انتشار؛ `publishAt` تاریخ/ساعت واقعیِ انتشار است (اختیاری).
+   * نبودنش یعنی «همین حالا» با ساعت سازمان — همان رفتار قبلی.
+   */
+  publish: (id: string, expectedVersion: string, publishAt?: { date?: string; time?: string }) => request<ApiResponse<{ content: Content; tasks: Task[] }>>(`/contents/${id}/publish`, { method: 'POST', body: { expectedVersion, ...(publishAt?.date ? { publishDate: publishAt.date } : {}), ...(publishAt?.time ? { publishTime: publishAt.time } : {}) } }).then(contentPairResponse),
   unpublish: (id: string, expectedVersion: string) => request<ApiResponse<{ content: Content; tasks: Task[] }>>(`/contents/${id}/unpublish`, { method: 'POST', body: { expectedVersion } }).then(contentPairResponse),
   schedule: (id: string, body: PublicationSettings) => request<ApiResponse<Content> & { meta?: { shiftedOccurrences?: number; shiftedDays?: number } }>(`/contents/${id}/publication-settings`, { method: 'PUT', body }).then(response => ({ ...response, data: normalizeContent(response.data) })),
   createPublicationTask: (id: string, body: PublicationTaskInput) => request<ApiResponse<Task>>(`/contents/${id}/publication-task`, { method: 'POST', body }),
