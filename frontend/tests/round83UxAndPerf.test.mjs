@@ -41,7 +41,9 @@ test('جست‌وجوی سراسری روی موبایل دکمهٔ مستقل �
   assert.match(navbar, /aria-label="جست‌وجوی سراسری"/);
   // پنهان‌شدن روی دسکتاپ با همان utilities تیلویند است (`hidden sm:inline-flex`)؛
   // قاعدهٔ نمایش در لایهٔ base تعریف شده تا utilities بر آن غلبه کنند.
-  assert.match(navbar, /className="ui-tap hidden[^"]*sm:inline-flex"/);
+  // پنهان‌شدن روی دسکتاپ با `sm:hidden` است و قاعدهٔ نمایش در لایهٔ base
+  // تعریف شده تا utility بر آن غلبه کند (دور ۸۷).
+  assert.match(navbar, /className="ui-tap inline-flex[^"]*sm:hidden"/);
   assert.doesNotMatch(navbar, /<div className="flex-1 sm:hidden flex justify-end mx-2">/);
   // سطح لمس ۳۶ پیکسلی که در فشار عرض کوچک نمی‌شود.
   assert.match(css, /\.ui-tap \{\s*box-sizing: border-box;\s*min-width: var\(--button-height\);\s*min-height: var\(--button-height\);\s*flex: 0 0 auto;/);

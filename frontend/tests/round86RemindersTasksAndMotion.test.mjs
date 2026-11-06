@@ -98,8 +98,11 @@ test('دکمه‌های فقط-موبایل روی دسکتاپ پنهان می�
   // هیچ قاعدهٔ موازی و هیچ کلاس دست‌ساز «فقط موبایل» نباید لازم باشد.
   assert.doesNotMatch(css, /\.ui-(mobile|compact)-only/);
   assert.doesNotMatch(css, /\.ui-tap\.hidden, /);
-  assert.match(navbar, /ui-tap hidden[^"]*lg:inline-flex/);
-  assert.match(navbar, /ui-tap hidden[^"]*sm:inline-flex/);
+  // دکمه‌ها با `inline-flex` نمایش داده می‌شوند و در نقطهٔ شکست با `lg:hidden`/
+  // `sm:hidden` پنهان می‌شوند؛ غلبهٔ این utilities بر قاعدهٔ نمایش فقط به‌خاطر
+  // قرارگرفتنِ آن قاعده در لایهٔ base است.
+  assert.match(navbar, /ui-tap inline-flex[^"]*lg:hidden/);
+  assert.match(navbar, /ui-tap inline-flex[^"]*sm:hidden/);
 });
 
 test('مدال جست‌وجو با انیمیشن باز و بسته می‌شود', () => {
