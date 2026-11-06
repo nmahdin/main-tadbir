@@ -16,7 +16,24 @@ export default defineConfig(({ command, mode }) => {
         name: 'tadbir-initial-favicon',
         transformIndexHtml(html: string) {
           // Browser discovers the real favicon from HTML, before React runs.
-          return html.replace('__TADBIR_FAVICON_URL__', `${apiBase}/public/favicon`);
+          let output = html.replace('__TADBIR_FAVICON_URL__', `${apiBase}/public/favicon`);
+          /*
+           * پیش‌اتصال به میزبان API: اولین درخواست سامانه (نشست/تنظیمات) بدون
+           * دست‌دادن دوبارهٔ TLS انجام می‌شود. این کار فقط یک «راهنمای» مرورگر
+           * است و هیچ درخواستی نمی‌فرستد؛ اگر میزبان API همان میزبان برنامه
+           * باشد (حالت توسعهٔ پروکسی‌شده) تگ اضافه نمی‌شود.
+           */
+          let apiOrigin = '';
+          try {
+            apiOrigin = new URL(apiBase).origin;
+          } catch {
+            apiOrigin = '';
+          }
+          const sameOrigin = !apiOrigin || apiOrigin === 'http://localhost' || apiOrigin === 'http://127.0.0.1';
+          const hints = sameOrigin || apiOrigin.includes('localhost') || apiOrigin.includes('127.0.0.1')
+            ? ''
+            : `<link rel="preconnect" href="${apiOrigin}" crossorigin />\n    <link rel="dns-prefetch" href="${apiOrigin}" />`;
+          return output.replace('__TADBIR_API_HINTS__', hints);
         },
       },
     ],

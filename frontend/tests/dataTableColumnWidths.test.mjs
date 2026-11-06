@@ -49,7 +49,9 @@ test('جدول اطلاعات با چیدمان ثابت و colgroup رندر م
   // پهنای هر ستون از مقدار ذخیره‌شده می‌آید، نه از طول محتوا.
   assert.ok(grid.includes('const sheetWidth = dataTablePixelWidth(columns.map(column => column.width));'));
   assert.ok(grid.includes('className="table-fixed border-collapse text-xs"'));
-  assert.ok(grid.includes('style={{ width: sheetWidth, minWidth: Math.min(sheetWidth, 560) }}'));
+  // دور ۸۳: در تمام‌صفحه، جدول عرض قاب را می‌گیرد و ستون‌ها متناسب بزرگ می‌شوند.
+  assert.ok(grid.includes("{ width: '100%', minWidth: Math.min(sheetWidth, 560) }"));
+  assert.ok(grid.includes(": { width: sheetWidth, minWidth: Math.min(sheetWidth, 560) }}"));
   assert.ok(grid.includes('<colgroup>') && grid.includes('</colgroup>'));
   assert.ok(grid.includes('{columns.map(column => <col key={column.id} style={{ width: tableColumnWidth(column.width) }} />)}'));
   assert.doesNotMatch(grid, /min-w-\[140px\]/);

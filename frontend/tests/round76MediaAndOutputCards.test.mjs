@@ -42,8 +42,9 @@ test('نوار کنترل هنگام پخش خودکار پنهان می‌شو�
   assert.match(player, /const CONTROLS_HIDE_MS = 2600;/);
   assert.match(player, /window\.setTimeout\(\(\) => setControlsVisible\(false\), CONTROLS_HIDE_MS\)/);
   assert.match(player, /onPointerMove=\{revealControls\}/);
-  assert.match(player, /data-visible=\{isVideo \? \(controlsVisible \? 'true' : 'false'\) : 'true'\}/);
-  assert.match(player, /controlsVisible \? 'opacity-100' : 'pointer-events-none translate-y-2 opacity-0'/);
+  // دور ۸۳: تا اولین فریم نیامده، نوار کنترل هم پنهان است.
+  assert.match(player, /data-visible=\{isVideo \? \(verticalReady && controlsVisible \? 'true' : 'false'\) : 'true'\}/);
+  assert.match(player, /verticalReady && controlsVisible \? 'opacity-100' : 'pointer-events-none translate-y-2 opacity-0'/);
   // در حالت توقف یا هنگام کشیدن نوار/باز بودن منوی صدا پنهان نمی‌شود.
   // نشانگرِ روی نوار کنترل یا منوی صدا باز، پنهان‌شدن را متوقف می‌کند.
   assert.match(player, /if \(!playing \|\| dragging \|\| volumeOpen \|\| controlsPinned\) return;/);
@@ -52,7 +53,9 @@ test('نوار کنترل هنگام پخش خودکار پنهان می‌شو�
 test('ویدیو پیش از آماده‌شدن نشانگر لودینگ دارد', () => {
   assert.match(player, /isVideo && !failed && !ready/);
   assert.match(player, /در حال بارگذاری ویدیو…/);
-  assert.match(player, /role="status" aria-live="polite"/);
+  // دور ۸۳: جانمای لودینگ هم‌اندازهٔ پخش‌کننده با اسکلت روشن (نه کادر سیاه).
+  assert.match(player, /aria-label="در حال آماده‌سازی پخش‌کنندهٔ ویدیو"/);
+  assert.match(player, /ui-skeleton h-full w-full absolute inset-0/);
   assert.match(player, /isVideo && playing && buffering/);
 });
 

@@ -13,6 +13,7 @@ import { ProtectedRoute } from './routing/ProtectedRoute';
 import { RouteEntity } from './routing/RouteEntity';
 import { PageTitle } from './routing/PageTitle';
 import { readContentLink, readIdeaLink, readTaskLink } from './utils/taskDeepLink';
+import { preloadGlobalSearch } from './routing/lazyOverlays';
 import { runtime } from './config/runtime';
 import { installModalExitLayer } from './utils/modalExitLayer';
 import { ConnectionBanner } from './components/common/ConnectionBanner';
@@ -68,6 +69,10 @@ const TemplateEditorModal = React.lazy(() => import('./components/templates/Temp
 const UserModal = React.lazy(() => import('./components/users/UserModal').then(m => ({default:m.UserModal})));
 const RoleModal = React.lazy(() => import('./components/roles/RoleModal').then(m => ({default:m.RoleModal})));
 const CreateContentModal = React.lazy(() => import('./components/content/CreateContentModal').then(m => ({default:m.CreateContentModal})));
+// «ایده جدید» و «جلسه جدید» از نوار کنار مستقیم روی همان صفحه باز می‌شوند؛
+// دیگر لازم نیست کاربر اول به اتاق فکر برود.
+const CreateIdeaModal = React.lazy(() => import('./components/thought-room/CreateIdeaModal').then(m => ({default:m.CreateIdeaModal})));
+const CreateMeetingModal = React.lazy(() => import('./components/thought-room/CreateMeetingModal').then(m => ({default:m.CreateMeetingModal})));
 import { ErrorBoundary, ToastViewport, WorkspaceLoader } from './components/common/Feedback';
 import { CustomSelectLayer } from './components/common/CustomSelectLayer';
 
@@ -86,9 +91,27 @@ const MainLayout: React.FC = () => {
     isCreateTaskOpen, isCreateProjectOpen, isEditProjectOpen, isCreateContentOpen,
     isTemplatesModalOpen, isTemplateEditorOpen,
     isCreateUserOpen, isEditUserOpen, isCreateRoleOpen, isEditRoleOpen,
+    isCreateIdeaOpen, setIsCreateIdeaOpen, isCreateMeetingOpen, setIsCreateMeetingOpen,
   } = useApp();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  /*
+   * بستهٔ «جست‌وجوی سراسری» بیرون از بستهٔ اولیه است تا صفحهٔ ورود سبک بماند.
+   * در زمان بیکاری از پیش گرفته می‌شود تا اولین ضربه روی آیکون (خصوصاً روی
+   * موبایل) بدون انتظار و با کیبورد باز شود.
+   */
+  React.useEffect(() => {
+    const idle = (window as Window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number }).requestIdleCallback;
+    if (typeof idle === 'function') {
+      const handle = idle(() => { void preloadGlobalSearch(); }, { timeout: 2_500 });
+      return () => {
+        const cancel = (window as Window & { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback;
+        if (typeof cancel === 'function') cancel(handle);
+      };
+    }
+    const timer = window.setTimeout(() => { void preloadGlobalSearch(); }, 1_500);
+    return () => window.clearTimeout(timer);
+  }, []);
   const [pendingSidebarView, setPendingSidebarView] = React.useState<ActiveView | null>(null);
   React.useEffect(() => {
     const handleGlobalSearchKey = (event: KeyboardEvent) => {
@@ -262,6 +285,8 @@ const MainLayout: React.FC = () => {
         {(isCreateUserOpen || isEditUserOpen) && <UserModal />}
         {(isCreateRoleOpen || isEditRoleOpen) && <RoleModal />}
         {isCreateContentOpen && <CreateContentModal />}
+        {isCreateIdeaOpen && <CreateIdeaModal isOpen onClose={() => setIsCreateIdeaOpen(false)} />}
+        {isCreateMeetingOpen && <CreateMeetingModal isOpen onClose={() => setIsCreateMeetingOpen(false)} />}
       </React.Suspense>
 
       {/* توست‌های بازخورد عملیات (موفق/خطا) */}

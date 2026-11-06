@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { notificationDestination } from '../../routing/listQuery';
 import { ErrorState, LoadingState, Modal } from '../common/Primitives';
 import { useWorkspacePage, useNotificationRead } from '../../queries/workspacePages';
+import { preloadGlobalSearch } from '../../routing/lazyOverlays';
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
@@ -59,6 +60,13 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
   const approvalUrgent = !!approvalDeadline && approvalDeadline.getTime() - Date.now() <= 86400000;
   const currentRoleName = roles.find(r => r.id === currentUser.roleId || r.key === currentUser.role)?.name
     || (currentUser.role === 'admin' ? 'مدیر سیستم' : currentUser.role === 'project_manager' ? 'مدیر پروژه' : 'عضو تیم');
+
+  /**
+   * ماژول جست‌وجوی سراسری تنبل بارگیری می‌شود؛ با هاور/لمسِ آیکون، پیش از
+   * باز شدن مدال دانلود می‌شود تا روی موبایل با اولین ضربه هم بستهٔ جداگانه
+   * منتظر نماند (کیبورد هم بی‌درنگ بالا می‌آید).
+   */
+  const warmSearch = () => { preloadGlobalSearch(); };
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -173,14 +181,14 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
 
   return (
-    <header className="h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 flex items-center justify-between text-right">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 border-b border-slate-200 bg-white/90 px-3 text-right backdrop-blur-md sm:px-6">
       {/* Right section: Hamburger & View title in RTL */}
       <div className="flex items-center gap-3">
         {onOpenSidebar && (
           <button
             id="mobile-sidebar-toggle"
             onClick={onOpenSidebar}
-            className="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
+            className="ui-tap shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 lg:hidden"
             aria-label="باز کردن منو"
           >
             <Menu className="w-5 h-5" />
@@ -213,6 +221,9 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
         )}
         <button
           id="top-search-bar"
+          type="button"
+          onPointerEnter={warmSearch}
+          onFocus={warmSearch}
           onClick={() => setIsSearchOpen(true)}
           className="min-w-0 flex-1 flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-sm text-slate-600 transition-all shadow-2xs group cursor-pointer"
         >
@@ -222,33 +233,40 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           </div>
         </button>
       </div>
-      <div className="flex-1 sm:hidden flex justify-end mx-2">
-         <button
-            onClick={() => setIsSearchOpen(true)}
-            className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-         >
-            <Search className="w-5 h-5" />
-         </button>
-      </div>
 
-      {/* Left Action Icons in RTL */}
-      <div className="flex items-center gap-2">
+      {/* Left action icons in RTL. On phones the search lives here as a real
+          36px button: previously it sat in a shrinking in-flow column and could
+          be squeezed out of the header, so the search box never opened. */}
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <button
+          id="top-search-btn"
+          type="button"
+          onPointerEnter={warmSearch}
+          onFocus={warmSearch}
+          onClick={() => setIsSearchOpen(true)}
+          title="جست‌وجوی سراسری"
+          aria-label="جست‌وجوی سراسری"
+          aria-haspopup="dialog"
+          className="ui-tap shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 sm:hidden"
+        >
+          <Search className="h-5 w-5" />
+        </button>
         {/* Calendar shortcut */}
         <button
           id="top-calendar-btn"
           onClick={() => setActiveView('calendar')}
           title="تقویم زمان‌بندی"
-          className={`p-2 rounded-xl inline-flex items-center gap-1.5 transition-colors cursor-pointer ${activeView === 'calendar' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
+          className={`ui-tap inline-flex shrink-0 items-center gap-1.5 rounded-xl p-2 transition-colors ${activeView === 'calendar' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
           aria-label="تقویم"
         >
-          <Calendar className="w-4 h-4" /><span className="text-xs font-bold">تقویم</span>
+          <Calendar className="h-4 w-4 shrink-0" /><span className="hidden text-xs font-bold sm:inline">تقویم</span>
         </button>
         {/* Notifications Dropdown */}
         <div className="relative" ref={notifRef}>
           <button
             id="top-notifications-bell"
             onClick={() => setIsNotifOpen(!isNotifOpen)}
-            className="relative p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+            className="ui-tap relative shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
             aria-label="اعلان‌ها"
           >
             <Bell className="w-4 h-4" />
@@ -368,7 +386,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           <button
             id="top-user-avatar-btn"
             onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
-            className="flex items-center gap-2 p-1 pr-1.5 rounded-full hover:bg-slate-100 transition-colors border border-transparent hover:border-slate-200 cursor-pointer"
+            className="ui-tap flex shrink-0 items-center gap-2 rounded-full border border-transparent p-1 pr-1.5 transition-colors hover:border-slate-200 hover:bg-slate-100"
           >
             <Avatar user={currentUser} size="sm" />
             <span className="hidden md:inline-block text-xs font-bold text-slate-800 max-w-[100px] truncate">

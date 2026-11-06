@@ -241,7 +241,7 @@ export const MyTasksView: React.FC = () => {
                               if (!(task.kind === 'content_review' && isCompleted)) moveTaskStatus(task.id, isCompleted ? 'backlog' : 'completed');
                             }}
                             disabled={task.kind === 'content_review' && (isCompleted || !hasPermission('content.approve'))}
-                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${isCompleted ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white hover:border-emerald-500'}`}
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center !rounded-full border-2 transition-colors ${isCompleted ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white hover:border-emerald-500'}`} style={{ borderRadius: '50%', minHeight: 0 }}
                           >
                             {isCompleted && <CheckCircle2 className="h-3.5 w-3.5" />}
                           </button>

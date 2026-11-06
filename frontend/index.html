@@ -19,6 +19,8 @@
         }
       } catch (_) { /* storage can be disabled by the browser */ }
     </script>
+    <!-- Hint browsers about the API origin (replaced at build time; empty in dev). -->
+    __TADBIR_API_HINTS__
     <!-- Browser-owned stable favicon: no React bootstrap or image swapping on reload. -->
     <link rel="icon" href="__TADBIR_FAVICON_URL__" data-tadbir-favicon="stable" />
 

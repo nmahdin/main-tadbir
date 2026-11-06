@@ -90,9 +90,12 @@ test('کارت خروجی هیچ تصویری لود نمی‌کند؛ تصوی�
 });
 
 test('پخش‌کنندهٔ ویدیو پیش از ابعاد واقعی، کادر ثابت و لودینگ دارد', () => {
-  // نسبت ۱۶:۹ و پس‌زمینهٔ سیاه تا روشن‌شدن تصویر.
+  // نسبت ۱۶:۹ با کادر ثابت؛ پیش از اولین فریم زمینهٔ روشن (جانمای لودینگ) و
+  // بعد از آماده‌شدن، زمینهٔ سیاه پخش‌کننده — با گذار نرم.
   assert.match(player, /aspect-video w-full max-h-\[62dvh\]/);
-  assert.match(player, /overflow-hidden rounded-2xl border border-slate-200 bg-black/);
+  assert.match(player, /overflow-hidden rounded-2xl border transition-colors duration-500/);
+  assert.match(player, /verticalReady \? 'border-slate-200 bg-black' : 'border-slate-200 bg-slate-100'/);
+  assert.match(player, /transition-opacity duration-500 ease-out/);
   assert.match(player, /const videoClass = `block bg-black object-contain/);
   assert.match(player, /'در حال آماده‌سازی ویدیو…'/);
   assert.match(player, /'در حال بارگذاری ویدیو…'/);

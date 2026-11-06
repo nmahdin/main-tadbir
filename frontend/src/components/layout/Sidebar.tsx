@@ -64,7 +64,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsCreateProjectOpen,
     setIsCreateContentOpen,
     setIsTemplatesModalOpen,
-    requestMeetingModal,
+    setIsCreateIdeaOpen,
+    setIsCreateMeetingOpen,
     requestContentSeriesModal,
     roles,
     generalSettings,
@@ -369,7 +370,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {hasPermission('thinktank.create_idea') && (
                   <button
-                    onClick={() => { handleNavClick('thought-room'); setIsQuickAddOpen(false); }}
+                    onClick={() => { setIsCreateIdeaOpen(true); setIsQuickAddOpen(false); }}
                     className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2.5 transition-colors cursor-pointer"
                   >
                     <Lightbulb className="w-4 h-4 text-amber-500" />
@@ -378,7 +379,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {hasPermission('meetings.create') && (
                   <button
-                    onClick={() => { handleNavClick('thought-room'); requestMeetingModal(); setIsQuickAddOpen(false); }}
+                    onClick={() => { setIsCreateMeetingOpen(true); setIsQuickAddOpen(false); }}
                     className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 transition-colors cursor-pointer"
                   >
                     <CalendarPlus className="w-4 h-4 text-emerald-600" />

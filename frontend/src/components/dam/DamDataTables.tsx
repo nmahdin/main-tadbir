@@ -803,7 +803,17 @@ export const DamDataTables: React.FC<{ openTableId?: string; openRowId?: string;
           <div className="min-h-0 flex-1 overflow-auto" ref={sheetRef}>
             {/* چیدمان ثابت (`table-fixed`) پهنای هر ستون را از `colgroup` می‌گیرد؛
                 بنابراین یک سلول بلند، پهنای ستون را زیاد نمی‌کند و ستون‌ها ثابت می‌مانند. */}
-            <table className="table-fixed border-collapse text-xs" style={{ width: sheetWidth, minWidth: Math.min(sheetWidth, 560) }}>
+            <table
+              className="table-fixed border-collapse text-xs"
+              /* دور ۸۳: در تمام‌صفحه، جدول عرض کامل قاب را می‌گیرد و (چون
+                 `table-fixed` است) فضای اضافه به‌نسبت پهنای ستون‌ها بین همه
+                 پخش می‌شود؛ یعنی ستون‌ها با محتوای خودشان بزرگ‌تر می‌شوند و
+                 نوار اسکرول افقی بیهوده نمی‌ماند. در حالت عادی همان پهنای
+                 واقعی شیت حفظ می‌شود. */
+              style={fullscreen
+                ? { width: '100%', minWidth: Math.min(sheetWidth, 560) }
+                : { width: sheetWidth, minWidth: Math.min(sheetWidth, 560) }}
+            >
               <colgroup>
                 <col style={{ width: ROW_INDEX_COLUMN_WIDTH }} />
                 {columns.map(column => <col key={column.id} style={{ width: tableColumnWidth(column.width) }} />)}

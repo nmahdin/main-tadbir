@@ -309,6 +309,13 @@ export function MediaPlayer({
   };
 
   const loadingLabel = !ready && started ? 'در حال بارگذاری…' : buffering ? 'در حال دریافت ادامهٔ فایل…' : '';
+  /*
+   * «آماده» یعنی اولین فریم/فراداده رسیده است. تا آن لحظه به‌جای پخش‌کننده یک
+   * جانمای لودینگ هم‌اندازه دیده می‌شود و ویدیو با گذار نرم از مات به شفاف
+   * ظاهر می‌شود؛ بنابراین کاربر نه کادر سیاه بی‌توضیح می‌بیند و نه با پرش
+   * چیدمان روبه‌رو می‌شود.
+   */
+  const verticalReady = isVideo && ready && !failed;
   // اندازهٔ ثابت پیش از معلوم‌شدن ابعاد فایل: کادر ویدیو از همان نخستین رندر
   // نسبت ۱۶:۹ دارد تا مدال با رسیدن فراداده نپرد و نلرزد.
   const videoClass = `block bg-black object-contain ${fullscreen ? 'h-full w-full max-h-none' : 'h-full w-full'}`;
@@ -347,10 +354,16 @@ export function MediaPlayer({
         onFocus={warmUp}
         onFocusCapture={revealControls}
         data-fullscreen={fullscreen ? 'true' : undefined}
-        data-controls={isVideo ? (controlsVisible ? 'shown' : 'hidden') : undefined}
+        // تا اولین فریم، نشانگر ماوس پنهان نمی‌شود؛ کاربر هنوز در حال انتظار است.
+        data-controls={isVideo ? (verticalReady && controlsVisible ? 'shown' : 'hidden') : undefined}
         className={
           isVideo
-            ? 'ui-media-stage relative flex aspect-video w-full max-h-[62dvh] items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-black'
+            ? `ui-media-stage relative flex aspect-video w-full max-h-[62dvh] items-center justify-center overflow-hidden rounded-2xl border transition-colors duration-500 ${
+              // دور ۸۳: تا آماده‌شدن اولین فریم، «پخش‌کننده» نمایش داده نمی‌شود؛
+              // همین کادر (با همان ابعاد نهایی) جانمای لودینگ است و بعد از
+              // آماده‌شدن، صحنه مات به تیره/شفاف تبدیل می‌شود.
+              verticalReady ? 'border-slate-200 bg-black' : 'border-slate-200 bg-slate-100'
+            }`
             : 'ui-media-stage relative rounded-2xl border border-slate-200 bg-white p-3 shadow-xs'
         }
       >
@@ -361,7 +374,11 @@ export function MediaPlayer({
           preload={preload}
           playsInline
           controls={false}
-          className={isVideo ? videoClass : 'hidden'}
+          className={
+            isVideo
+              ? `${videoClass} transition-opacity duration-500 ease-out ${verticalReady ? 'opacity-100' : 'pointer-events-none opacity-0'}`
+              : 'hidden'
+          }
           onClick={isVideo ? toggle : undefined}
           onLoadedMetadata={event => {
             setDuration(event.currentTarget.duration || 0);
@@ -395,11 +412,22 @@ export function MediaPlayer({
           ۲) در حالت توقف، دکمهٔ بزرگ پخش/ادامه — پیش از شروع هم همین دکمه
              دیده می‌شود تا کاربر بداند باید چه کند (نه اسپینر بی‌پایان).
         */}
+        {/* جانمای لودینگ به‌اندازهٔ خود پخش‌کننده: پیش از رسیدن اولین فریم، هیچ
+            نوار کنترل یا کادر سیاهی دیده نمی‌شود؛ فقط همین قاب با اسکلت و پیام. */}
         {isVideo && !failed && !ready && (
-          <div role="status" aria-live="polite" className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/45 text-white">
-            <LoaderCircle className="h-7 w-7 animate-spin" aria-hidden />
-            <span className="text-[11px] font-black">{started ? 'در حال بارگذاری ویدیو…' : 'در حال آماده‌سازی ویدیو…'}</span>
-            {/* کادر سیاه می‌ماند (پس‌زمینهٔ پخش‌کننده) تا تصویر که آمد، پرش رنگ نباشد. */}
+          <div
+            role="status"
+            aria-live="polite"
+            aria-label="در حال آماده‌سازی پخش‌کنندهٔ ویدیو"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-100"
+          >
+            <div aria-hidden className="ui-skeleton h-full w-full absolute inset-0" />
+            <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white/90 text-indigo-600 shadow-sm">
+              <LoaderCircle className="h-6 w-6 animate-spin" aria-hidden />
+            </span>
+            <span className="relative text-[11px] font-black text-slate-600">
+              {started ? 'در حال بارگذاری ویدیو…' : 'در حال آماده‌سازی ویدیو…'}
+            </span>
             {slow && (
               <button
                 type="button"
@@ -472,12 +500,15 @@ export function MediaPlayer({
           روی ویدیو با گرادیان پایین می‌نشیند و هنگام پخش خودکار پنهان می‌شود.
         */}
         <div
-          data-visible={isVideo ? (controlsVisible ? 'true' : 'false') : 'true'}
+          data-visible={isVideo ? (verticalReady && controlsVisible ? 'true' : 'false') : 'true'}
+          aria-hidden={isVideo ? !verticalReady : undefined}
           onPointerEnter={() => { setControlsPinned(true); revealControls(); }}
           onPointerLeave={() => { setControlsPinned(false); revealControls(); }}
           className={
             isVideo
-              ? `ui-media-controls absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-slate-950/90 via-slate-950/45 to-transparent px-3 pb-2 pt-8 transition-all duration-200 ${controlsVisible ? 'opacity-100' : 'pointer-events-none translate-y-2 opacity-0'}`
+              ? `ui-media-controls absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-slate-950/90 via-slate-950/45 to-transparent px-3 pb-2 pt-8 transition-all duration-200 ${
+                verticalReady && controlsVisible ? 'opacity-100' : 'pointer-events-none translate-y-2 opacity-0'
+              }`
               : 'ui-media-controls mt-2.5'
           }
         >

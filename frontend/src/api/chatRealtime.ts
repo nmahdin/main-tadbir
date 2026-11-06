@@ -21,13 +21,19 @@ export function connectChatRealtime(conversationId: string, onState: (state: Cha
     typingUsers: Array.isArray(data.typingUsers) ? data.typingUsers : [],
     transport,
   });
+  /**
+   * درخواست‌های حضور/تایپ فقط وقتی صفحه دیده می‌شود فرستاده می‌شوند.
+   * با پنهان شدن تب، این دو تایمر بی‌فایده‌اند و فقط اینترنت و باتری مصرف
+   * می‌کنند؛ با بازگشت کاربر، اولین تیک بعدی وضعیت را تازه می‌کند.
+   */
+  const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
   const poll = async () => {
-    if (closed || websocketReady) return;
+    if (closed || websocketReady || hidden()) return;
     try { const response = await chatApi.realtime.status(conversationId); if (!closed) onState(normalize(response.data, 'polling-fallback')); }
     catch { /* module error reporting remains centralized in AppContext */ }
   };
   const heartbeat = async () => {
-    if (closed) return;
+    if (closed || hidden()) return;
     if (websocketReady && socket?.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: 'presence.heartbeat', conversationId, typing: lastTyping }));
       return;
@@ -60,6 +66,8 @@ export function connectChatRealtime(conversationId: string, onState: (state: Cha
   void poll();
   const pollTimer = window.setInterval(() => void poll(), 4_000);
   const heartbeatTimer = window.setInterval(() => void heartbeat(), 25_000);
+  const onVisible = () => { if (document.visibilityState === 'visible') { void poll(); void heartbeat(); } };
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
   return {
     typing(active: boolean) {
       lastTyping = active;
@@ -75,6 +83,7 @@ export function connectChatRealtime(conversationId: string, onState: (state: Cha
       closed = true;
       window.clearInterval(pollTimer);
       window.clearInterval(heartbeatTimer);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
       if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'typing.changed', conversationId, typing: false }));
       socket?.close();
     },

@@ -63,10 +63,14 @@ test('فوتر صفحه‌بندی بیرون از اسکرول افقی و ثا
 
 test('تیک وظایف مرتبط گرد است و قاعدهٔ پایهٔ دکمه‌ها آن را نمی‌شکند', () => {
   // خودِ کنترل: دایره + کلاس صریح.
-  assert.match(related, /ui-check-circle flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2/);
+  assert.match(related, /ui-check-circle !rounded-full flex h-5 w-5 shrink-0 items-center justify-center border-2/);
+  // دور ۸۳: علاوه بر کلاس‌ها، گردی به‌صورت درون‌خطی هم قفل شده است.
+  assert.match(related, /style=\{\{ borderRadius: '50%', minHeight: 0 \}\}/);
   // قاعدهٔ پایهٔ `button` گردی `--radius-md` می‌گذارد و بیرون از لایه‌های تیلویند
   // است، پس بر `rounded-full` غالب می‌شد؛ این قاعده بعد از آن می‌آید.
   assert.match(css, /button\.rounded-full,\s*\[role='button'\]\.rounded-full,\s*\.ui-check-circle \{\s*border-radius: 9999px;/);
+  // قاعدهٔ تقویت‌شدهٔ دور ۸۳: تیک در جدول‌ها با `!important` همیشه دایره است.
+  assert.match(css, /td button\.ui-check-circle,\s*button\.ui-check-circle,\s*\.ui-check-circle \{\s*border-radius: 9999px !important;/);
   const base = css.indexOf("button, [role='button'] {\n  border-radius: var(--radius-md);");
   const override = css.indexOf('button.rounded-full,');
   assert.ok(base > 0 && override > base, 'قاعدهٔ دایره باید بعد از قاعدهٔ پایه بیاید.');

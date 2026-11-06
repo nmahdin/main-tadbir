@@ -62,7 +62,14 @@ export const GlobalSearchModal: React.FC = () => {
       setDebouncedQuery('');
       return;
     }
-    const frame = window.requestAnimationFrame(() => inputRef.current?.focus());
+    /*
+     * فوکوس باید در همان چرخهٔ رندر بعد از ضربه انجام شود؛ روی موبایل اگر
+     * فوکوس با تأخیر (فریم‌های بعدی) صدا زده شود، iOS آن را «بدون اشارهٔ
+     * کاربر» می‌داند و کیبورد بالا نمی‌آید. یک تلاش هم‌زمان + یک تلاش کوتاه
+     * بعدی، هر دو حالت را پوشش می‌دهد.
+     */
+    inputRef.current?.focus({ preventScroll: true });
+    const frame = window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
     return () => window.cancelAnimationFrame(frame);
   }, [isSearchOpen]);
 
@@ -110,25 +117,37 @@ export const GlobalSearchModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 px-4 pt-16 backdrop-blur-xs sm:pt-24" onMouseDown={event => {
-      if (event.currentTarget === event.target) setIsSearchOpen(false);
-    }}>
-      <section role="dialog" aria-modal="true" aria-label="جست‌وجوی سراسری" className="w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-200 bg-white text-right shadow-2xl" dir="rtl">
+    <div
+      className="fixed inset-0 z-[130] flex items-start justify-center bg-slate-900/50 px-2 pt-3 backdrop-blur-xs sm:px-4 sm:pt-24"
+      onMouseDown={event => {
+        if (event.currentTarget === event.target) setIsSearchOpen(false);
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="جست‌وجوی سراسری"
+        className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-right shadow-2xl sm:max-h-[80dvh] sm:rounded-3xl"
+        dir="rtl"
+      >
         <div className="flex items-center gap-3 border-b border-slate-200 p-4">
           {search.isFetching ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-indigo-600" /> : <Search className="h-5 w-5 shrink-0 text-slate-600" />}
           <input
             ref={inputRef}
-            type="text"
+            type="search"
+            inputMode="search"
+            autoComplete="off"
+            enterKeyHint="search"
             value={query}
             onChange={event => setQuery(event.target.value)}
             placeholder="جستجو در پروژه‌ها، وظایف، محتواها و مجموعه‌ها…"
-            className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-medium text-slate-900 outline-none ring-0 placeholder:text-slate-500 focus:border-0 focus:outline-none focus:ring-0 focus-visible:border-0 focus-visible:outline-none focus-visible:ring-0"
+            className="w-full min-w-0 appearance-none border-0 bg-transparent p-0 text-base font-medium text-slate-900 outline-none ring-0 placeholder:text-slate-500 sm:text-sm focus:border-0 focus:outline-none focus:ring-0 focus-visible:border-0 focus-visible:outline-none focus-visible:ring-0"
           />
           {query && <button type="button" onClick={() => setQuery('')} aria-label="پاک‌کردن جست‌وجو" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"><X className="h-4 w-4" /></button>}
           <button type="button" onClick={() => setIsSearchOpen(false)} aria-label="بستن جست‌وجو" className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200">ESC</button>
         </div>
 
-        <div className="max-h-[65vh] min-h-48 space-y-5 overflow-y-auto p-4" aria-live="polite">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-3 sm:p-4" aria-live="polite">
           {waitingForQuery && <div className="py-12 text-center"><Search className="mx-auto mb-3 h-8 w-8 text-slate-300" /><p className="text-sm font-bold text-slate-700">حداقل دو حرف وارد کنید</p><p className="mt-1 text-xs text-slate-500">نتایج کامل و مجاز مستقیماً از سرور دریافت می‌شوند.</p></div>}
           {!waitingForQuery && (search.isPending || query.trim() !== debouncedQuery) && <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-600"><LoaderCircle className="h-5 w-5 animate-spin" />در حال جست‌وجو…</div>}
           {!waitingForQuery && search.isError && <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><div className="flex items-center gap-2 font-bold"><AlertCircle className="h-5 w-5" />جست‌وجو انجام نشد</div><button type="button" onClick={() => void search.refetch()} className="mt-3 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-bold">تلاش دوباره</button></div>}
