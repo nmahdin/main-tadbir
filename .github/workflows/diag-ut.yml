@@ -1,0 +1,53 @@
+name: diag ut (ephemeral)
+on:
+  pull_request:
+  push:
+    branches: ['arena/**']
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip, opcache
+          coverage: none
+          tools: composer:v2
+      - name: Install
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Pint
+        working-directory: backend
+        run: php vendor/bin/pint --test app/Core/Billing app/Http/Controllers/Api/V1/BillingQuoteController.php app/Console/Commands/ExpireBillingQuotes.php tests/Feature/Core/BillingQuoteTest.php tests/Feature/Core/BillingQuoteConcurrencyMysqlTest.php
+      - name: PHPUnit filter
+        id: ut
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          set +e
+          php vendor/bin/phpunit --colors=never --filter BillingQuote > ut.out 2>&1
+          echo "ec=$?" >> $GITHUB_OUTPUT
+      - name: Post
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let out='';
+            try{out=fs.readFileSync('backend/ut.out','utf8')}catch(e){out='no ut.out'}
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body:'## ut err\n\n```\n'+out.slice(-30000)+'\n```'});
+      - name: Fail
+        if: always()
+        run: exit ${{ steps.ut.outputs.ec }}
