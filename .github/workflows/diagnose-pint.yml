@@ -1,0 +1,43 @@
+name: Pint diagnosis (ephemeral)
+on:
+  pull_request:
+  push:
+    branches: ['arena/**']
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
+          coverage: none
+          tools: composer:v2
+      - name: Install
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Run pint
+        id: pint
+        working-directory: backend
+        run: |
+          set +e
+          php vendor/bin/pint --test app/Core app/Modules app/Http/Controllers/Api/V1/Platform app/Http/Controllers/Api/V1/BillingCatalogController.php tests/Unit/Architecture tests/Feature/Core bootstrap/providers.php -v > pint.out 2>&1
+          echo "ec=$?" >> $GITHUB_OUTPUT
+      - name: Post
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const c = fs.readFileSync('backend/pint.out','utf8');
+            const body = '## Pint failures\n\n```\n' + c.slice(-25000) + '\n```';
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
+      - name: Fail
+        if: always()
+        run: exit ${{ steps.pint.outputs.ec }}
