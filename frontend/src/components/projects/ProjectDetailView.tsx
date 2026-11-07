@@ -53,6 +53,7 @@ import { DamLibrary } from '../dam/DamLibrary';
 import { CreateIdeaModal } from '../thought-room/CreateIdeaModal';
 import { CreateMeetingModal } from '../thought-room/CreateMeetingModal';
 import { useSlidingTabs } from '../common/SlidingTabs';
+import { morphName, runViewTransition } from '../../utils/viewTransition';
 
 type TabId = 'overview' | 'tasks' | 'contents' | 'series' | 'assets' | 'activities' | 'ideas' | 'meetings' | 'plan';
 type DomainTab = Exclude<TabId, 'overview' | 'plan' | 'assets'>;
@@ -275,8 +276,8 @@ export const ProjectDetailView: React.FC = () => {
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-2">
-                <IconButton label="بازگشت به پروژه‌ها" purpose="back" variant="ghost" onClick={() => { setSelectedProjectId(null); setActiveView('projects'); }} className="shrink-0"><ArrowRight className="h-4 w-4" /></IconButton>
-                <h1 className="min-w-0 truncate text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">{project.name}</h1>
+                <IconButton label="بازگشت به پروژه‌ها" purpose="back" variant="ghost" onClick={() => runViewTransition(() => { setSelectedProjectId(null); setActiveView('projects'); })} className="shrink-0"><ArrowRight className="h-4 w-4" /></IconButton>
+                <h1 style={{ viewTransitionName: morphName('project', project.id) }} className="min-w-0 truncate text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">{project.name}</h1>
               </div>
               {project.description && <p className="mt-2 max-w-4xl text-xs leading-6 text-slate-600">{project.description}</p>}
             </div>

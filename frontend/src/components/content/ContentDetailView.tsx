@@ -50,6 +50,7 @@ import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { EditContentModal } from './EditContentModal';
 import { EditWorkflowModal } from './EditWorkflowModal';
 import { useSlidingTabs } from '../common/SlidingTabs';
+import { morphName, runViewTransition } from '../../utils/viewTransition';
 import { Settings } from 'lucide-react';
 import {
   Clock,
@@ -246,9 +247,13 @@ export const ContentDetailView: React.FC = () => {
   const detailTabStrip = useSlidingTabs(activeTab);
   const goBack = () => {
     const explicitReturn = tabParams.get('returnTo');
-    if (explicitReturn) { navigate(safeReturnTo(explicitReturn, '/contents')); return; }
-    if ((window.history.state?.idx ?? 0) > 0) { navigate(-1); return; }
-    navigate('/contents');
+    // بازگشت هم با همان گذار مورف انجام می‌شود تا عنوان سربرگ به ردیف فهرست برگردد.
+    const back = (to: number | string) => runViewTransition(() => {
+      if (typeof to === 'number') navigate(to); else navigate(to);
+    });
+    if (explicitReturn) { back(safeReturnTo(explicitReturn, '/contents')); return; }
+    if ((window.history.state?.idx ?? 0) > 0) { back(-1); return; }
+    back('/contents');
   };
   const [commentInput, setCommentInput] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
@@ -1418,7 +1423,7 @@ export const ContentDetailView: React.FC = () => {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-3">
                 <button type="button" onClick={goBack} aria-label="بازگشت به صفحه قبل" title="بازگشت به صفحه قبل" className="ui-button ui-button-ghost ui-icon-button ui-icon-button-back !h-9 !w-9 shrink-0"><ArrowRight className="h-4 w-4" /></button>
-                <h1 className="min-w-0 flex-1 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">{content.title}</h1>
+                <h1 style={{ viewTransitionName: morphName('content', content.id) }} className="min-w-0 flex-1 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">{content.title}</h1>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span dir="ltr" title="کد محتوا" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-100 px-3 font-mono text-xs font-black tracking-[0.08em] leading-none text-slate-900 shadow-2xs">

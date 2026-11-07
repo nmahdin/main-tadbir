@@ -695,6 +695,40 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 }
 
 /*
+ * گذار بین صفحه‌ها (دور ۹۶).
+ *
+ * مرورگر دو عکس از صفحه می‌گیرد و عنصرهایی که نام یکسان دارند را مورف می‌کند
+ * (عنوان کارت فهرست ← عنوان سربرگ جزئیات). بقیهٔ صفحه فقط محو می‌شود؛ چون
+ * سایدبار و هدر در دو عکس یکسان‌اند، عملاً ثابت می‌مانند.
+ */
+@keyframes ui-page-out {
+  from { opacity: 1 }
+  to { opacity: 0 }
+}
+@keyframes ui-page-in {
+  from { opacity: 0 }
+  to { opacity: 1 }
+}
+::view-transition-group(root) {
+  animation-duration: .3s;
+  animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+}
+::view-transition-old(root) { animation: ui-page-out .16s ease-out both; }
+::view-transition-new(root) { animation: ui-page-in .26s cubic-bezier(.22, 1, .36, 1) both; }
+/* خودِ عنصر مورف‌شده: حرکت نرم و کمی کشیده‌تر از محو شدن صفحه. */
+::view-transition-group(*) {
+  animation-duration: .34s;
+  animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+}
+::view-transition-old(*), ::view-transition-new(*) { animation-duration: .24s; mix-blend-mode: normal; }
+
+/*
+ * در طول گذار، انیمیشن ورود صفحه‌ها فقط «سریع» می‌شود و حذف نمی‌شود؛ اگر حذف
+ * شود، با پایان گذار دوباره از اول اجرا می‌شد و صفحه دو بار محو می‌شد.
+ */
+html[data-view-transition] .animate-in { animation-duration: 1ms !important; }
+
+/*
  * چرخندهٔ لودینگ سریع (دور ۹۱).
  *
  * پیش‌فرض `animate-spin` تالبویند یک دور کامل در ۱ ثانیه است که برای نشانگرهای
@@ -756,6 +790,7 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 
 @media (prefers-reduced-motion: reduce) {
   .ui-tab-pill, .ui-tab-pill[data-state='moving'] { transition: none !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
   .ui-modal-overlay, .ui-modal-panel,
   .ui-modal-overlay[data-state='closing'], .ui-modal-panel[data-state='closing'],
   .ui-layer-out, .ui-panel-out, .ui-pop, .ui-pop[data-state='closing'],

@@ -54,6 +54,7 @@ import { CalendarDayModal } from '../calendar/CalendarDayModal';
 import { calendarDueInfo, calendarTimeLabel, sortCalendarEventsByTime } from '../../utils/calendarTone';
 import { EditTaskModal } from '../tasks/EditTaskModal';
 import { useSlidingTabs } from '../common/SlidingTabs';
+import { morphName, runViewTransition } from '../../utils/viewTransition';
 
 const filterNames: Record<string, string> = {
   status: 'وضعیت', search: 'جستجو', due: 'سررسید', assignee: 'مسئول', owner: 'مالک',
@@ -279,9 +280,21 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     const id = module === 'projects' ? row.projectManagerId : module === 'tasks' ? row.assigneeId : row.publisherId;
     return app.users.find(user => user.id === id)?.name || (id ? `کاربر #${id}` : 'تعیین نشده');
   };
+  /**
+   * باز کردن صفحهٔ جزئیات با گذار مورف (دور ۹۶): عنوان همین کارت به عنوان سربرگ
+   * صفحهٔ مقصد کشیده می‌شود. کلیک‌های ترکیبی (Ctrl/Cmd/Shift، کلیک میانی و
+   * راست) دست نمی‌خورند تا «باز کردن در تب تازه» همان رفتار مرورگر بماند.
+   */
+  const morphOpen = (to: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    runViewTransition(() => navigate(to));
+  };
+  /** ردیف‌های فهرست و کارت‌ها برای مورف شدن باید نام یکتا داشته باشند. */
+  const rowMorphName = (row: any) => module === 'tasks' ? undefined : morphName(module === 'contents' ? 'content' : 'project', row.id);
   const recordTitle = (row: any, className: string) => module === 'tasks'
     ? <button type="button" data-press="none" className={`${className} text-right`} onClick={() => app.setSelectedTaskId(row.id)}>{titleOf(row)}</button>
-    : <Link className={className} to={detail(row.id)}>{titleOf(row)}</Link>;
+    : <Link className={className} to={detail(row.id)} style={{ viewTransitionName: rowMorphName(row) }} onClick={morphOpen(detail(row.id))}>{titleOf(row)}</Link>;
   const handleTaskDrop = (status: string) => {
     if (!draggedTaskId) return;
     const task = rows.find((row: any) => row.id === draggedTaskId);
@@ -546,7 +559,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                       {row.description && <p className="text-xs leading-6 text-slate-500 line-clamp-2">{row.description}</p>}
                       <div className="flex items-center gap-2 flex-wrap">{module === 'contents' ? <ContentTypeBadge color={typeOf(row)?.color} label={typeNameOf(row)} /> : row.priority && <PriorityPill priority={row.priority as Priority} size="sm" />}<span className="text-[11px] text-slate-500 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" />{module === 'contents' ? `منتشرکننده: ${personOf(row)}` : personOf(row)}</span></div>
                     </div>
-                    <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">{module === 'contents' ? <PublicationDateChip content={row} /> : <span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>}{module === 'projects' && <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} title="باز کردن پروژه" className="rounded-xl p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-700"><ChevronLeft className="h-4 w-4" /></Link>}</footer>
+                    <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">{module === 'contents' ? <PublicationDateChip content={row} /> : <span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>}{module === 'projects' && <Link to={detail(row.id)} onClick={morphOpen(detail(row.id))} aria-label={`باز کردن ${titleOf(row)}`} title="باز کردن پروژه" className="rounded-xl p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-700"><ChevronLeft className="h-4 w-4" /></Link>}</footer>
                   </article>
                 ))}
               </div>
