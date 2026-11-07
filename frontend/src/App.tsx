@@ -377,7 +377,15 @@ function LegacyLinks() {
   return null;
 }
 export default function App() {
-  return <QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><UIProvider><AppProvider>
+  return <QueryClientProvider client={queryClient}>
+    {/*
+      * `useTransitions={false}`: React Router v7 ناوبری را پیش‌فرض داخل
+      * `React.startTransition` می‌برد؛ در نتیجه گذار صفحه (View Transition)
+      * نمی‌تواند نسخهٔ تازهٔ DOM را در همان لحظه بگیرد و مورف عنوان هرگز دیده
+      * نمی‌شد. با خاموش‌کردن آن، `flushSync` داخل `startViewTransition` واقعاً
+      * commit می‌کند و صفحهٔ مقصد در عکس دوم هست.
+      */}
+    <BrowserRouter useTransitions={false}><AuthProvider><UIProvider><AppProvider>
     {/* انتخابگر سفارشی همهٔ کنترل‌های انتخابی سامانه (جای فهرست پیش‌فرض مرورگر). */}
     <CustomSelectLayer />
     {/* نمایش زیبای خطای اتصال اینترنت در همهٔ صفحه‌ها. */}

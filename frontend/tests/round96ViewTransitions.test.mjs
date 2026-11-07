@@ -13,7 +13,10 @@ test('گذار صفحه فقط جایی فعال می‌شود که مرورگر
   // مرورگرهای بدون پشتیبانی و حالت «کاهش حرکت» ناوبری ساده می‌گیرند.
   assert.match(helper, /typeof \(document as TransitionDocument\)\.startViewTransition !== 'function'/);
   assert.match(helper, /window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches/);
-  assert.match(helper, /if \(inFlight \|\| !viewTransitionsAvailable\(\)\) \{\s*\n\s*update\(\);\s*\n\s*return;/);
+  // ناوبری همیشه انجام می‌شود؛ در حالت بدون گذار، آماده‌سازی مقصد هم انجام و بعد
+  // ناوبری ساده اجرا می‌شود (دور ۹۷).
+  assert.match(helper, /if \(inFlight \|\| !viewTransitionsAvailable\(\)\) \{/);
+  assert.match(helper, /if \(options\.prepare\) void options\.prepare\(\)\.catch\(\(\) => undefined\)\.finally\(update\);/);
 
   // React باید همان لحظه commit کند تا عکس دوم از محتوای تازه گرفته شود.
   assert.match(helper, /import \{ flushSync \} from 'react-dom';/);
@@ -52,7 +55,9 @@ test('عنوان کارت فهرست و سربرگ جزئیات نام مورف 
 
   // کلیک‌های ترکیبی و کلیک میانی به رفتار پیش‌فرض مرورگر واگذار می‌شوند.
   assert.match(list, /if \(event\.defaultPrevented \|\| event\.button !== 0 \|\| event\.metaKey \|\| event\.ctrlKey \|\| event\.shiftKey \|\| event\.altKey\) return;/);
-  assert.match(list, /event\.preventDefault\(\);\s*\n\s*runViewTransition\(\(\) => navigate\(to\)\);/);
+  assert.match(list, /runViewTransition\(\(\) => navigate\(to\), \{ prepare \}\);/);
+  // بستهٔ صفحهٔ مقصد پیش از شروع گذار آماده می‌شود (دور ۹۷).
+  assert.match(list, /const prepare = module === 'contents' \? preloadContentDetail : preloadProjectDetail;/);
 
   // مقصد، همان نام را روی عنوان سربرگ می‌گذارد.
   assert.match(contentDetail, /<h1 style=\{\{ viewTransitionName: morphName\('content', content\.id\) \}\}/);

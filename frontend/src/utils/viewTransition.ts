@@ -45,15 +45,49 @@ export function morphName(kind: 'content' | 'project' | 'task', id: string | num
   return `tadbir-${kind}-${String(id ?? '').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 }
 
+export type ViewTransitionOptions = {
+  /**
+   * کارهایی که باید **پیش از** گرفتن عکس اول تمام شوند.
+   *
+   * صفحه‌های جزئیات با `React.lazy` بار می‌شوند؛ اگر بستهٔ مقصد آماده نباشد،
+   * عکس دوم به‌جای سربرگ، همان لودر Suspense را می‌گیرد و مورف انجام نمی‌شود.
+   * با `prepare` بستهٔ مقصد (و هر دادهٔ لازم) پیش از شروع گذار آماده می‌شود.
+   */
+  prepare?: () => Promise<unknown>;
+};
+
 /**
  * اجرای یک به‌روزرسانی (ناوبری یا تغییر وضعیت) داخل گذار مرورگر.
  *
  * `flushSync` لازم است چون React به‌طور پیش‌فرض به‌روزرسانی‌ها را در میکروتسک
  * انجام می‌دهد و مرورگر باید نسخهٔ تازهٔ DOM را همان لحظه ببیند تا عکس دوم را
- * از محتوای درست بگیرد.
+ * از محتوای درست بگیرد. همچنین روتر باید بدون `startTransition` تنظیم شده باشد
+ * (`<BrowserRouter useTransitions={false}>`)، وگرنه این commit هم به تعویق می‌افتد.
  */
-export function runViewTransition(update: () => void): void {
+export function runViewTransition(update: () => void, options: ViewTransitionOptions = {}): void {
   if (inFlight || !viewTransitionsAvailable()) {
+    // حتی وقتی گذار ممکن نیست، آماده‌سازی مقصد به تجربهٔ بعدی کمک می‌کند.
+    if (options.prepare) void options.prepare().catch(() => undefined).finally(update);
+    else update();
+    return;
+  }
+  const prepare = options.prepare;
+  if (prepare) {
+    // قفل تا پایان آماده‌سازی: کلیک دوم نباید دو ناوبری بسازد.
+    inFlight = true;
+    void prepare()
+      .catch(() => undefined)
+      .then(() => {
+        inFlight = false;
+        startTransitionNow(update);
+      });
+    return;
+  }
+  startTransitionNow(update);
+}
+
+function startTransitionNow(update: () => void): void {
+  if (!viewTransitionsAvailable() || inFlight) {
     update();
     return;
   }

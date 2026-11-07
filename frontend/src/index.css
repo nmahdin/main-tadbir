@@ -686,6 +686,30 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
   /* لبه‌های نیم‌پیکسلی در حرکت، رنگ را کمی محو نشان می‌دهند. */
   backface-visibility: hidden;
 }
+/*
+ * اسکلت در حال بارگذاری (دور ۹۷).
+ *
+ * جای چرخندهٔ وسط‌چین، شکل همان محتوا با یک درخشش نرم کشیده می‌شود. گرادیان
+ * سه‌رنگ روی خودِ بلوک حرکت می‌کند؛ چون `background-position` است، روی لایهٔ
+ * کامپوزیت اجرا می‌شود و چیدمان را دست نمی‌زند.
+ */
+@keyframes ui-shimmer {
+  from { background-position: 100% 0 }
+  to { background-position: 0 0 }
+}
+.ui-shimmer {
+  background-color: #eef2f7;
+  background-image: linear-gradient(90deg, #eef2f7 20%, #f8fafc 40%, #eef2f7 60%);
+  background-size: 300% 100%;
+  animation: ui-shimmer 1.35s ease-in-out infinite;
+}
+/* ورود نرم محتوای واقعی روی اسکلت؛ ارتفاع را عوض نمی‌کند تا صفحه نپرد. */
+@keyframes ui-swap-in {
+  from { opacity: 0; transform: translateY(2px) }
+  to { opacity: 1; transform: translateY(0) }
+}
+.ui-swap-in { animation: ui-swap-in .18s ease-out both; }
+
 .ui-tab-pill[data-state='moving'] {
   transition:
     transform .26s cubic-bezier(.22, 1, .36, 1),
@@ -789,13 +813,16 @@ html[data-view-transition] .animate-in { animation-duration: 1ms !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ui-tab-pill, .ui-tab-pill[data-state='moving'] { transition: none !important; }
-  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
   .ui-modal-overlay, .ui-modal-panel,
   .ui-modal-overlay[data-state='closing'], .ui-modal-panel[data-state='closing'],
   .ui-layer-out, .ui-panel-out, .ui-pop, .ui-pop[data-state='closing'],
   .ui-toast-in, .ui-toast-out, .ui-msg-in, .ui-msg-out,
   .animate-in, .animate-out { animation: none !important; }
+  /* نشانگر تب، اسکلت بارگذاری و گذار صفحه (دورهای ۹۵–۹۶). */
+  .ui-tab-pill, .ui-tab-pill[data-state='moving'] { transition: none !important; }
+  .ui-shimmer { animation: none !important; background-image: none; }
+  .ui-swap-in { animation: none !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 
 /*

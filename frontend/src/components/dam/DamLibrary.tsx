@@ -29,6 +29,7 @@ import { SmartImage } from '../common/SmartImage';
 import { ImagePreview } from '../common/ImagePreview';
 import { MediaPlayer } from '../common/MediaPlayer';
 import { SearchableSelect } from '../common/SearchableSelect';
+import { TableSkeleton, TileGridSkeleton } from '../common/Shimmer';
 
 type AssetType = 'file' | 'content';
 type Context = { project_id?: number; task_id?: number; department_id?: number; content_id?: number; idea_id?: number; meeting_id?: number };
@@ -920,7 +921,13 @@ export const DamLibrary: React.FC<{
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
               {error && <div role="alert" className="m-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700"><Shield className="mt-0.5 h-4 w-4 shrink-0" />{error}<button onClick={() => setError('')} className="mr-auto"><X className="h-4 w-4" /></button></div>}
-              {loading ? <div className="flex items-center justify-center gap-2 p-12 text-xs text-slate-400"><LoaderCircle className="h-4 w-4 animate-spin" />در حال دریافت اطلاعات...</div>
+              {loading ? (
+                // اسکلت هم‌شکل با نمای جاری (دور ۹۷): کاشی‌ها برای شبکه و ردیف‌ها
+                // برای جدول/فهرست، تا با رسیدن داده چیدمان نپرد.
+                viewMode === 'grid'
+                  ? <TileGridSkeleton count={9} className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3" label="در حال دریافت دارایی‌ها…" />
+                  : <div className="overflow-x-auto"><TableSkeleton rows={8} columns={viewMode === 'table' ? ['دارایی', 'وضعیت', 'حجم', 'تاریخ'] : ['دارایی', 'وضعیت']} label="در حال دریافت دارایی‌ها…" /></div>
+              )
                 : items.length === 0 && (viewMode !== 'explorer' || childFolders.length === 0) ? <EmptyState canCreate={hasPermission('assets.upload')} onCreate={() => setEntryOpen(true)} />
                 : viewMode === 'explorer'
                 ? <AssetExplorer folders={childFolders} assets={items} statusLabel={damStatusLabel} onOpenFolder={id => { setFolderId(id); setPage(1); }} onOpenAsset={asset => void openAsset(asset)} />

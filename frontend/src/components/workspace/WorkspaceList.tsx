@@ -30,7 +30,7 @@ import { useWorkspacePage } from '../../queries/workspacePages';
 import { CONTENT_DEFAULT_SORT, parseListQuery, listStatuses } from '../../routing/listQuery';
 import { usePageCorrection } from '../../routing/usePageCorrection';
 import { useApp } from '../../context/AppContext';
-import { Button, EmptyState, ErrorState, LoadingState, Select } from '../common/Primitives';
+import { Button, EmptyState, ErrorState, Select } from '../common/Primitives';
 import { Pagination } from '../common/WorkspacePatterns';
 import { DeadlineChip } from '../common/DeadlineChip';
 import { Collapsible } from '../common/Collapsible';
@@ -55,6 +55,8 @@ import { calendarDueInfo, calendarTimeLabel, sortCalendarEventsByTime } from '..
 import { EditTaskModal } from '../tasks/EditTaskModal';
 import { useSlidingTabs } from '../common/SlidingTabs';
 import { morphName, runViewTransition } from '../../utils/viewTransition';
+import { preloadContentDetail, preloadProjectDetail } from '../../routing/preloadViews';
+import { BoardSkeleton, CardGridSkeleton, TableSkeleton } from '../common/Shimmer';
 
 const filterNames: Record<string, string> = {
   status: 'وضعیت', search: 'جستجو', due: 'سررسید', assignee: 'مسئول', owner: 'مالک',
@@ -288,7 +290,10 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const morphOpen = (to: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    runViewTransition(() => navigate(to));
+    // بستهٔ صفحهٔ مقصد باید پیش از گرفتن عکس دوم آماده باشد؛ وگرنه به‌جای سربرگ،
+    // لودر Suspense در عکس می‌افتد و مورف دیده نمی‌شود (دور ۹۷).
+    const prepare = module === 'contents' ? preloadContentDetail : preloadProjectDetail;
+    runViewTransition(() => navigate(to), { prepare });
   };
   /** ردیف‌های فهرست و کارت‌ها برای مورف شدن باید نام یکتا داشته باشند. */
   const rowMorphName = (row: any) => module === 'tasks' ? undefined : morphName(module === 'contents' ? 'content' : 'project', row.id);
@@ -496,8 +501,14 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           </div>
         )}
 
-        {query.isPending ? <LoadingState label="در حال دریافت فهرست از سرور…" /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : (
-          <div aria-busy={query.isFetching} className="relative">
+        {query.isPending ? (
+          // اسکلت هم‌شکل با همان نمایی که کاربر انتخاب کرده (دور ۹۷): جدول با
+          // سرستون‌های واقعی، کارت‌ها با همان اندازه، کانبان با همان ستون‌ها.
+          view === 'cards' ? <CardGridSkeleton count={6} />
+            : module === 'tasks' && view === 'kanban' ? <BoardSkeleton columns={4} />
+            : <div className="overflow-x-auto"><TableSkeleton rows={6} columns={module === 'tasks' ? ['عنوان', 'وضعیت', 'اولویت', 'سررسید', 'عملیات'] : module === 'contents' ? ['عنوان', 'وضعیت', 'نوع', 'منتشرکننده', 'تاریخ انتشار', 'عملیات'] : ['عنوان', 'وضعیت', 'اولویت', 'مدیر پروژه', 'سررسید', 'عملیات']} /></div>
+        ) : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : (
+          <div aria-busy={query.isFetching} className="ui-swap-in relative">
             {query.isFetching && <div role="status" className="absolute top-2 left-3 z-10 px-2.5 py-1 rounded-lg bg-white/95 border border-slate-200 text-[11px] text-slate-500 shadow-xs">در حال تازه‌سازی…</div>}
             {!rows.length ? (
               <EmptyState title="موردی مطابق فیلترها یافت نشد.">
