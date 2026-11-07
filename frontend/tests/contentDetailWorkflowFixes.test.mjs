@@ -83,7 +83,7 @@ test('the reviewer chip uses the same grey tone as the other responsibility chip
   assert.ok(chipStart > -1, 'نشان ارزیاب باید عنوان توضیحی داشته باشد');
   // انتهای برش، آغازِ کنترلِ مهلت مرحله است (دور ۸۷ این کنترل جای شرطِ
   // `{stageDeadline && (` را گرفت و همیشه رندر می‌شود).
-  const chip = contentDetail.slice(Math.max(0, chipStart - 700), contentDetail.indexOf('aria-label="انتخاب مهلت مرحله"'));
+  const chip = contentDetail.slice(Math.max(0, chipStart - 700), contentDetail.indexOf('variant="panel"'));
   assert.match(chip, /bg-slate-50 hover:border-indigo-300 hover:bg-white/);
   assert.doesNotMatch(chip, /amber/);
   assert.match(chip, /ارزیاب: \{stageReviewer\.name\}/);
@@ -110,7 +110,9 @@ test('stage deadlines carry tier colours and drive the derived «تأخیر» st
   // مهلت مرحله حالا همیشه دیده می‌شود («بدون مهلت» هم حالت معتبر است) و با
   // کلیک همان‌جا انتخاب می‌شود — دور ۸۷.
   assert.match(contentDetail, /stage\.deadline \? formatPersianDate\(stage\.deadline\) : 'بدون مهلت'/);
-  assert.match(contentDetail, /aria-label="انتخاب مهلت مرحله"/);
+  // دور ۹۰: کلیک روی خود تاریخ، تقویم را مستقیم و بدون کادر/فیلد میانی باز می‌کند.
+  assert.match(contentDetail, /variant="panel"/);
+  assert.match(contentDetail, /onClose=\{\(\) => setStageDeadlinePicker\(null\)\}/);
   assert.match(contentDetail, /assignStageResponsibility\(content\.id, stage\.id, \{ deadline: date \}\)/);
   // مرحلهٔ تمام‌شده رنگ تأخیر و برچسب نسبی نمی‌گیرد؛ فقط مرحلهٔ ناتمام رنگی می‌شود.
   assert.match(contentDetail, /const stageFinished = \['approved', 'completed', 'skipped'\]\.includes\(stage\.status\)/);

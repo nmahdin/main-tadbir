@@ -35,6 +35,20 @@ import { calendarDueInfo, calendarTimeLabel, sortCalendarEventsByTime } from '..
 type ViewMode = 'list' | 'kanban' | 'calendar';
 type TaskScope = 'near' | 'all';
 
+/**
+ * انواع وظیفه در کارتابل.
+ *
+ * درخواست دور ۹۰: کنار فیلتر وضعیت، فیلتر «نوع» هم باشد. شناسه‌ها همان `kind`
+ * واقعیِ تسک‌های سامانه‌اند و وظیفهٔ بدون `kind` زیر «عمومی» می‌آید.
+ */
+const TASK_KIND_FILTERS: { id: string; label: string }[] = [
+  { id: 'general', label: 'عمومی' },
+  { id: 'content_work', label: 'کار مرحلهٔ محتوا' },
+  { id: 'content_review', label: 'بررسی محتوا' },
+  { id: 'content_correction', label: 'اصلاح محتوا' },
+  { id: 'content_publish', label: 'انتشار محتوا' },
+];
+
 const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 export const MyTasksView: React.FC = () => {
@@ -53,6 +67,8 @@ export const MyTasksView: React.FC = () => {
 
   const [statusFilter, setStatusFilter] = useUrlFilter<string>('status', 'all');
   const [priorityFilter, setPriorityFilter] = useUrlFilter<string>('priority', 'all');
+  /** فیلتر «نوع وظیفه»: عمومی، کار مرحلهٔ محتوا، بررسی، اصلاح یا انتشار. */
+  const [kindFilter, setKindFilter] = useUrlFilter<string>('kind', 'all');
   const [taskScope, setTaskScope] = useUrlFilter<TaskScope>('scope', 'near');
   const [timeframeFilter, setTimeframeFilter] = useState<'all' | 'today' | 'overdue' | 'week'>('all');
   const [viewMode, setViewMode] = useUrlFilter<ViewMode>('view', 'list');
@@ -75,6 +91,8 @@ export const MyTasksView: React.FC = () => {
     const matchesStatus = statusFilter === 'overdue' ? !['completed', 'archived'].includes(t.status) && !!t.deadline && t.deadline < todayStr
       : statusFilter === 'all' ? t.status !== 'archived' : t.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || t.priority === priorityFilter;
+    // وظیفهٔ بدون `kind` همان وظیفهٔ عمومی است؛ مقایسه با رشتهٔ خالی هم درست کار کند.
+    const matchesKind = kindFilter === 'all' || (t.kind || 'general') === kindFilter;
     const matchesScope = taskScope === 'all' || isNearDue(t);
 
     let matchesTimeframe = true;
@@ -88,7 +106,7 @@ export const MyTasksView: React.FC = () => {
       matchesTimeframe = taskDate >= now && taskDate <= now + 7 * 86400000;
     }
 
-    return matchesStatus && matchesPriority && matchesScope && matchesTimeframe;
+    return matchesStatus && matchesPriority && matchesScope && matchesKind && matchesTimeframe;
   });
 
   const overdueCount = myTasks.filter(t => !['completed', 'archived'].includes(t.status) && !!t.deadline && t.deadline < todayStr).length;
@@ -158,6 +176,18 @@ export const MyTasksView: React.FC = () => {
               <option value="overdue">سررسید گذشته</option>
               {orderedStatuses.map(s => (
                 <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+            {/* نوع وظیفه: عمومی، کار مرحلهٔ محتوا، بررسی، اصلاح یا انتشار. */}
+            <select
+              value={kindFilter}
+              onChange={(e) => setKindFilter(e.target.value)}
+              aria-label="فیلتر نوع وظیفه"
+              className="rounded-xl border border-slate-200 bg-slate-50 !px-2.5 !py-1 text-[11px] font-bold text-slate-700 shadow-2xs focus:border-indigo-300 focus:outline-none"
+            >
+              <option value="all">همه نوع‌ها</option>
+              {TASK_KIND_FILTERS.map(kind => (
+                <option key={kind.id} value={kind.id}>{kind.label}</option>
               ))}
             </select>
             <select

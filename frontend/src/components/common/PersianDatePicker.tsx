@@ -19,6 +19,16 @@ interface PersianDatePickerProps {
   className?: string;
   required?: boolean;
   portal?: boolean;
+  /**
+   * `panel` = فقط خودِ تقویم، بدون فیلد ورودی.
+   *
+   * برای جاهایی که کلیک روی یک تراشه/برچسب تاریخ باید **مستقیم** تقویم را باز
+   * کند (مثل مهلت مرحله در جریان محتوا)؛ پیش‌تر یک پنجرهٔ کوچک باز می‌شد و
+   * کاربر باید دوباره روی فیلد داخل آن کلیک می‌کرد.
+   */
+  variant?: 'field' | 'panel';
+  /** با انتخاب روز یا بستن پنل صدا زده می‌شود؛ فقط در حالت `panel`. */
+  onClose?: () => void;
 }
 
 export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
@@ -28,9 +38,12 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
   placeholder = 'انتخاب تاریخ شمسی...',
   className = '',
   required = false,
-  portal = false
+  portal = false,
+  variant = 'field',
+  onClose
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const panelOnly = variant === 'panel';
+  const [isOpen, setIsOpen] = useState(panelOnly);
   const containerRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
   const [calendarPosition, setCalendarPosition] = useState<React.CSSProperties>({ top: 8, left: 8 });
@@ -52,6 +65,9 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
       const target = event.target as Node;
       if (!containerRef.current?.contains(target) && !calendarRef.current?.contains(target)) {
         setIsOpen(false);
+        // در حالت `panel` والد باید بداند پنل بسته شد؛ وگرنه کادر تقویم
+        // پنهان می‌شود ولی پوششِ کلیک بیرون روی صفحه می‌ماند.
+        if (panelOnly) onClose?.();
       }
     };
     if (isOpen) {
@@ -60,7 +76,7 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen]);
+  }, [isOpen, panelOnly, onClose]);
 
   useLayoutEffect(() => {
     if (!isOpen || !portal) return;
@@ -134,12 +150,14 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
   const handleSelectDay = (day: number) => {
     emitGregorian(viewYear, viewMonth, day);
     setIsOpen(false);
+    onClose?.();
   };
 
   const handleSelectToday = () => {
     const today = parseToJalali(new Date());
     emitGregorian(today.jy, today.jm, today.jd);
     setIsOpen(false);
+    onClose?.();
   };
 
   const handleSelectNextWeek = () => {
@@ -148,6 +166,7 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
     const j = parseToJalali(nextWeek);
     emitGregorian(j.jy, j.jm, j.jd);
     setIsOpen(false);
+    onClose?.();
   };
 
   const handleSelectNextMonth = () => {
@@ -156,6 +175,7 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
     const j = parseToJalali(nextMonth);
     emitGregorian(j.jy, j.jm, j.jd);
     setIsOpen(false);
+    onClose?.();
   };
 
 
@@ -167,7 +187,7 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
     <div
       ref={calendarRef}
       style={portal ? calendarPosition : undefined}
-      className={`${portal ? 'fixed z-[100] max-h-[calc(100vh-1rem)] overflow-y-auto' : 'absolute z-50 mt-2 right-0'} w-72 bg-white rounded-2xl border border-slate-200 shadow-xl p-3.5 animate-in fade-in zoom-in-95 duration-150`}
+      className={`${panelOnly ? 'relative' : portal ? 'fixed z-[100] max-h-[calc(100vh-1rem)] overflow-y-auto' : 'absolute z-50 mt-2 right-0'} w-72 bg-white rounded-2xl border border-slate-200 shadow-xl p-3.5 animate-in fade-in zoom-in-95 duration-150`}
     >
           {/* Header Navigation */}
           <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
@@ -301,6 +321,23 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
           </div>
         </div>
   ) : null;
+
+  /**
+   * حالت `panel`: تقویم همان لحظه باز و بدون فیلد ورودی نمایش داده می‌شود؛
+   * انتخاب روز یا کلیک بیرون، پنل را با `onClose` به والد می‌بندد.
+   */
+  if (panelOnly) {
+    return (
+      <div className={`relative ${className}`} ref={containerRef} dir="rtl">
+        {label && (
+          <label className="mb-1.5 block text-xs font-bold text-slate-700">
+            {label} {required && <span className="text-rose-500">*</span>}
+          </label>
+        )}
+        {calendarPanel}
+      </div>
+    );
+  }
 
   return (
     <div className={`relative ${className}`} ref={containerRef} dir="rtl">

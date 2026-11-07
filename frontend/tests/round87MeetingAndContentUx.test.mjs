@@ -94,7 +94,8 @@ test('تاریخ مهلت مرحلهٔ محتوا با کلیک همان‌جا 
   // مسیر داده همان تابع مسئول مرحله است؛ هیچ ذخیره‌سازی موازی ساخته نشده.
   assert.match(view, /assignStageResponsibility\(content\.id, stage\.id, \{ deadline: date \}\)/);
   assert.match(view, /aria-label="انتخاب مهلت مرحله"/);
-  assert.match(view, /<PersianDatePicker/);
+  // دور ۹۰: خودِ پنجرهٔ تقویم باز می‌شود، نه یک فیلد تاریخ که باید دوباره کلیک شود.
+  assert.match(view, /variant="panel"/);
 });
 
 test('پیوست‌های وظیفه در پنجرهٔ جزئیات نمایش داده نمی‌شوند', async () => {

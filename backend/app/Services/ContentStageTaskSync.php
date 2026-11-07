@@ -80,6 +80,20 @@ class ContentStageTaskSync
                 }
             }
             $status = (string) ($stage['status'] ?? 'not_started');
+            /**
+             * مرحلهٔ «انتشار» تا وقتی خودِ محتوا واقعاً منتشر نشده، «تمام‌شده»
+             * نیست (دور ۹۰).
+             *
+             * چرا: با لغو انتشار، تسک‌های انتشار به «در انتظار بررسی» برمی‌گردند؛
+             * اما تا اینجا هنگام هم‌زمان‌سازی، وضعیت «تأییدشده» مرحلهٔ انتشار به
+             * تسک هم منتقل می‌شد و بلافاصله دوباره «تکمیل‌شده» می‌شد. حالا کارِ
+             * مرحلهٔ انتشار باز می‌ماند تا ثبت انتشار واقعاً انجام شود.
+             */
+            if (($stage['stageKey'] ?? null) === 'publish'
+                && ! ContentPublication::published($content)
+                && in_array($status, ['approved', 'completed'], true)) {
+                $status = 'not_started';
+            }
             $assigneeId = $this->numericId($stage['assigneeId'] ?? null);
             $reviewerId = $this->numericId(
                 $stage['reviewerId']

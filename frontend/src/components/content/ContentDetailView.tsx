@@ -38,7 +38,7 @@ import { useApp } from '../../context/AppContext';
 import { ErrorBoundary } from '../common/Feedback';
 import { ContentProcessTemplate, ContentStageStatus, ContentStage, ContentStageInput } from '../../types';
 import { type FlowStageTask } from './ContentFlowPanel';
-import { addCalendarDays, buildStagesFromTemplate, departmentMembers, flowHasStarted, sameId, stageWaitingReason } from '../../utils/contentWorkflow';
+import { addCalendarDays, buildStagesFromTemplate, departmentMembers, flowHasStarted, sameId, stageStatusLabel, stageWaitingReason } from '../../utils/contentWorkflow';
 import { platformIcon as getPlatformIcon } from '../../utils/platformIcons';
 import { dataTableRowValueSummary } from '../../utils/dataTableRows';
 import { RowDetailsModal, type DamDataRow, type TableColumn } from '../dam/DamDataTables';
@@ -219,8 +219,10 @@ export const ContentDetailView: React.FC = () => {
     deleteContentComment,
     assignStageResponsibility,
     updateStageStatus,
+    setStageStatus,
     addStageDeliverable,
     removeStageDeliverable,
+    renameStageOutput,
     forwardStageOutput,
     approveStage,
     rejectStage,
@@ -277,6 +279,15 @@ export const ContentDetailView: React.FC = () => {
   const [stagePersonSaving, setStagePersonSaving] = useState<string | null>(null);
   /** کدام مهلت مرحله باز است؛ مثل تراشهٔ مسئول، همان‌جا تاریخ انتخاب می‌شود. */
   const [stageDeadlinePicker, setStageDeadlinePicker] = useState<string | null>(null);
+  /**
+   * کدام «باجت وضعیت مرحله» باز است و چه وضعیتی در حال ذخیره است.
+   *
+   * درخواست دور ۹۰: کلیک روی نشان وضعیت هر مرحله باید همان‌جا فهرست وضعیت‌ها
+   * را باز کند و انتخاب، وضعیت را تغییر دهد؛ وضعیت‌های «تأییدشده» و «در انتظار
+   * بررسی» هم قفل نیستند.
+   */
+  const [stageStatusPicker, setStageStatusPicker] = useState<string | null>(null);
+  const [stageStatusSaving, setStageStatusSaving] = useState<string | null>(null);
   const [stageDeadlineSaving, setStageDeadlineSaving] = useState<string | null>(null);
   const [applyingTemplateId, setApplyingTemplateId] = useState<string | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
@@ -1013,6 +1024,75 @@ export const ContentDetailView: React.FC = () => {
     }
   };
 
+  /**
+   * چه کسی می‌تواند «نام نمایشی» خروجی‌های مرحله را عوض کند؟ همان کسانی که
+   * اجازهٔ ثبت/ویرایش خروجی همان مرحله را دارند، به‌همراه مدیر جریان محتوا.
+   */
+  const canRenameOutput = canManageContentWorkflow || stages.some(stage => canDepositOutput(stage));
+
+  /**
+   * فهرست وضعیت‌های قابل انتخاب برای هر مرحله (دور ۹۰).
+   *
+   * «تأییدشده»، «در انتظار بررسی» و «تکمیل‌شده» هم در فهرست‌اند: خواستهٔ صریح
+   * این بود که این وضعیت‌ها قفل نباشند و از روی همان نشان تغییر کنند.
+   */
+  const stageStatusChoices: { id: ContentStageStatus; label: string }[] = [
+    { id: 'not_started', label: 'شروع‌نشده' },
+    { id: 'ready', label: 'آماده شروع' },
+    { id: 'in_progress', label: 'در حال انجام' },
+    { id: 'pending_approval', label: 'در انتظار بررسی' },
+    { id: 'needs_revision', label: 'نیازمند اصلاح' },
+    { id: 'approved', label: 'تأییدشده' },
+    { id: 'completed', label: 'تکمیل‌شده' },
+    { id: 'skipped', label: 'بدون نیاز / عبور' },
+  ];
+
+  /** نشان وضعیت مرحله + فهرست تغییر آن؛ فقط مدیر جریان محتوا می‌تواند تغییر دهد. */
+  const stageStatusControl = (stage: ContentStage, readyForStart: boolean) => {
+    const saving = stageStatusSaving === stage.id;
+    const open = stageStatusPicker === stage.id;
+    return (
+      <div className="relative inline-flex">
+        <button
+          type="button"
+          disabled={!canManageContentWorkflow || saving}
+          aria-haspopup={canManageContentWorkflow ? 'listbox' : undefined}
+          aria-expanded={open}
+          onClick={() => setStageStatusPicker(current => current === stage.id ? null : stage.id)}
+          title={canManageContentWorkflow
+            ? 'کلیک برای تغییر وضعیت این مرحله'
+            : 'تغییر وضعیت مرحله نیازمند مجوز مدیریت جریان محتواست'}
+          className={`inline-flex items-center gap-1 rounded-md ${canManageContentWorkflow ? 'cursor-pointer hover:brightness-95' : ''}`}
+        >
+          {saving ? <InlineSpinner size="sm" /> : getStageStatusBadge(stage.status, readyForStart, stage.reviewRequired !== false)}
+          {canManageContentWorkflow && !saving && <ChevronDown className="h-3 w-3 text-slate-400" aria-hidden />}
+        </button>
+        {open && (
+          <>
+            <button type="button" tabIndex={-1} aria-label="بستن فهرست وضعیت مرحله" onClick={() => setStageStatusPicker(null)} className="fixed inset-0 z-30 cursor-default" />
+            <div role="listbox" aria-label="انتخاب وضعیت مرحله" className="absolute right-0 top-full z-40 mt-1 w-48 rounded-xl border border-slate-200 bg-white p-1.5 text-right shadow-xl">
+              <p className="px-2 pb-1 pt-0.5 text-[10px] font-black text-slate-500">وضعیت این مرحله</p>
+              {stageStatusChoices.map(choice => (
+                <button
+                  key={choice.id}
+                  type="button"
+                  role="option"
+                  aria-selected={stage.status === choice.id}
+                  disabled={saving}
+                  onClick={() => { setStageStatusPicker(null); if (stage.status !== choice.id) void changeStageStatus(stage, choice.id); }}
+                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11px] font-bold transition-colors disabled:opacity-60 ${stage.status === choice.id ? 'bg-indigo-50 text-indigo-800' : 'text-slate-700 hover:bg-slate-50'}`}
+                >
+                  <span>{choice.label}</span>
+                  {stage.status === choice.id && <Check className="h-3.5 w-3.5 shrink-0" />}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   const getStageStatusBadge = (status: ContentStageStatus, readyForStart = false, reviewRequired = true) => {
     switch (status) {
       case 'completed':
@@ -1206,6 +1286,25 @@ export const ContentDetailView: React.FC = () => {
       : { type: 'error', title: 'تغییر مهلت انجام نشد', message: 'دلیل دقیق در پیام‌های سرور آمده است؛ دسترسی و وضعیت جریان را بررسی کنید.' });
   };
 
+  /**
+   * تغییر دستی وضعیت مرحله از روی نشان وضعیت (دور ۹۰).
+   *
+   * وضعیت‌های «تأییدشده» و «در انتظار بررسی» هم قفل نیستند؛ درخواست صریح بود که
+   * از همین نشان قابل تغییر باشند. سرور تصمیم را می‌گیرد، تاریخ فعالیت را ثبت
+   * می‌کند و تسک‌های همان مرحله را هم‌تراز می‌کند.
+   */
+  const changeStageStatus = async (stage: ContentStage, status: ContentStageStatus) => {
+    if (!canManageContentWorkflow) return;
+    setStageStatusPicker(null);
+    setStageStatusSaving(stage.id);
+    const saved = await setStageStatus(content.id, stage.id, status);
+    setStageStatusSaving(null);
+    void stageTasksQuery.refetch();
+    notify(saved
+      ? { type: 'success', title: 'وضعیت مرحله تغییر کرد', message: `وضعیت تازه: ${stageStatusLabel(status)}`, dedupeKey: `stage-status-${stage.id}` }
+      : { type: 'error', title: 'تغییر وضعیت مرحله انجام نشد', message: commandFailure('دلیل دقیق در پیام‌های سرور آمده است؛ دسترسی و وضعیت جریان را بررسی کنید.') });
+  };
+
   /** فهرست کشویی انتخاب فرد؛ با کلیک بیرون بسته می‌شود و داده‌ای جعل نمی‌کند. */
   const stagePersonPanel = (stage: ContentStage, field: 'assignee' | 'reviewer') => {
     const options = stagePeopleOptions(stage, field);
@@ -1301,9 +1400,9 @@ export const ContentDetailView: React.FC = () => {
                   {watchSaving ? 'در حال ثبت…' : watching ? 'لغو دنبال‌کردن' : 'دنبال‌کردن'}
                 </button>
               )}
-              {(content.access?.edit ?? hasPermission('content.edit')) && <button type="button" onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"><Edit3 className="h-4 w-4 text-indigo-600" />ویرایش محتوا</button>}
-              {!isPublished && workflowReady && hasPermission('content.publish') && <button type="button" disabled={publishingContentIds.includes(content.id)} onClick={openPublicationConfirm} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:opacity-50"><Zap className="h-4 w-4" />{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'انتشار'}</button>}
-              {isPublished && hasPermission('content.publish') && <button type="button" disabled={publishingContentIds.includes(content.id)} onClick={() => { if (window.confirm('انتشار این محتوا لغو شود و به «آماده انتشار» بازگردد؟')) unpublishContent(content.id); }} className="flex items-center gap-1.5 rounded-xl bg-slate-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-slate-700 disabled:opacity-50"><RotateCcw className="h-4 w-4" />لغو انتشار</button>}
+              {(content.access?.edit ?? hasPermission('content.edit')) && <button type="button" onClick={() => setIsEditModalOpen(true)} className="ui-quiet-shadow flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50"><Edit3 className="h-4 w-4 text-indigo-600" />ویرایش محتوا</button>}
+              {!isPublished && workflowReady && hasPermission('content.publish') && <button type="button" disabled={publishingContentIds.includes(content.id)} onClick={openPublicationConfirm} className="ui-quiet-shadow flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"><Zap className="h-4 w-4" />{publishingContentIds.includes(content.id) ? 'در حال ثبت…' : 'انتشار'}</button>}
+              {isPublished && hasPermission('content.publish') && <button type="button" disabled={publishingContentIds.includes(content.id)} onClick={() => { if (window.confirm('انتشار این محتوا لغو شود و به «آماده انتشار» بازگردد؟')) unpublishContent(content.id); }} className="ui-quiet-shadow flex items-center gap-1.5 rounded-xl bg-slate-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-slate-700 disabled:opacity-50"><RotateCcw className="h-4 w-4" />لغو انتشار</button>}
             </div>
           </div>
 
@@ -1467,7 +1566,7 @@ export const ContentDetailView: React.FC = () => {
                                   {stageDept?.name || stage.departmentId}
                                 </span>
                               )}
-                              {getStageStatusBadge(stage.status, readyForStart, stage.reviewRequired !== false)}
+                              {stageStatusControl(stage, readyForStart)}
                             </div>
                             <p className="text-xs text-slate-500 mt-0.5">{stage.description}</p>
                           </div>
@@ -1541,6 +1640,7 @@ export const ContentDetailView: React.FC = () => {
                               type="button"
                               disabled={!canAssignStagePeople || stageDeadlineSaving === stage.id}
                               aria-haspopup={canAssignStagePeople ? 'dialog' : undefined}
+                              aria-label="انتخاب مهلت مرحله"
                               aria-expanded={stageDeadlinePicker === stage.id}
                               onClick={() => setStageDeadlinePicker(current => current === stage.id ? null : stage.id)}
                               title={canAssignStagePeople
@@ -1558,13 +1658,15 @@ export const ContentDetailView: React.FC = () => {
                             {stageDeadlinePicker === stage.id && (
                               <>
                                 <button type="button" tabIndex={-1} aria-label="بستن انتخاب تاریخ" onClick={() => setStageDeadlinePicker(null)} className="fixed inset-0 z-30 cursor-default bg-transparent" />
-                                <div role="dialog" aria-label="انتخاب مهلت مرحله" className="absolute left-0 top-full z-40 mt-1 w-64 rounded-xl border border-slate-200 bg-white p-3 text-right shadow-xl">
-                                  <p className="pb-1 text-[10px] font-black text-slate-500">مهلت این مرحله</p>
+                                {/* دور ۹۰: کلیک روی خود تاریخ، مستقیم تقویم را باز می‌کند؛
+                                    پیش‌تر یک کادر میانی با یک فیلد دیگر باز می‌شد و کاربر
+                                    باید دوباره روی آن فیلد کلیک می‌کرد. */}
+                                <div className="absolute left-0 top-full z-40 mt-1 w-72 text-right">
                                   <PersianDatePicker
                                     value={stage.deadline ? String(stage.deadline).slice(0, 10) : ''}
-                                    onChange={date => void changeStageDeadline(stage, date)}
-                                    label="تاریخ شمسی"
-                                    portal
+                                    onChange={date => { setStageDeadlinePicker(null); void changeStageDeadline(stage, date); }}
+                                    variant="panel"
+                                    onClose={() => setStageDeadlinePicker(null)}
                                   />
                                 </div>
                               </>
@@ -2115,6 +2217,11 @@ export const ContentDetailView: React.FC = () => {
         onOpenInDam={assetId => { setDetailAssetId(assetId); setActiveView('assets'); }}
         canEditTextAsset={hasPermission('assets.edit_info')}
         onEditText={saveOutputText}
+        onRenameOutput={canRenameOutput ? async (target, title) => {
+          if (!target.stageId || !target.outputId) throw new Error('این خروجی دیگر در جریان این پرونده نیست؛ صفحه را تازه کنید.');
+          const saved = await renameStageOutput(content.id, target.stageId, target.outputId, title);
+          if (!saved) throw new Error('تغییر نام نمایشی ذخیره نشد؛ دلیل خطا در پیام‌های سرور آمده است.');
+        } : undefined}
         onOpenDataTable={tableId => navigate(`/dam?table=${tableId}`)}
       />
 

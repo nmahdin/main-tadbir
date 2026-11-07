@@ -18,6 +18,26 @@ final class ContentReview
 
     public const WAITING = ['pending_approval', 'ready_for_review'];
 
+    /** برچسب فارسی وضعیت مرحله برای متن تاریخ فعالیت (همان واژگان رابط کاربری). */
+    public const STATUS_LABELS = [
+        'not_started' => 'شروع‌نشده', 'pending_dependency' => 'در انتظار پیش‌نیاز', 'ready' => 'آماده',
+        'in_progress' => 'در حال انجام', 'ready_for_review' => 'در انتظار بررسی', 'pending_approval' => 'در انتظار بررسی',
+        'needs_revision' => 'نیازمند اصلاح', 'revisions_needed' => 'نیازمند اصلاح', 'approved' => 'تأییدشده',
+        'completed' => 'تکمیل‌شده', 'skipped' => 'بدون نیاز / عبور',
+    ];
+
+    /**
+     * وضعیت‌هایی که گردانندهٔ جریان می‌تواند دستی روی یک مرحله بگذارد.
+     *
+     * «تأییدشده» و «در انتظار بررسی» هم در همین فهرست‌اند: درخواست صریح این بود
+     * که این دو وضعیت قفل نباشند و از روی نشان وضعیت مرحله هم قابل تغییر باشند.
+     */
+    public const EDITABLE_STAGE_STATUSES = [
+        'not_started', 'pending_dependency', 'ready', 'in_progress',
+        'ready_for_review', 'pending_approval', 'approved', 'completed',
+        'needs_revision', 'revisions_needed', 'skipped',
+    ];
+
     /** Structural stage fields a generic PATCH may never rewrite. */
     public const STRUCTURAL_FIELDS = ['stageKey', 'order', 'departmentId', 'assigneeId', 'reviewerId', 'approverId',
         'advanceMode', 'reviewRequired', 'reviewerStrategy', 'dependsOnStageIds', 'title'];
@@ -395,6 +415,70 @@ final class ContentReview
             app(ContentStageTaskSync::class)->sync($fresh->refresh());
             app(ContentWatchNotifier::class)->meaningful($fresh->refresh(), $actor, 'output-forwarded:'.$event['id'],
                 'یک خروجی از محتوای «'.$fresh->title.'» به مرحله بعد ارجاع شد.');
+
+            return $fresh->refresh();
+        }, 3);
+    }
+
+    /**
+     * تغییر دستی وضعیت یک مرحله (فقط دارندگان مجوز مدیریت جریان محتوا).
+     *
+     * برخلاف `guardGeneric`، این مسیر ورود به وضعیت‌های تصمیم و خروج از
+     * «در انتظار بررسی» را مجاز می‌کند؛ چون خودش یک فرمان صریح و ممیزی‌شده است:
+     * یک ردیف در تاریخ فعالیت مرحله و در تاریخ پرونده ثبت می‌شود و تسک‌های
+     * مرحله با وضعیت تازه هم‌تراز می‌شوند.
+     */
+    public function overrideStageStatus(User $actor, Content $content, string $stageId, array $data): Content
+    {
+        return DB::transaction(function () use ($actor, $content, $stageId, $data): Content {
+            $fresh = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
+            $payload = $fresh->payload ?? [];
+            $stages = array_values(is_array($payload['stages'] ?? null) ? $payload['stages'] : []);
+            $index = collect($stages)->search(fn ($item) => is_array($item) && (string) ($item['id'] ?? '') === $stageId);
+            abort_if($index === false, 404, 'این مرحله در جریان این پرونده پیدا نشد.');
+
+            if (isset($data['expectedVersion']) && $data['expectedVersion'] !== '') {
+                abort_unless(hash_equals(self::version($fresh), $data['expectedVersion']), 409, 'اطلاعات پرونده تغییر کرده است؛ دوباره آن را باز کنید.');
+            }
+
+            $status = (string) $data['status'];
+            $before = (string) ($stages[$index]['status'] ?? '');
+            if ($before === $status) {
+                return $fresh;
+            }
+
+            $time = now()->toIso8601String();
+            $event = ['id' => (string) Str::uuid(), 'userId' => (string) $actor->id, 'userName' => $actor->name,
+                'action' => 'تغییر دستی وضعیت مرحله از «'.(self::STATUS_LABELS[$before] ?? $before).'» به «'.(self::STATUS_LABELS[$status] ?? $status).'»',
+                'fromStatus' => $before, 'toStatus' => $status, 'note' => (string) ($data['note'] ?? ''), 'timestamp' => $time];
+            $stages[$index] = [...$stages[$index], 'status' => $status,
+                'activityLog' => [...($stages[$index]['activityLog'] ?? []), $event]];
+            if (in_array($status, ['approved', 'completed'], true)) {
+                $stages[$index]['completedAt'] = app(OrganizationTime::class)->date();
+            } else {
+                // با بازگشت از وضعیت پایانی، مهر «پایان یافته» برداشته می‌شود؛
+                // تاریخچهٔ همین تغییر در activityLog باقی می‌ماند.
+                unset($stages[$index]['completedAt']);
+            }
+            $payload['stages'] = $stages;
+            $payload['history'] = [...($payload['history'] ?? []), $event];
+            $fresh->update(['payload' => $payload]);
+
+            // خروج از وضعیت پایانی، کارِ همان مرحله را هم از «تکمیل‌شده» بیرون
+            // می‌آورد؛ وگرنه کاربر وضعیت مرحله را عوض می‌کرد ولی تسکش همچنان
+            // بسته می‌ماند و دوباره در کارتابل کسی دیده نمی‌شد.
+            if (! in_array($status, ['approved', 'completed', 'skipped'], true)) {
+                Task::where('content_id', $fresh->id)->where('content_stage_id', $stageId)
+                    ->whereIn('kind', ['content_work', 'content_review', 'content_correction'])
+                    ->where('status', 'completed')
+                    ->update(['status' => 'backlog']);
+            }
+            // تسک‌های مرحله با وضعیت تازه هم‌تراز می‌شوند: بستن تسک با تأیید و
+            // بازکردن دوبارهٔ آن با خروج از وضعیت پایانی.
+            app(ContentStageTaskSync::class)->sync($fresh->refresh());
+            app(TaskOperations::class)->updateProjectProgress($fresh->project_id);
+            app(ContentWatchNotifier::class)->meaningful($fresh->refresh(), $actor, 'stage-status:'.$event['id'],
+                'وضعیت مرحله «'.($stages[$index]['title'] ?? '').'» در «'.$fresh->title.'» تغییر کرد.');
 
             return $fresh->refresh();
         }, 3);

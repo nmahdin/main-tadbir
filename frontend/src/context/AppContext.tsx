@@ -228,6 +228,19 @@ interface AppContextType {
   updateStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string, reportText?: string) => Promise<boolean>;
   addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string; renameTitle?: string; dataTableId?: string; dataTableName?: string; rowIds?: string[]; rowLabels?: string[] }) => Promise<boolean>;
   removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
+  /**
+   * تغییر «نام نمایشی» یک خروجی مرحله، بدون دست‌زدن به فایل، متن یا تاریخ
+   * تحویل. فقط فیلد `name` همان خروجی عوض می‌شود و یک ردیف در تاریخ فعالیت
+   * مرحله ثبت می‌گردد.
+   */
+  renameStageOutput: (contentId: string, stageId: string, outputId: string, name: string) => Promise<boolean>;
+  /**
+   * تغییر دستی وضعیت یک مرحله (نشان وضعیت در جریان محتوا).
+   *
+   * از مسیر اختصاصی سرور می‌رود تا وضعیت‌های «تأییدشده» و «در انتظار بررسی» هم
+   * قابل تغییر باشند و تسک‌های همان مرحله هم‌زمان هم‌تراز شوند.
+   */
+  setStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string) => Promise<boolean>;
   forwardStageOutput: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   approveStage: (contentId: string, stageId: string, note?: string) => Promise<boolean>;
   rejectStage: (contentId: string, stageId: string, reason: string, correctionAssigneeId?: string) => Promise<boolean>;
@@ -1801,6 +1814,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   
+  const setStageStatus = async (contentId: string, stageId: string, status: ContentStageStatus, note?: string): Promise<boolean> => {
+    if (runtime.demoMode) return updateStageStatus(contentId, stageId, status, note);
+    const current = contents.find(content => content.id === contentId);
+    try {
+      const { data } = await contentsApi.stageStatus(contentId, stageId, status, current?.reviewVersion);
+      setContents(rows => rows.map(row => row.id === contentId ? data : row));
+      void queryClient.invalidateQueries({ queryKey: ['pages'] });
+      return true;
+    } catch (error) {
+      notifyApiError('content:stage-status', error, 'تغییر وضعیت مرحله انجام نشد');
+      return false;
+    }
+  };
+
+  const renameStageOutput = (contentId: string, stageId: string, outputId: string, name: string) => {
+    const title = name.trim().slice(0, 255);
+    if (!title) return Promise.resolve(false);
+    const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
+    return applyContentChange(contentId, prev => prev.map(c => {
+      if (c.id !== contentId) return c;
+      const updatedStages = (c.stages || []).map(stg => {
+        if (stg.id !== stageId) return stg;
+        let previous = '';
+        const outputs = stg.outputs.map(out => {
+          if (out.id !== outputId) return out;
+          previous = out.name || '';
+          return { ...out, name: title };
+        });
+        if (previous === title) return stg;
+        return {
+          ...stg,
+          outputs,
+          activityLog: [
+            ...(stg.activityLog || []),
+            { id: `act-${Date.now()}`, userId: currentUser.id, userName: currentUser.name,
+              action: `نام نمایشی خروجی از «${previous || 'بدون عنوان'}» به «${title}» تغییر کرد`, timestamp: nowStr },
+          ],
+        };
+      });
+      return { ...c, stages: updatedStages };
+    }));
+  };
+
   const removeStageDeliverable = (contentId: string, stageId: string, outputId: string) => {
     return applyContentChange(contentId, prev => prev.map(c => {
       if (c.id !== contentId) return c;
@@ -5030,6 +5086,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateStageStatus,
         addStageDeliverable,
         removeStageDeliverable,
+        renameStageOutput,
+        setStageStatus,
         forwardStageOutput,
         approveStage,
         rejectStage,

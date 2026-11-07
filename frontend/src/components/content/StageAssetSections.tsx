@@ -596,7 +596,7 @@ function PreviewLoading({ label, hint }: { label: string; hint?: string }) {
 
 /** پیش‌نمایش درون‌صفحه‌ای ورودی/خروجی بدون خروج از صفحهٔ جزئیات محتوا. */
 export function StageAssetPreviewModal({
-  view, onClose, onOpenInDam, onOpenDataTable, onEditText, canLoadAsset = true, canEditTextAsset = false,
+  view, onClose, onOpenInDam, onOpenDataTable, onEditText, onRenameOutput, canLoadAsset = true, canEditTextAsset = false,
 }: {
   view: StageAssetView | null;
   onClose: () => void;
@@ -604,6 +604,14 @@ export function StageAssetPreviewModal({
   onOpenDataTable?: (tableId: number) => void;
   /** ویرایش متن خروجی جریان؛ عنوان هم همراه متن ذخیره می‌شود. */
   onEditText?: (view: StageAssetView, plainText: string, title?: string) => Promise<void>;
+  /**
+   * تغییر «نام نمایشی» خودِ خروجی مرحله، مستقل از ویرایش متن یا فایل.
+   *
+   * پیش‌تر فقط داخل فرم «ویرایش متن» و تنها برای خروجی متنی می‌شد عنوان را
+   * عوض کرد؛ برای فایل، تصویر و جدول هیچ راهی نبود. حالا دکمهٔ کنار عنوان
+   * همان مدال، نام نمایشی را برای هر نوع خروجی تغییر می‌دهد.
+   */
+  onRenameOutput?: (view: StageAssetView, title: string) => Promise<void>;
   canLoadAsset?: boolean;
   canEditTextAsset?: boolean;
 }) {
@@ -614,6 +622,11 @@ export function StageAssetPreviewModal({
   const [savedTitle, setSavedTitle] = useState<string | null>(null);
   const [textNote, setTextNote] = useState('');
   const [textSaving, setTextSaving] = useState(false);
+  /** ویرایش «نام نمایشی» مستقل از ویرایش متن/فایل. */
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [renameSaving, setRenameSaving] = useState(false);
+  const [renameError, setRenameError] = useState('');
   const [textError, setTextError] = useState('');
   const [savedTextHtml, setSavedTextHtml] = useState<string | null>(null);
   const assetId = view?.assetId && /^\d+$/.test(view.assetId) ? view.assetId : undefined;
@@ -734,8 +747,40 @@ export function StageAssetPreviewModal({
     setSavedTextHtml(null);
     setSavedTitle(null);
     setTextError('');
+    setRenaming(false);
+    setRenameError('');
     setDocumentReady(false);
   }, [view?.id]);
+
+  /** نام نمایشی قابل تغییر است: خروجی جریان (با مجوز ثبت خروجی) یا دارایی مخزن. */
+  const canRename = Boolean(view && (onRenameOutput || (assetId && canEditTextAsset)));
+  const startRename = () => {
+    setRenameDraft(displayTitle);
+    setRenameError('');
+    setRenaming(true);
+  };
+  const saveRename = async () => {
+    if (!view || renameSaving) return;
+    const title = renameDraft.trim().slice(0, 255);
+    if (title.length < 2) { setRenameError('نام نمایشی باید حداقل دو نویسه باشد.'); return; }
+    setRenameSaving(true);
+    setRenameError('');
+    try {
+      // نام نمایشی خروجی جریان و عنوان دارایی مخزن جدا ذخیره می‌شوند؛ اگر هر
+      // دو موجود باشند هر دو به‌روز می‌شوند تا فهرست‌ها یک نام نشان دهند.
+      if (onRenameOutput) await onRenameOutput(view, title);
+      if (assetId && canEditTextAsset) {
+        await damApi.library.updateTitle(assetId, title);
+        await asset.refetch();
+      }
+      setSavedTitle(title);
+      setRenaming(false);
+    } catch (error) {
+      setRenameError(error instanceof ApiError ? apiErrorMessage(error) : error instanceof Error ? error.message : 'ذخیرهٔ نام نمایشی انجام نشد.');
+    } finally {
+      setRenameSaving(false);
+    }
+  };
 
   return <Modal
     open={Boolean(view)}
@@ -757,7 +802,27 @@ export function StageAssetPreviewModal({
         {view.fileSize && <span className="rounded-lg bg-white px-2 py-1">{view.fileSize}</span>}
         {view.deliveredAt && <span className="rounded-lg bg-white px-2 py-1">تحویل: {view.deliveredAt}</span>}
         {view.forwardedToStageTitle && <span className="rounded-lg bg-indigo-50 px-2 py-1 text-indigo-700"><Send className="ml-1 inline h-3 w-3" />ارجاع به {view.forwardedToStageTitle}{view.forwardedAt ? ` · ${view.forwardedAt}` : ''}</span>}
+        {canRename && !renaming && <button type="button" onClick={startRename} className="ui-button ui-button-secondary !min-h-7 !rounded-lg !px-2 !py-1 text-[10px]" title="تغییر نام نمایشی این خروجی"><Pencil className="h-3.5 w-3.5" />تغییر نام نمایشی</button>}
       </div>
+      {renaming && <div className="space-y-2 border-b border-slate-100 bg-white px-5 py-3">
+        <label className="block space-y-1.5 text-[10px] font-bold text-slate-600">نام نمایشی
+          <input
+            type="text"
+            autoFocus
+            value={renameDraft}
+            onChange={event => setRenameDraft(event.target.value)}
+            maxLength={255}
+            aria-label="نام نمایشی خروجی"
+            placeholder="نامی که در فهرست خروجی‌ها دیده شود"
+            className="ui-input mt-1.5 text-xs"
+          />
+        </label>
+        {renameError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-[10px] font-bold text-rose-700">{renameError}</p>}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" className="ui-button ui-button-secondary !min-h-8 !rounded-lg !px-3 !py-1 text-[10px]" disabled={renameSaving} onClick={() => { setRenaming(false); setRenameError(''); }}>انصراف</button>
+          <button type="button" className="ui-button ui-button-primary !min-h-8 !rounded-lg !px-3 !py-1 text-[10px]" disabled={renameSaving} onClick={() => void saveRename()}>{renameSaving ? 'در حال ذخیره…' : 'ذخیرهٔ نام'}</button>
+        </div>
+      </div>}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
         {payload.mode === 'loading' && <PreviewSkeleton />}

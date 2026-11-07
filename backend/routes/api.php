@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\ChatRealtimeController;
 use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\ContentController;
 use App\Http\Controllers\Api\V1\ContentSeriesController;
+use App\Http\Controllers\Api\V1\ContentStageStatusController;
 use App\Http\Controllers\Api\V1\ContentWatchController;
 use App\Http\Controllers\Api\V1\AdminMaintenanceController;
 use App\Http\Controllers\Api\V1\DamAssetController;
@@ -336,6 +337,9 @@ Route::prefix('v1')->group(function (): void {
         Route::post('contents/{content}/stages/{stage}/outputs/{output}/forward', [ApprovalController::class, 'forwardOutput'])
             ->middleware('throttle:30,1,content-output-forward');
         Route::post('contents/{content}/stages/{stage}/decision', [ApprovalController::class, 'decide'])->middleware('permission:content.approve');
+        // تغییر دستی وضعیت مرحله از روی نشان وضعیت در صفحهٔ جزئیات محتوا؛
+        // «تأییدشده» و «در انتظار بررسی» هم از همین مسیر قابل تغییرند.
+        Route::post('contents/{content}/stages/{stage}/status', ContentStageStatusController::class);
         Route::get('contents', [ContentController::class, 'index']);
         Route::post('contents', [ContentController::class, 'store'])->middleware('permission:content.create');
         Route::post('contents/{content}/publish', [ContentController::class, 'publish'])->middleware('permission:content.publish');

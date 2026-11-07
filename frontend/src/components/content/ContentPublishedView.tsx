@@ -4,7 +4,7 @@ import { formatPersianDate } from '../../utils/date';
 import { toIsoDateKey } from '../../utils/isoDate';
 import { useApp } from '../../context/AppContext';
 import type { Content } from '../../types';
-import { sortByPublicationMoment } from '../../utils/publicationTiming';
+import { sortPublishedNewestFirst } from '../../utils/publicationTiming';
 import { Button, IconButton } from '../common/Primitives';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { Collapsible } from '../common/Collapsible';
@@ -54,11 +54,21 @@ export const ContentPublishedView: React.FC = () => {
     }
   };
 
-  // تازه‌ترین انتشار بالا؛ قاعدهٔ ترتیب همان قاعدهٔ مشترک «میز انتشار» است و
-  // پروندهٔ بدون تاریخ انتشار در پایان فهرست می‌ماند.
-  const publishedContents = sortByPublicationMoment<Content>(
+  /**
+   * پیش‌فرض این صفحه: **جدیدترین انتشار بالا و قدیمی‌ترین در پایان**.
+   *
+   * پیش‌تر ترتیب از `sortByPublicationMoment` می‌آمد که فقط تاریخ میلادی را
+   * می‌شناسد؛ تاریخ‌های شمسیِ ثبت‌شده «بدون تاریخ» حساب می‌شدند و فهرست عملاً
+   * به هم می‌ریخت. حالا کلید مقایسه با `toIsoDateKey` ساخته می‌شود (شمسی و
+   * میلادی هر دو به یک کلید تبدیل می‌شوند) و ساعت هم در همان کلید می‌آید؛
+   * پروندهٔ بدون تاریخ انتشار در پایان می‌ماند.
+   */
+  const publishedContents = sortPublishedNewestFirst<Content>(
     contents.filter(content => content.status === 'published'),
-    content => ({ date: content.publishInfo?.date, time: content.publishInfo?.time, published: true }),
+    content => ({
+      publication: { date: content.publishInfo?.date, time: content.publishInfo?.time, status: 'published' },
+      fallbackDate: content.updatedAt,
+    }),
   );
 
   /**
@@ -181,8 +191,10 @@ export const ContentPublishedView: React.FC = () => {
                 {seriesOptions.map(series => <option key={series.id} value={series.id}>{series.name}</option>)}
               </select>
             </label>
-            <div className="text-[11px] font-bold text-slate-600">از تاریخ انتشار<PersianDatePicker className="mt-1.5" value={dateFrom} onChange={setDateFrom} placeholder="از تاریخ شمسی…" /></div>
-            <div className="text-[11px] font-bold text-slate-600">تا تاریخ انتشار<PersianDatePicker className="mt-1.5" value={dateTo} onChange={setDateTo} placeholder="تا تاریخ شمسی…" /></div>
+            {/* انتخابگر تاریخ با `portal` رندر می‌شود؛ وگرنه کادر تقویم داخل
+                باکس فیلتر بریده می‌شد و بخشی از روزها/ماه‌ها دیده نمی‌شد. */}
+            <div className="text-[11px] font-bold text-slate-600">از تاریخ انتشار<PersianDatePicker className="mt-1.5" value={dateFrom} onChange={setDateFrom} placeholder="از تاریخ شمسی…" portal /></div>
+            <div className="text-[11px] font-bold text-slate-600">تا تاریخ انتشار<PersianDatePicker className="mt-1.5" value={dateTo} onChange={setDateTo} placeholder="تا تاریخ شمسی…" portal /></div>
           </div>
           <div className="mt-3 flex justify-end">
             <button type="button" onClick={resetFilters} disabled={activeFilterCount === 0} className="ui-button ui-button-secondary text-[11px] disabled:opacity-50">پاک کردن فیلترها</button>

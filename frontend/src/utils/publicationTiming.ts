@@ -11,6 +11,8 @@
  * گزارش می‌شود.
  */
 
+import { toIsoDateKey as isoDayKey } from './isoDate.ts';
+
 const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 const fa = (value: number | string): string => String(value).replace(/\d/g, digit => PERSIAN_DIGITS[Number(digit)]);
 
@@ -157,6 +159,44 @@ export interface PublicationSortable extends PublicationSchedule {
   /** وضعیت انتشار همان پرونده (اگر محتوا منتشر شده باشد). */
   published?: boolean;
 }
+
+/**
+ * ترتیب «جدیدترین انتشار اول» برای فهرست محتواهای منتشرشده.
+ *
+ * چرا تابع جدا؟ `publicationMoment` فقط تاریخ میلادیِ `YYYY-MM-DD` را می‌شناسد،
+ * اما تاریخ‌های ثبت‌شده در سامانه گاهی شمسی‌اند (`۱۴۰۵/۰۶/۱۵`)؛ در آن حالت
+ * مرتب‌سازی قبلی همه را «بدون تاریخ» می‌دید و فهرست عملاً به هم‌ریخته می‌ماند.
+ * اینجا کلید مقایسه با تبدیل تاریخ شمسی به میلادی ساخته می‌شود و ساعت هم داخل
+ * همان کلید می‌آید تا دو انتشارِ یک روز هم درست مرتب شوند.
+ */
+export const publicationSortKey = (
+  schedule?: PublicationSchedule | null,
+  fallbackDate?: string | null,
+): string => {
+  const day = isoDayKey(schedule?.date) || isoDayKey(fallbackDate);
+  if (!day) return '';
+  const clock = /^(\d{1,2}):(\d{1,2})/.exec(String(schedule?.time ?? '').trim());
+  const minutes = clock ? `${String(Math.min(23, Number(clock[1]))).padStart(2, '0')}:${String(Math.min(59, Number(clock[2]))).padStart(2, '0')}` : '00:00';
+  return `${day}T${minutes}`;
+};
+
+/** جدیدترین انتشار اول؛ پرونده‌های بدون تاریخ در پایان و با ترتیب خودشان. */
+export const sortPublishedNewestFirst = <T,>(
+  items: readonly T[],
+  infoOf: (item: T) => { publication?: PublicationSchedule | null; fallbackDate?: string | null },
+): T[] =>
+  items
+    .map((item, index) => {
+      const info = infoOf(item);
+      return { item, index, key: publicationSortKey(info.publication, info.fallbackDate) };
+    })
+    .sort((left, right) => {
+      if (left.key === right.key) return left.index - right.index;
+      if (!left.key) return 1;
+      if (!right.key) return -1;
+      return right.key.localeCompare(left.key);
+    })
+    .map(entry => entry.item);
 
 /**
  * ترتیب همیشگی بر اساس تاریخ انتشار:

@@ -20,6 +20,13 @@ export type PublicationTaskInput = { expectedVersion: string; title?: string; de
 export const contentsApi = {
   forwardOutput: (id: string, stage: string, output: string, expectedVersion: string) => request<ApiResponse<Content>>(`/contents/${id}/stages/${encodeURIComponent(stage)}/outputs/${encodeURIComponent(output)}/forward`, { method: 'POST', body: { expectedVersion } }).then(contentResponse),
   decide: (id: string, stage: string, body: {decision: 'approve'|'reject'; note?: string; expectedVersion: string; correctionAssigneeId?: string}) => request<ApiResponse<Content>>(`/contents/${id}/stages/${encodeURIComponent(stage)}/decision`, {method:'POST',body}).then(contentResponse),
+  /**
+   * تغییر دستی وضعیت مرحله از روی نشان وضعیت (دور ۹۰).
+   *
+   * مسیر جدا از ویرایش عمومی محتواست تا «تأییدشده» و «در انتظار بررسی» هم —
+   * که ویرایش عمومی عمداً قفل می‌کند — با مجوز مدیریت جریان محتوا تغییر کنند.
+   */
+  stageStatus: (id: string, stage: string, status: string, expectedVersion?: string) => request<ApiResponse<Content>>(`/contents/${id}/stages/${encodeURIComponent(stage)}/status`, { method: 'POST', body: { status, ...(expectedVersion ? { expectedVersion } : {}) } }).then(contentResponse),
   get: (id: string, signal?: AbortSignal) => request<ApiResponse<Content>>(`/contents/${id}`, { signal }).then(contentResponse),
   /**
    * ثبت انتشار؛ `publishAt` تاریخ/ساعت واقعیِ انتشار است (اختیاری).
