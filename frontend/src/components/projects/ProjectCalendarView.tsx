@@ -18,6 +18,7 @@ import {
   type CalendarDay,
   type CalendarRangeMode,
 } from '../calendar/CalendarViews';
+import { useSlidingTabs } from '../common/SlidingTabs';
 
 type CalendarFilter = 'task' | 'project' | 'content' | 'all';
 type CalendarEvent = {
@@ -60,6 +61,8 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
   const [anchor, setAnchor] = useState(new Date());
   const [rangeMode, setRangeMode] = useState<CalendarRangeMode>(defaultCalendarRangeMode);
   const [filter, setFilter] = useState<CalendarFilter>('all');
+  // نشانگر متحرک تب‌ها (دور ۹۵).
+  const eventTabs = useSlidingTabs(filter);
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
 
   const userName = (id?: string | null) => {
@@ -235,7 +238,8 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
     {/* تب‌های نوع رویداد (دور ۸۴): پس‌زمینهٔ کل نوار سفید است، تب فعال با رنگ
         اصلی سامانه پر می‌شود و تب‌های غیرفعال بدون پس‌زمینه/حاشیه‌اند؛ در هاور
         فقط یک پس‌زمینهٔ کم‌رنگ می‌آید. */}
-    <div className="flex flex-wrap items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs" role="tablist" aria-label="نوع رویدادهای تقویم">
+    <div ref={eventTabs.stripRef} className="relative flex flex-wrap items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs" role="tablist" aria-label="نوع رویدادهای تقویم">
+      {eventTabs.pill}
       {tabs.map(tab => {
         const Icon = tab.icon;
         const active = filter === tab.value;
@@ -245,10 +249,11 @@ export const ProjectCalendarView: React.FC<{ projectId?: string; filterAssignee?
             type="button"
             role="tab"
             aria-selected={active}
+            data-tab-active={active}
             onClick={() => setFilter(tab.value)}
-            className={`flex cursor-pointer items-center gap-2 rounded-xl border-0 px-3 py-1.5 text-[11px] font-bold transition-colors ${
+            className={`relative z-10 flex cursor-pointer items-center gap-2 rounded-xl border-0 px-3 py-1.5 text-[11px] font-bold transition-colors ${
               active
-                ? 'bg-indigo-600 text-white shadow-xs'
+                ? 'text-white'
                 : 'bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700'
             }`}
           >

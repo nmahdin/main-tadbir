@@ -23,6 +23,7 @@ import { ContentStatusBadge } from '../../utils/statusBadges';
 import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../common/PriorityPill';
 import { EmptyState, ErrorState, LoadingState } from '../common/Primitives';
 import { DepartmentModal } from './DepartmentModal';
+import { useSlidingTabs } from '../common/SlidingTabs';
 
 type Tab = 'projects' | 'contents' | 'tasks';
 
@@ -65,6 +66,8 @@ export const DepartmentDashboardView: React.FC = () => {
   const departmentId = manageable.some(department => department.id === requested) ? requested! : manageable[0]?.id || '';
   const selectedDepartment = manageable.find(department => department.id === departmentId) || null;
   const [tab, setTab] = useState<Tab>('projects');
+  // نشانگر متحرک تب‌ها (دور ۹۵).
+  const listTabs = useSlidingTabs(tab);
   const query = useQuery({
     queryKey: ['department-dashboard', currentUser.id, departmentId],
     queryFn: () => departmentsApi.dashboard(departmentId),
@@ -122,8 +125,9 @@ export const DepartmentDashboardView: React.FC = () => {
         </div>
 
         <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xs">
-          <div className="flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 p-2" role="tablist">
-            {([['projects', 'پروژه‌ها', Layers3], ['contents', 'محتواها', FileText], ['tasks', 'وظایف', CheckSquare2]] as const).map(([value, label, Icon]) => <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-black ${tab === value ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-white'}`}><Icon className="h-4 w-4" />{label}</button>)}
+          <div ref={listTabs.stripRef} className="relative flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 p-2" role="tablist">
+            {listTabs.pill}
+            {([['projects', 'پروژه‌ها', Layers3], ['contents', 'محتواها', FileText], ['tasks', 'وظایف', CheckSquare2]] as const).map(([value, label, Icon]) => <button key={value} type="button" role="tab" aria-selected={tab === value} data-tab-active={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-black transition-colors ${tab === value ? 'text-white' : 'text-slate-600 hover:bg-white'}`}><Icon className="h-4 w-4" />{label}</button>)}
           </div>
           {tab === 'projects' ? <ProjectRows projects={data.projects} person={person} onOpen={id => navigate(`/projects/${id}`)} /> : tab === 'contents' ? <ContentRows contents={data.contents} person={person} onOpen={id => navigate(`/contents/${id}`)} /> : <TaskRows tasks={data.tasks} person={person} onOpen={setSelectedTaskId} onRemind={task => void remind(task)} remindingId={remindingId} />}
         </div>

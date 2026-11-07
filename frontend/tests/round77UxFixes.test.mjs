@@ -33,7 +33,9 @@ test('تب‌های بازهٔ تقویم به حالت قبلی برگشتند 
   assert.doesNotMatch(calendarViews, /icon: CalendarDays/);
   assert.doesNotMatch(calendarViews, /icon: CalendarRange/);
   assert.doesNotMatch(calendarViews, /icon: CalendarClock/);
-  assert.match(calendarViews, /mode === item\.id \? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'/);
+  // دور ۹۵: تب فعال متن سفید می‌گیرد و پس‌زمینهٔ رنگی را نشانگر متحرک می‌کشد.
+  assert.match(calendarViews, /const rangeTabs = useSlidingTabs\(mode\);/);
+  assert.match(calendarViews, /mode === item\.id \? 'text-white' : 'text-slate-500 hover:bg-slate-50'/);
 
   // نوع رویداد: هر تب آیکون دارد؛ انتخاب‌نشده سفید، انتخاب‌شده با رنگ اصلی.
   assert.match(projectCalendar, /icon: LucideIcon/);
@@ -43,7 +45,8 @@ test('تب‌های بازهٔ تقویم به حالت قبلی برگشتند 
   assert.match(projectCalendar, /icon: FileText \}/);
   // دور ۸۴: نوار تب‌ها سفید است و تب فعال با رنگ اصلی سامانه پر می‌شود.
   assert.match(projectCalendar, /border border-slate-200 bg-white p-1\.5 shadow-2xs/);
-  assert.match(projectCalendar, /'bg-indigo-600 text-white shadow-xs'/);
+  assert.match(projectCalendar, /const eventTabs = useSlidingTabs\(filter\);/);
+  assert.match(projectCalendar, /'text-white'\s*\n?\s*:\s*'bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700'/);
   assert.match(projectCalendar, /'bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700'/);
 });
 

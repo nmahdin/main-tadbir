@@ -18,7 +18,9 @@ test('content list keeps the system palette, stage progress and series name with
   assert.match(list, /app\.setActiveView\('content-publishing'\)[\s\S]{0,120}className=\{`\$\{CONTENT_HEADER_ACTION_CLASS\} border-slate-200/);
   assert.match(list, /app\.setActiveView\('content-published'\)[\s\S]{0,120}className=\{`\$\{CONTENT_HEADER_ACTION_CLASS\} border-transparent bg-green-600/);
   assert.match(list, /module === 'contents' \? `\$\{CONTENT_HEADER_ACTION_CLASS\} border-transparent bg-indigo-600/);
-  assert.match(list, /\$\{active \? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'\}/);
+  // دور ۹۵: رنگ تب فعال از خود دکمه به نشانگر متحرک منتقل شد؛ دکمه فقط متن سفید می‌گیرد.
+  assert.match(list, /\$\{active \? 'text-white' : 'text-slate-600 hover:bg-slate-100'\}/);
+  assert.match(list, /const contentPresetTabs = useSlidingTabs\(`contents:\$\{PRESETS\.contents\.findIndex/);
 
   // نوار پیشرفت زیر وضعیت، فقط از مرحله‌های واقعی پرونده
   assert.match(list, /const COMPLETED_STAGE_STATUSES = \['completed', 'approved', 'skipped'\];/);

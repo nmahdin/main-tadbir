@@ -49,6 +49,7 @@ import { InlineSpinner } from '../common/Feedback';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { EditContentModal } from './EditContentModal';
 import { EditWorkflowModal } from './EditWorkflowModal';
+import { useSlidingTabs } from '../common/SlidingTabs';
 import { Settings } from 'lucide-react';
 import {
   Clock,
@@ -241,6 +242,8 @@ export const ContentDetailView: React.FC = () => {
   const [tabParams,setTabParams] = useSearchParams();
   const activeTab = ['process','attachments','publish','tasks'].includes(tabParams.get('tab') || '') ? tabParams.get('tab')! : 'process';
   const setActiveTab = (tab:string) => {const next=new URLSearchParams(tabParams);next.set('tab',tab);setTabParams(next, { replace: true });};
+  // نشانگر متحرک تب‌ها (دور ۹۵).
+  const detailTabStrip = useSlidingTabs(activeTab);
   const goBack = () => {
     const explicitReturn = tabParams.get('returnTo');
     if (explicitReturn) { navigate(safeReturnTo(explicitReturn, '/contents')); return; }
@@ -1460,11 +1463,12 @@ export const ContentDetailView: React.FC = () => {
 
       {/* Tabs Navigation */}
       <nav className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs" role="tablist" aria-label="بخش‌های پرونده محتوا">
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:flex xl:flex-wrap">
+        <div ref={detailTabStrip.stripRef} className="relative grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:flex xl:flex-wrap">
+          {detailTabStrip.pill}
           {detailTabs.map(item => {
             const Icon = item.icon;
             const selected = activeTab === item.id;
-            return <button key={item.id} type="button" role="tab" aria-selected={selected} aria-controls={`content-panel-${item.id}`} onClick={() => setActiveTab(item.id)} className={`group flex min-h-9 w-full min-w-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-right transition-colors xl:w-auto ${selected ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+            return <button key={item.id} type="button" role="tab" aria-selected={selected} data-tab-active={selected} aria-controls={`content-panel-${item.id}`} onClick={() => setActiveTab(item.id)} className={`group relative z-10 flex min-h-9 w-full min-w-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-right transition-colors xl:w-auto ${selected ? 'text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
               <Icon className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-white' : 'text-indigo-500'}`} />
               <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black">{item.label}</span></span>
               {item.count !== undefined && <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${selected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{item.count.toLocaleString('fa-IR')}</span>}

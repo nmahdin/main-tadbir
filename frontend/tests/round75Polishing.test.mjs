@@ -82,7 +82,9 @@ test('تقویم: تب آیکونی، خانه‌های بی‌حاشیه و ک�
   assert.match(projectCalendar, /icon: LayoutGrid/);
   // دور ۸۴: نوار تب‌ها سفید، تب فعال با رنگ اصلی سامانه، غیرفعال بی‌حاشیه.
   assert.match(projectCalendar, /border border-slate-200 bg-white p-1\.5 shadow-2xs/);
-  assert.match(projectCalendar, /bg-indigo-600 text-white shadow-xs/);
+  // دور ۹۵: رنگ تب فعال را نشانگر متحرک (`useSlidingTabs`) می‌دهد، نه خود دکمه.
+  assert.match(projectCalendar, /const eventTabs = useSlidingTabs\(filter\);/);
+  assert.match(projectCalendar, /'text-white'/);
   assert.match(projectCalendar, /bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700/);
   assert.doesNotMatch(calendarViews, /icon: CalendarRange/);
   assert.match(calendarViews, /label: 'ماهانه', hint: 'همهٔ روزهای ماه' \}/);

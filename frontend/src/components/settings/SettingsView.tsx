@@ -15,6 +15,7 @@ import { apiErrorMessage } from '../../api/errors';
 import { BrandLogo } from '../common/BrandLogo';
 import { refreshFavicon } from '../../utils/favicon';
 import { ActivityView } from '../activity/ActivityView';
+import { useSlidingTabs } from '../common/SlidingTabs';
 import { DamActivityHistory } from '../dam/DamActivityHistory';
 import {
   Settings,
@@ -149,6 +150,8 @@ export const SettingsView: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  // نشانگر متحرک تب‌ها (دور ۹۵): رنگ تب فعال بین تب‌ها می‌لغزد، نه اینکه یک‌باره بپرد.
+  const settingsTabs = useSlidingTabs(activeTab);
 
   // تصویر زندهٔ اعلان‌ها: دسته‌بندی رسمی سرور، شمار واقعی همین کاربر و وضعیت کانال‌ها.
   const notificationsOverview = useQuery({
@@ -537,15 +540,17 @@ export const SettingsView: React.FC = () => {
       {readOnlyNotice}
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 flex-wrap p-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+      <div ref={settingsTabs.stripRef} className="relative flex items-center gap-2 flex-wrap p-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+        {settingsTabs.pill}
         {SETTINGS_TABS.map(tab => (
           <button
             key={tab.id}
             type="button"
+            data-tab-active={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`relative z-10 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === tab.id
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                ? 'text-white'
                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
             }`}
           >

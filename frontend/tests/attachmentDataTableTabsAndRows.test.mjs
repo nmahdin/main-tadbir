@@ -11,8 +11,10 @@ const composer = readFileSync(new URL('../src/components/common/AttachmentCompos
  */
 test('the three table modes are stacked vertically, not side by side', () => {
   // ظرف تب‌ها ستونی است و دکمه‌ها تمام‌عرض/راست‌چین
-  assert.match(composer, /role="tablist" aria-orientation="vertical" aria-label="حالت‌های جدول اطلاعات" className="flex flex-col gap-1/);
-  assert.match(composer, /className=\{`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-right/);
+  assert.match(composer, /role="tablist" aria-orientation="vertical" aria-label="حالت‌های جدول اطلاعات" className="relative flex flex-col gap-1/);
+  assert.match(composer, /className=\{`relative z-10 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-right/);
+  // دور ۹۵: نشانگر روشن بین حالت‌ها بالا/پایین می‌رود.
+  assert.match(composer, /const tableModeTabs = useSlidingTabs\(activeTableOperation, 'light'\);/);
   // حالت‌های قدیمیِ کنارهم (`flex-1` در ردیف افقی) حذف شده‌اند
   assert.doesNotMatch(composer, /flex rounded-xl border border-slate-200 bg-slate-50 p-1/);
   assert.doesNotMatch(composer, /className=\{`flex-1 rounded-lg px-3 py-2 text-\[11px\] font-bold/);

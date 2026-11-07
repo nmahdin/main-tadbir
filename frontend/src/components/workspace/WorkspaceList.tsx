@@ -53,6 +53,7 @@ import { CalendarEventCard } from '../calendar/CalendarEventCard';
 import { CalendarDayModal } from '../calendar/CalendarDayModal';
 import { calendarDueInfo, calendarTimeLabel, sortCalendarEventsByTime } from '../../utils/calendarTone';
 import { EditTaskModal } from '../tasks/EditTaskModal';
+import { useSlidingTabs } from '../common/SlidingTabs';
 
 const filterNames: Record<string, string> = {
   status: 'وضعیت', search: 'جستجو', due: 'سررسید', assignee: 'مسئول', owner: 'مالک',
@@ -211,6 +212,12 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     const scope = SCOPE_FILTERS[module];
     return scope.every(key => (filters[key] || '') === (preset.values[key] || ''));
   };
+  // نشانگر متحرک تب‌ها (دور ۹۵): چهار نوار مستقل داریم؛ هر کدام ref و نشانگر خودش
+  // را می‌گیرد و چون فقط یکی از آن‌ها در هر لحظه رندر می‌شود، بقیه بی‌اثرند.
+  const taskPresetTabs = useSlidingTabs(`tasks:${PRESETS.tasks.findIndex(preset => presetActive(preset))}`);
+  const contentPresetTabs = useSlidingTabs(`contents:${PRESETS.contents.findIndex(preset => presetActive(preset))}`);
+  const taskViewTabs = useSlidingTabs(view);
+  const listViewTabs = useSlidingTabs(view);
 
   const create = module === 'projects'
     ? () => app.setIsCreateProjectOpen(true)
@@ -354,21 +361,23 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
       </header>
 
       {module === 'tasks' && (
-        <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="دسته‌بندی وظایف">
+        <div ref={taskPresetTabs.stripRef} className="relative flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="دسته‌بندی وظایف">
+          {taskPresetTabs.pill}
           {PRESETS.tasks.map(preset => {
             const PresetIcon = preset.icon;
             const active = presetActive(preset);
-            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 ${active ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="w-3.5 h-3.5" />{preset.label}</button>;
+            return <button key={preset.label} type="button" role="tab" aria-selected={active} data-tab-active={active} onClick={() => applyPreset(preset)} className={`relative z-10 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-colors ${active ? 'text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="w-3.5 h-3.5" />{preset.label}</button>;
           })}
         </div>
       )}
 
       {module === 'contents' && (
-        <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="وضعیت محتوا">
+        <div ref={contentPresetTabs.stripRef} className="relative flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="وضعیت محتوا">
+          {contentPresetTabs.pill}
           {PRESETS.contents.map(preset => {
             const PresetIcon = preset.icon;
             const active = presetActive(preset);
-            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${active ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="h-3.5 w-3.5" />{preset.label}</button>;
+            return <button key={preset.label} type="button" role="tab" aria-selected={active} data-tab-active={active} onClick={() => applyPreset(preset)} className={`relative z-10 flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${active ? 'text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="h-3.5 w-3.5" />{preset.label}</button>;
           })}
         </div>
       )}
@@ -382,13 +391,15 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             </button>
 
             {module === 'tasks' ? (
-              <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای وظایف">
-                {([['list', 'فهرست', List], ['kanban', 'کانبان', LayoutGrid], ['calendar', 'تقویم', CalendarClock]] as const).map(([value, label, ViewIcon]) => <button key={value} type="button" role="tab" aria-selected={view === value} onClick={() => update('view', value)} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === value ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><ViewIcon className="w-3.5 h-3.5" />{label}</button>)}
+              <div ref={taskViewTabs.stripRef} className="relative flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای وظایف">
+                {taskViewTabs.pill}
+                {([['list', 'فهرست', List], ['kanban', 'کانبان', LayoutGrid], ['calendar', 'تقویم', CalendarClock]] as const).map(([value, label, ViewIcon]) => <button key={value} type="button" role="tab" aria-selected={view === value} data-tab-active={view === value} onClick={() => update('view', value)} className={`relative z-10 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${view === value ? 'text-white' : 'text-slate-500 hover:bg-slate-50'}`}><ViewIcon className="w-3.5 h-3.5" />{label}</button>)}
               </div>
             ) : (
-              <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای فهرست">
-                <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => update('view', 'list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><List className="w-3.5 h-3.5" />فهرست</button>
-                <button type="button" role="tab" aria-selected={view === 'cards'} onClick={() => update('view', 'cards')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'cards' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><LayoutGrid className="w-3.5 h-3.5" />کارت</button>
+              <div ref={listViewTabs.stripRef} className="relative flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای فهرست">
+                {listViewTabs.pill}
+                <button type="button" role="tab" aria-selected={view === 'list'} data-tab-active={view === 'list'} onClick={() => update('view', 'list')} className={`relative z-10 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${view === 'list' ? 'text-white' : 'text-slate-500 hover:bg-slate-50'}`}><List className="w-3.5 h-3.5" />فهرست</button>
+                <button type="button" role="tab" aria-selected={view === 'cards'} data-tab-active={view === 'cards'} onClick={() => update('view', 'cards')} className={`relative z-10 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${view === 'cards' ? 'text-white' : 'text-slate-500 hover:bg-slate-50'}`}><LayoutGrid className="w-3.5 h-3.5" />کارت</button>
               </div>
             )}
           </div>

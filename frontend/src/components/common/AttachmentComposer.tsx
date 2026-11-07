@@ -9,6 +9,7 @@ import { FolderBrowserModal, type RepositoryFolder } from '../dam/FolderBrowserM
 import { DamAssetQuickPreview } from '../dam/DamAssetQuickPreview';
 import { dataTableRowFields, dataTableRowIsLinked, dataTableRowLabel, dataTableRowLinkLabel } from '../../utils/dataTableRows';
 import { contextFolderPayload } from '../../utils/attachmentContext';
+import { useSlidingTabs } from './SlidingTabs';
 
 export type AttachmentTextDraft = { id: string; title: string; body: string };
 export type AttachmentLibraryAsset = {
@@ -493,6 +494,8 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
   const [tableOperation, setTableOperation] = useState<'create' | 'append' | 'link'>(canViewLibrary ? 'append' : 'create');
   // حالت مؤثر جدول: اگر زمینهٔ محتوا/تسک نباشد، «اتصال ردیف» به حالت افزودن برمی‌گردد.
   const activeTableOperation: 'create' | 'append' | 'link' = tableOperation === 'link' && !canLinkRows ? 'append' : tableOperation;
+  // نشانگر متحرک تب‌ها (دور ۹۵)؛ این نوار عمودی است و نشانگر روشن آن بالا/پایین می‌رود.
+  const tableModeTabs = useSlidingTabs(activeTableOperation, 'light');
   const [dataTables, setDataTables] = useState<DataTableResponse[]>([]);
   const [dataTablesLoading, setDataTablesLoading] = useState(false);
   const [dataTablesLoaded, setDataTablesLoaded] = useState(false);
@@ -985,7 +988,8 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
             کم شکسته و شلوغ می‌شدند. هر دکمه تمام‌عرض و راست‌چین است و حالت فعال
             با زمینهٔ روشن و نشان کنارِ عنوان مشخص می‌شود.
           */}
-          <div role="tablist" aria-orientation="vertical" aria-label="حالت‌های جدول اطلاعات" className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <div ref={tableModeTabs.stripRef} role="tablist" aria-orientation="vertical" aria-label="حالت‌های جدول اطلاعات" className="relative flex flex-col gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+            {tableModeTabs.pill}
             {([
               { id: 'append' as const, label: 'افزودن ردیف به جدول موجود', hint: 'ردیف تازه در جدولی که از قبل ساخته شده', allowed: canViewLibrary },
               { id: 'create' as const, label: 'ساخت جدول جدید', hint: 'تعریف ستون‌ها و ثبت ردیف‌های تازه', allowed: canUpload },
@@ -997,6 +1001,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
                 type="button"
                 role="tab"
                 aria-selected={active}
+                data-tab-active={active}
                 disabled={disabled || !tab.allowed}
                 onClick={() => {
                   setTableOperation(tab.id);
@@ -1010,7 +1015,7 @@ export function AttachmentComposer({ value, onChange, disabled = false, title = 
                     void loadTableRows(selectedTable.id, 1, rowSearch, firstSearchable);
                   }
                 }}
-                className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-right transition-colors disabled:opacity-40 ${active ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500 hover:bg-white/60'}`}
+                className={`relative z-10 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-right transition-colors disabled:opacity-40 ${active ? 'text-indigo-700' : 'text-slate-500 hover:bg-white/60'}`}
               >
                 <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${active ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}>
                   <Check className="h-2.5 w-2.5" aria-hidden="true" />

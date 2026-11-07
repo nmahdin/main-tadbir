@@ -16,7 +16,9 @@ const stage = read('../src/components/content/StageAssetSections.tsx');
 test('تب‌های نوع رویداد: نوار سفید، تب فعال با رنگ اصلی، غیرفعال بی‌حاشیه', () => {
   // دور ۸۴: کل نوار تب‌ها سفید است و تب فعال با رنگ اصلی سامانه پر می‌شود.
   assert.match(calendar, /rounded-2xl border border-slate-200 bg-white p-1\.5 shadow-2xs/);
-  assert.match(calendar, /'bg-indigo-600 text-white shadow-xs'/);
+  // دور ۹۵: پس‌زمینهٔ تب فعال را نشانگر متحرک می‌دهد و خود تب فقط متن سفید دارد.
+  assert.match(calendar, /const eventTabs = useSlidingTabs\(filter\);/);
+  assert.match(calendar, /active\s*\n?\s*\? 'text-white'/);
   // تب غیرفعال: شفاف، بدون حاشیه، فقط هاورِ کم‌رنگ.
   assert.match(calendar, /'bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700'/);
   // هیچ رنگ پُرِ اصلی و هیچ حاشیه‌ای روی تب‌ها نمانده باشد.

@@ -672,6 +672,29 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 .ui-pop[data-state='closing'] { animation: ui-menu-out .13s cubic-bezier(.4, 0, 1, 1) both; }
 
 /*
+ * نشانگر متحرک تب‌ها (دور ۹۵).
+ *
+ * پس‌زمینهٔ تب فعال دیگر روی خودِ دکمه نیست؛ یک لایهٔ مطلق است که همان اندازه و
+ * گوشهٔ تب فعال را می‌گیرد و با `transform` بین تب‌ها می‌لغزد. چون فقط
+ * `transform`/`width`/`height` عوض می‌شود، حرکت روی لایهٔ کامپوزیت انجام می‌شود و
+ * چیدمان دوباره محاسبه نمی‌شود. پیش از اولین اندازه‌گیری (`data-state='idle'`)
+ * انتقال خاموش است تا نشانگر از گوشهٔ نوار به جای تب فعال پرواز نکند.
+ */
+.ui-tab-pill {
+  will-change: transform, width, height;
+  transition: none;
+  /* لبه‌های نیم‌پیکسلی در حرکت، رنگ را کمی محو نشان می‌دهند. */
+  backface-visibility: hidden;
+}
+.ui-tab-pill[data-state='moving'] {
+  transition:
+    transform .26s cubic-bezier(.22, 1, .36, 1),
+    width .26s cubic-bezier(.22, 1, .36, 1),
+    height .26s cubic-bezier(.22, 1, .36, 1),
+    border-radius .26s cubic-bezier(.22, 1, .36, 1);
+}
+
+/*
  * چرخندهٔ لودینگ سریع (دور ۹۱).
  *
  * پیش‌فرض `animate-spin` تالبویند یک دور کامل در ۱ ثانیه است که برای نشانگرهای
@@ -732,6 +755,7 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .ui-tab-pill, .ui-tab-pill[data-state='moving'] { transition: none !important; }
   .ui-modal-overlay, .ui-modal-panel,
   .ui-modal-overlay[data-state='closing'], .ui-modal-panel[data-state='closing'],
   .ui-layer-out, .ui-panel-out, .ui-pop, .ui-pop[data-state='closing'],

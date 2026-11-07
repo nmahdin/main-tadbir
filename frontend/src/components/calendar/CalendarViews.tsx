@@ -1,6 +1,7 @@
 import React from 'react';
 import { addDays, addMonths, format, getDay, getDaysInMonth, startOfMonth, subDays, subMonths } from 'date-fns-jalali';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useSlidingTabs } from '../common/SlidingTabs';
 
 /**
  * تقویم مشترک سامانه (نمای تقویم و تقویم انتشار).
@@ -141,7 +142,10 @@ export const CalendarRangeToolbar: React.FC<CalendarRangeToolbarProps> = ({
   onShift,
   onToday,
   busy = false,
-}) => (
+}) => {
+  // نشانگر متحرک تب‌ها (دور ۹۵).
+  const rangeTabs = useSlidingTabs(mode);
+  return (
   <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 lg:flex-row lg:items-center lg:justify-between">
     <div className="flex min-w-0 items-center gap-3">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
@@ -159,16 +163,18 @@ export const CalendarRangeToolbar: React.FC<CalendarRangeToolbarProps> = ({
     <div className="flex flex-wrap items-center gap-2">
       {/* تب‌های بازه (ماهانه/هفتگی/سه‌هفتگی): همان ظاهر سادهٔ قبلی؛ آیکون و
           زمینهٔ سفید/رنگی به تب‌های «همه/تسک‌ها/پروژه‌ها/محتواها» تعلق داشت. */}
-      <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="بازهٔ نمایش تقویم">
+      <div ref={rangeTabs.stripRef} className="relative flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="بازهٔ نمایش تقویم">
+        {rangeTabs.pill}
         {CALENDAR_RANGE_MODES.map(item => (
           <button
             key={item.id}
             type="button"
             role="tab"
             aria-selected={mode === item.id}
+            data-tab-active={mode === item.id}
             title={item.hint}
             onClick={() => onModeChange(item.id)}
-            className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors sm:px-3 ${mode === item.id ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+            className={`relative z-10 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors sm:px-3 ${mode === item.id ? 'text-white' : 'text-slate-500 hover:bg-slate-50'}`}
           >
             {item.label}
           </button>
@@ -187,7 +193,8 @@ export const CalendarRangeToolbar: React.FC<CalendarRangeToolbarProps> = ({
       </div>
     </div>
   </div>
-);
+  );
+};
 
 export interface CalendarGridProps {
   days: CalendarDay[];

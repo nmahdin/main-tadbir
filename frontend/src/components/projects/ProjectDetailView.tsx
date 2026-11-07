@@ -52,6 +52,7 @@ import { PriorityPill, ProjectStatusBadge } from '../common/PriorityPill';
 import { DamLibrary } from '../dam/DamLibrary';
 import { CreateIdeaModal } from '../thought-room/CreateIdeaModal';
 import { CreateMeetingModal } from '../thought-room/CreateMeetingModal';
+import { useSlidingTabs } from '../common/SlidingTabs';
 
 type TabId = 'overview' | 'tasks' | 'contents' | 'series' | 'assets' | 'activities' | 'ideas' | 'meetings' | 'plan';
 type DomainTab = Exclude<TabId, 'overview' | 'plan' | 'assets'>;
@@ -168,6 +169,8 @@ export const ProjectDetailView: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab') as TabId | null;
   const tab: TabId = tabs.some(item => item.id === requestedTab) ? requestedTab! : 'overview';
+  // نشانگر متحرک تب‌ها (دور ۹۵)؛ پیش از بازگشت‌های زودهنگام صدا زده می‌شود.
+  const operationsTabs = useSlidingTabs(tab);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Record<string, string>>({ search: '', status: '' });
   const [archiveConfirmationOpen, setArchiveConfirmationOpen] = useState(false);
@@ -329,14 +332,16 @@ export const ProjectDetailView: React.FC = () => {
       </section>
 
       <nav aria-label="بخش‌های مرکز عملیات پروژه" className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs">
-        <div className="flex min-w-max gap-1">
+        <div ref={operationsTabs.stripRef} className="relative flex min-w-max gap-1">
+          {operationsTabs.pill}
           {visibleTabs.map(item => (
             <button
               key={item.id}
               onClick={() => switchTab(item.id)}
               aria-current={currentTab === item.id ? 'page' : undefined}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold transition-colors [&>svg]:h-3.5 [&>svg]:w-3.5 ${
-                currentTab === item.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              data-tab-active={currentTab === item.id}
+              className={`relative z-10 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold transition-colors [&>svg]:h-3.5 [&>svg]:w-3.5 ${
+                currentTab === item.id ? 'text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               {item.icon}{item.label}

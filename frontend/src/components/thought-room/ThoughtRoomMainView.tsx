@@ -16,6 +16,7 @@ import { readIdeaLink } from '../../utils/taskDeepLink';
 import { Button, Select } from '../common/Primitives';
 import { Collapsible } from '../common/Collapsible';
 import { openIdeaCount, pendingMeetingCount } from '../../utils/meetings';
+import { useSlidingTabs } from '../common/SlidingTabs';
 
 export const ThoughtRoomMainView: React.FC = () => {
   const { ideas, thinkTankMeetings, departments, ideaCategories, selectedIdeaId, setSelectedIdeaId, hasPermission, meetingModalRequest, notify } = useApp();
@@ -28,6 +29,8 @@ export const ThoughtRoomMainView: React.FC = () => {
     if (searchParams.get('tab') === 'meetings' && canViewMeetings) return 'meetings';
     return canViewIdeas ? 'ideas' : 'meetings';
   });
+  // نشانگر متحرک تب‌ها (دور ۹۵).
+  const sectionTabs = useSlidingTabs(activeTab);
   const [ideaStatusFilter, setIdeaStatusFilter] = useState('active');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
@@ -147,9 +150,10 @@ export const ThoughtRoomMainView: React.FC = () => {
         </div>
       </header>
 
-      <div className="inline-flex max-w-full gap-1 rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="بخش‌های اتاق فکر">
-        {canViewIdeas && <button type="button" role="tab" aria-selected={activeTab === 'ideas'} onClick={() => setActiveTab('ideas')} className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-black ${activeTab === 'ideas' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Lightbulb className="h-3.5 w-3.5" />ایده‌ها<span title="ایده‌های باز و تکمیل‌نشده" className={`rounded-full px-1.5 py-0.5 text-[9px] ${activeTab === 'ideas' ? 'bg-white/20' : 'bg-slate-100'}`}>{openIdeaCount(ideas).toLocaleString('fa-IR')}</span></button>}
-        {canViewMeetings && <button type="button" role="tab" aria-selected={activeTab === 'meetings'} onClick={() => setActiveTab('meetings')} className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-black ${activeTab === 'meetings' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Calendar className="h-3.5 w-3.5" />جلسات<span title="جلسه‌های برگزارنشده (بدون صورت‌جلسهٔ ثبت‌شده)" className={`rounded-full px-1.5 py-0.5 text-[9px] ${activeTab === 'meetings' ? 'bg-white/20' : 'bg-slate-100'}`}>{pendingMeetingCount(thinkTankMeetings).toLocaleString('fa-IR')}</span></button>}
+      <div ref={sectionTabs.stripRef} className="relative inline-flex max-w-full gap-1 rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="بخش‌های اتاق فکر">
+        {sectionTabs.pill}
+        {canViewIdeas && <button type="button" role="tab" aria-selected={activeTab === 'ideas'} data-tab-active={activeTab === 'ideas'} onClick={() => setActiveTab('ideas')} className={`relative z-10 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-black transition-colors ${activeTab === 'ideas' ? 'text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Lightbulb className="h-3.5 w-3.5" />ایده‌ها<span title="ایده‌های باز و تکمیل‌نشده" className={`rounded-full px-1.5 py-0.5 text-[9px] ${activeTab === 'ideas' ? 'bg-white/20' : 'bg-slate-100'}`}>{openIdeaCount(ideas).toLocaleString('fa-IR')}</span></button>}
+        {canViewMeetings && <button type="button" role="tab" aria-selected={activeTab === 'meetings'} data-tab-active={activeTab === 'meetings'} onClick={() => setActiveTab('meetings')} className={`relative z-10 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-black transition-colors ${activeTab === 'meetings' ? 'text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Calendar className="h-3.5 w-3.5" />جلسات<span title="جلسه‌های برگزارنشده (بدون صورت‌جلسهٔ ثبت‌شده)" className={`rounded-full px-1.5 py-0.5 text-[9px] ${activeTab === 'meetings' ? 'bg-white/20' : 'bg-slate-100'}`}>{pendingMeetingCount(thinkTankMeetings).toLocaleString('fa-IR')}</span></button>}
       </div>
 
       {activeTab === 'ideas' ? <>

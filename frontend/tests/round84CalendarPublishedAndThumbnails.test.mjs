@@ -21,7 +21,9 @@ test('نوار تب تقویم سفید است و تب فعال رنگ اصلی 
   // پس‌زمینهٔ کل قسمت تب سفید.
   assert.match(calendar, /rounded-2xl border border-slate-200 bg-white p-1\.5 shadow-2xs/);
   // تب فعال: رنگ اصلی سامانه (`bg-indigo-600` به `--color-primary` نگاشت شده است).
-  assert.match(calendar, /'bg-indigo-600 text-white shadow-xs'/);
+  // دور ۹۵: رنگ اصلی سامانه روی نشانگر متحرک است؛ تب فعال فقط متن سفید می‌گیرد.
+  assert.match(calendar, /const eventTabs = useSlidingTabs\(filter\);/);
+  assert.match(calendar, /data-tab-active=\{active\}/);
   assert.match(calendar, /active \? 'text-white' : 'text-slate-400'/);
   // تب غیرفعال: بدون پس‌زمینه و بدون حاشیه، هاور کم‌رنگ.
   assert.match(calendar, /'bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700'/);

@@ -8,6 +8,7 @@ import { baleApi, BaleState } from '../../api/bale';
 import { ApiResponse } from '../../api/client';
 import { Button, Input, LoadingState } from '../common/Primitives';
 import { baleDate, baleDeliveryLabel, baleErrorLabel } from './balePresentation';
+import { useSlidingTabs } from '../common/SlidingTabs';
 
 const statusLabels: Record<string, string> = {
   connected: 'متصل و آماده', failed: 'اتصال ناموفق', untested: 'در انتظار بررسی', not_configured: 'تنظیم نشده',
@@ -23,6 +24,8 @@ const tabs: { id: BaleTab; label: string; icon: React.ReactNode }[] = [
 export function BaleSettingsPanel() {
   const [state, setState] = useState<BaleState | null>(null);
   const [activeTab, setActiveTab] = useState<BaleTab>('overview');
+  // نشانگر متحرک تب‌ها (دور ۹۵)؛ زمینهٔ این نوار روشن است، پس نشانگر سفید است.
+  const baleTabs = useSlidingTabs(activeTab, 'light');
   const [enabled, setEnabled] = useState(false);
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
@@ -90,8 +93,9 @@ export function BaleSettingsPanel() {
       </span>
     </header>
 
-    <nav aria-label="بخش‌های مدیریت ربات بله" className="flex gap-1 overflow-x-auto border-b border-slate-100 bg-slate-50/70 p-2">
-      {tabs.map(tab => <button key={tab.id} type="button" aria-current={activeTab === tab.id ? 'page' : undefined} onClick={() => { setActiveTab(tab.id); setError(''); setNotice(''); }} className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors ${activeTab === tab.id ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:bg-white/70'}`}>{tab.icon}{tab.label}</button>)}
+    <nav ref={baleTabs.stripRef} aria-label="بخش‌های مدیریت ربات بله" className="relative flex gap-1 overflow-x-auto border-b border-slate-100 bg-slate-50/70 p-2">
+      {baleTabs.pill}
+      {tabs.map(tab => <button key={tab.id} type="button" aria-current={activeTab === tab.id ? 'page' : undefined} data-tab-active={activeTab === tab.id} onClick={() => { setActiveTab(tab.id); setError(''); setNotice(''); }} className={`relative z-10 inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors ${activeTab === tab.id ? 'text-indigo-700' : 'text-slate-600 hover:bg-white/70'}`}>{tab.icon}{tab.label}</button>)}
     </nav>
 
     <div className="space-y-5 p-5 sm:p-6">

@@ -31,6 +31,7 @@ import {
 import { CalendarEventCard } from '../calendar/CalendarEventCard';
 import { CalendarDayModal } from '../calendar/CalendarDayModal';
 import { calendarDueInfo, calendarTimeLabel, sortCalendarEventsByTime } from '../../utils/calendarTone';
+import { useSlidingTabs } from '../common/SlidingTabs';
 
 type ViewMode = 'list' | 'kanban' | 'calendar';
 type TaskScope = 'near' | 'all';
@@ -70,8 +71,11 @@ export const MyTasksView: React.FC = () => {
   /** فیلتر «نوع وظیفه»: عمومی، کار مرحلهٔ محتوا، بررسی، اصلاح یا انتشار. */
   const [kindFilter, setKindFilter] = useUrlFilter<string>('kind', 'all');
   const [taskScope, setTaskScope] = useUrlFilter<TaskScope>('scope', 'near');
+  // نشانگر متحرک تب‌ها (دور ۹۵).
+  const scopeTabs = useSlidingTabs(taskScope);
   const [timeframeFilter, setTimeframeFilter] = useState<'all' | 'today' | 'overdue' | 'week'>('all');
   const [viewMode, setViewMode] = useUrlFilter<ViewMode>('view', 'list');
+  const viewModeTabs = useSlidingTabs(viewMode, 'outlined');
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetCol, setDropTargetCol] = useState<string | null>(null);
@@ -137,13 +141,15 @@ export const MyTasksView: React.FC = () => {
       
 
       {/* ── Scope tabs: کوچک و یکپارچه ── */}
-      <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-2xs" role="tablist" aria-label="دامنه زمانی کارتابل">
+      <div ref={scopeTabs.stripRef} className="relative flex items-center gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-2xs" role="tablist" aria-label="دامنه زمانی کارتابل">
+        {scopeTabs.pill}
         <button
           type="button"
           role="tab"
           aria-selected={taskScope === 'near'}
+          data-tab-active={taskScope === 'near'}
           onClick={() => { setTaskScope('near'); setTimeframeFilter('all'); }}
-          className={`inline-flex !min-h-7 flex-1 items-center justify-center gap-1.5 rounded-xl !px-3 !py-1 text-[11px] font-bold transition-colors sm:flex-none ${taskScope === 'near' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+          className={`relative z-10 inline-flex !min-h-7 flex-1 items-center justify-center gap-1.5 rounded-xl !px-3 !py-1 text-[11px] font-bold transition-colors sm:flex-none ${taskScope === 'near' ? 'text-white' : 'text-slate-600 hover:bg-slate-100'}`}
         >
           <CalendarDays className="h-3.5 w-3.5" />
           موعد نزدیک
@@ -153,8 +159,9 @@ export const MyTasksView: React.FC = () => {
           type="button"
           role="tab"
           aria-selected={taskScope === 'all'}
+          data-tab-active={taskScope === 'all'}
           onClick={() => { setTaskScope('all'); setTimeframeFilter('all'); }}
-          className={`inline-flex !min-h-7 flex-1 items-center justify-center gap-1.5 rounded-xl !px-3 !py-1 text-[11px] font-bold transition-colors sm:flex-none ${taskScope === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+          className={`relative z-10 inline-flex !min-h-7 flex-1 items-center justify-center gap-1.5 rounded-xl !px-3 !py-1 text-[11px] font-bold transition-colors sm:flex-none ${taskScope === 'all' ? 'text-white' : 'text-slate-600 hover:bg-slate-100'}`}
         >
           <ListTodo className="h-3.5 w-3.5" />
           همه
@@ -202,24 +209,28 @@ export const MyTasksView: React.FC = () => {
             </select>
           </div>
 
-          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <div ref={viewModeTabs.stripRef} className="relative flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+            {viewModeTabs.pill}
             <button
               onClick={() => setViewMode('list')}
-              className={`!min-h-7 !min-w-7 flex items-center justify-center rounded-lg !p-1.5 transition-all ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+              data-tab-active={viewMode === 'list'}
+              className={`relative z-10 !min-h-7 !min-w-7 flex items-center justify-center rounded-lg !p-1.5 transition-colors ${viewMode === 'list' ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
               title="نمایش لیستی"
             >
               <List className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => setViewMode('kanban')}
-              className={`!min-h-7 !min-w-7 flex items-center justify-center rounded-lg !p-1.5 transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+              data-tab-active={viewMode === 'kanban'}
+              className={`relative z-10 !min-h-7 !min-w-7 flex items-center justify-center rounded-lg !p-1.5 transition-colors ${viewMode === 'kanban' ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
               title="نمایش کانبان"
             >
               <LayoutGrid className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => setViewMode('calendar')}
-              className={`!min-h-7 !min-w-7 flex items-center justify-center rounded-lg !p-1.5 transition-all ${viewMode === 'calendar' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+              data-tab-active={viewMode === 'calendar'}
+              className={`relative z-10 !min-h-7 !min-w-7 flex items-center justify-center rounded-lg !p-1.5 transition-colors ${viewMode === 'calendar' ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
               title="نمایش تقویمی"
             >
               <CalendarDays className="h-3.5 w-3.5" />
