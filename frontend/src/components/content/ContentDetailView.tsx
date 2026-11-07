@@ -1038,6 +1038,7 @@ export const ContentDetailView: React.FC = () => {
    */
   const stageStatusChoices: { id: ContentStageStatus; label: string }[] = [
     { id: 'not_started', label: 'شروع‌نشده' },
+    { id: 'pending_dependency', label: 'در انتظار مرحلهٔ قبل' },
     { id: 'ready', label: 'آماده شروع' },
     { id: 'in_progress', label: 'در حال انجام' },
     { id: 'pending_approval', label: 'در انتظار بررسی' },
@@ -1046,6 +1047,22 @@ export const ContentDetailView: React.FC = () => {
     { id: 'completed', label: 'تکمیل‌شده' },
     { id: 'skipped', label: 'بدون نیاز / عبور' },
   ];
+
+  /**
+   * وضعیت واقعی مرحله → گزینهٔ نمایشی متناظر در همین فهرست.
+   *
+   * جریان محتوا برای «در انتظار بررسی» دو شناسه دارد (`ready_for_review` از سمت
+   * مسئول و `pending_approval` از سمت ارزیاب) و برای «نیازمند اصلاح» هم دو
+   * شناسه (`needs_revision`/`revisions_needed`). پیش‌تر مقایسهٔ سادهٔ
+   * `stage.status === choice.id` بود؛ برای همین وقتی مرحله در وضعیت
+   * `ready_for_review` بود هیچ گزینه‌ای «انتخاب‌شده» دیده نمی‌شد و منو نشان
+   * نمی‌داد وضعیت کنونی کدام است. اکنون هر دو شناسه به یک گزینه می‌رسند.
+   */
+  const stageStatusChoiceKey = (status: string): string => {
+    if (status === 'ready_for_review') return 'pending_approval';
+    if (status === 'revisions_needed') return 'needs_revision';
+    return status;
+  };
 
   /** نشان وضعیت مرحله + فهرست تغییر آن؛ فقط مدیر جریان محتوا می‌تواند تغییر دهد. */
   const stageStatusControl = (stage: ContentStage, readyForStart: boolean) => {
@@ -1062,7 +1079,7 @@ export const ContentDetailView: React.FC = () => {
           title={canManageContentWorkflow
             ? 'کلیک برای تغییر وضعیت این مرحله'
             : 'تغییر وضعیت مرحله نیازمند مجوز مدیریت جریان محتواست'}
-          className={`inline-flex items-center gap-1 rounded-md ${canManageContentWorkflow ? 'cursor-pointer hover:brightness-95' : ''}`}
+          className={`inline-flex items-center gap-1 rounded-md transition-shadow ${canManageContentWorkflow ? 'cursor-pointer hover:brightness-95' : ''} ${open ? 'ring-2 ring-indigo-200 ring-offset-1' : ''}`}
         >
           {saving ? <InlineSpinner size="sm" /> : getStageStatusBadge(stage.status, readyForStart, stage.reviewRequired !== false)}
           {canManageContentWorkflow && !saving && <ChevronDown className="h-3 w-3 text-slate-400" aria-hidden />}
@@ -1070,22 +1087,36 @@ export const ContentDetailView: React.FC = () => {
         {open && (
           <>
             <button type="button" tabIndex={-1} aria-label="بستن فهرست وضعیت مرحله" onClick={() => setStageStatusPicker(null)} className="fixed inset-0 z-30 cursor-default" />
-            <div role="listbox" aria-label="انتخاب وضعیت مرحله" className="absolute right-0 top-full z-40 mt-1 w-48 rounded-xl border border-slate-200 bg-white p-1.5 text-right shadow-xl">
-              <p className="px-2 pb-1 pt-0.5 text-[10px] font-black text-slate-500">وضعیت این مرحله</p>
-              {stageStatusChoices.map(choice => (
-                <button
-                  key={choice.id}
-                  type="button"
-                  role="option"
-                  aria-selected={stage.status === choice.id}
-                  disabled={saving}
-                  onClick={() => { setStageStatusPicker(null); if (stage.status !== choice.id) void changeStageStatus(stage, choice.id); }}
-                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11px] font-bold transition-colors disabled:opacity-60 ${stage.status === choice.id ? 'bg-indigo-50 text-indigo-800' : 'text-slate-700 hover:bg-slate-50'}`}
-                >
-                  <span>{choice.label}</span>
-                  {stage.status === choice.id && <Check className="h-3.5 w-3.5 shrink-0" />}
-                </button>
-              ))}
+            <div role="listbox" aria-label="انتخاب وضعیت مرحله" className="absolute right-0 top-full z-40 mt-1 w-52 rounded-xl border border-slate-200 bg-white p-1.5 text-right shadow-xl">
+              {/* وضعیت کنونی در سرصفحهٔ فهرست نوشته می‌شود تا حتی اگر گزینه‌ای
+                  با نام دیگری هم‌معنا باشد، کاربر بداند کجاست. */}
+              <p className="px-2 pb-1 pt-0.5 text-[10px] font-black text-slate-500">
+                وضعیت کنونی: <span className="text-indigo-700">{stageStatusLabel(stage.status)}</span>
+              </p>
+              {stageStatusChoices.map(choice => {
+                const current = stageStatusChoiceKey(stage.status) === choice.id;
+                return (
+                  <button
+                    key={choice.id}
+                    type="button"
+                    role="option"
+                    aria-selected={current}
+                    aria-current={current ? 'true' : undefined}
+                    data-stage-status-current={current ? 'true' : undefined}
+                    disabled={saving}
+                    onClick={() => { setStageStatusPicker(null); if (!current) void changeStageStatus(stage, choice.id); }}
+                    className={`mb-0.5 flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11px] transition-colors disabled:opacity-60 ${current
+                      ? 'bg-indigo-600 text-white font-black shadow-xs'
+                      : 'font-bold text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {current && <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-white" />}
+                      {choice.label}
+                    </span>
+                    {current && <Check className="h-3.5 w-3.5 shrink-0" />}
+                  </button>
+                );
+              })}
             </div>
           </>
         )}

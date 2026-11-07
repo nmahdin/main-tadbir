@@ -299,10 +299,11 @@ button.ui-check-circle,
  * دیده شوند ولی حالت برجسته/شناور نگیرند.
  */
 .ui-quiet-shadow {
-  box-shadow: 0 1px 2px rgb(15 23 42 / .07), 0 1px 1px rgb(15 23 42 / .04) !important;
+  /* یک لبهٔ نیم‌پیکسلیِ محو؛ فقط برای جدا شدن از کارت، بدون حس شناور بودن. */
+  box-shadow: 0 1px 1px rgb(15 23 42 / .035) !important;
 }
 .ui-quiet-shadow:hover:not(:disabled) {
-  box-shadow: 0 1px 3px rgb(15 23 42 / .10), 0 1px 2px rgb(15 23 42 / .06) !important;
+  box-shadow: 0 1px 2px rgb(15 23 42 / .05) !important;
 }
 
 /*

@@ -141,9 +141,33 @@ test('دکمه‌های انتشار و ویرایش محتوا سایهٔ بس�
   // سایه نباید دوباره با کلاس تیلویند خنثی یا تقویت شود.
   assert.doesNotMatch(publishButton, /shadow-2xs|shadow-xs|shadow-md/);
 
+  // سایه باید «بسیار کم» باشد: حداکثر ۱px و شفافیت زیر ۵٪.
   const css = await source('../src/index.css');
-  const block = css.slice(css.indexOf('.ui-quiet-shadow {'));
-  assert.match(block, /box-shadow: 0 1px 2px rgb\(15 23 42 \/ \.07\), 0 1px 1px rgb\(15 23 42 \/ \.04\)/);
+  const block = css.slice(css.indexOf('.ui-quiet-shadow {'), css.indexOf('.ui-quiet-shadow:hover'));
+  const shadow = /box-shadow: ([^;]+);/.exec(block);
+  assert.ok(shadow, 'قاعدهٔ سایهٔ کم پیدا نشد');
+  assert.match(shadow[1], /^0 1px 1px /, 'سایه نباید بیشتر از یک‌پیکسل باشد');
+  // شفافیت RGBA مثل `rgb(15 23 42 / .035)` است؛ مقدار کسری خوانده می‌شود.
+  const alpha = Number(`0.${/\/ \.(\d+)\)/.exec(shadow[1])?.[1] ?? ''}`);
+  assert.ok(Number.isFinite(alpha), 'شفافیت سایه خوانده نشد');
+  assert.ok(alpha * 100 <= 5, `شفافیت سایه باید حداکثر ۵٪ باشد، ولی ${Math.round(alpha * 100)}٪ است`);
+});
+
+// ── ۴ب. منوی وضعیت، وضعیت کنونی را درست نشان دهد ──
+test('منوی وضعیت مرحله گزینهٔ وضعیت کنونی را مشخص می‌کند، حتی با شناسه‌های هم‌معنا', async () => {
+  const detail = await source('../src/components/content/ContentDetailView.tsx');
+  // «ready_for_review» و «pending_approval» هر دو «در انتظار بررسی» هستند؛
+  // مقایسهٔ خام باعث می‌شد هیچ گزینه‌ای انتخاب‌شده دیده نشود.
+  assert.match(detail, /const stageStatusChoiceKey = \(status: string\): string => \{/);
+  assert.match(detail, /if \(status === 'ready_for_review'\) return 'pending_approval';/);
+  assert.match(detail, /if \(status === 'revisions_needed'\) return 'needs_revision';/);
+  assert.match(detail, /const current = stageStatusChoiceKey\(stage\.status\) === choice\.id;/);
+  assert.match(detail, /aria-selected=\{current\}/);
+  assert.match(detail, /data-stage-status-current=\{current \? 'true' : undefined\}/);
+  // وضعیت کنونی در سرصفحهٔ منو هم نوشته می‌شود.
+  assert.match(detail, /وضعیت کنونی: <span className="text-indigo-700">\{stageStatusLabel\(stage\.status\)\}<\/span>/);
+  // انتخاب گزینهٔ هم‌معنای وضعیت فعلی، درخواست بی‌مورد به سرور نمی‌فرستد.
+  assert.match(detail, /if \(!current\) void changeStageStatus\(stage, choice\.id\);/);
 });
 
 // ── ۷. لغو انتشار، وظیفهٔ انتشار را باز می‌کند ──
