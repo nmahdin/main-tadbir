@@ -3,11 +3,9 @@
 namespace App\Core\Billing;
 
 use App\Core\Audit\AuditWriter;
-use App\Core\Organizations\Organization;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\CorePlanVersion;
 use App\Core\Subscriptions\SubscriptionOwner;
-use App\Core\Workspaces\Workspace;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -419,6 +417,7 @@ final class QuoteService
         if ($promoId === null) {
             return 0;
         }
+
         return (int) CorePromoReservation::query()
             ->where('owner_key', $ownerKey)
             ->where('promo_id', $promoId)
