@@ -25,7 +25,7 @@ test('FE-UX-TOUR-01 missing targets are harmless and overlays remain mock/access
  assert.equal(missingTarget(['demo-dashboard'],'demo-dashboard'),false);
  const source=read('src/features/showcase/lab/GuidedTourPrototype.tsx');
  const host=read('src/features/showcase/lab/OceanDesignLab.tsx');
- for(const part of ['role="dialog"','aria-modal="true"','Escape','data-tour-id','getBoundingClientRect','TourSpotlight','TourStepPopover','hideControls'])assert.ok(source.includes(part),part);
+ for(const part of ['role="dialog"','aria-modal="true"','Escape','data-tour-id','getBoundingClientRect','TourSpotlight','TourStepPopover','hideControls','anchor={anchor}'])assert.ok(source.includes(part),part);
  assert.ok(host.includes('lab=tour'));
  for(const prohibited of ['localStorage','fetch(', 'useQuery(', 'logoutSession(', 'setActiveView('])assert.ok(!source.includes(prohibited),prohibited);
 });

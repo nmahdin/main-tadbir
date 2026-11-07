@@ -13,12 +13,13 @@ type SpotlightRect={top:number;left:number;width:number;height:number};
 export function TourSpotlight({rect}:{rect:SpotlightRect|null}){
  return rect&&<div className="odl-tour-spot" aria-hidden="true" style={rect}/>;
 }
-export function TourStepPopover({step,state,total,missing,onAction}:{step?:TourStep;state:TourState;total:number;missing:boolean;onAction:(action:TourAction)=>void}){
+export function TourStepPopover({step,state,total,missing,anchor,onAction}:{step?:TourStep;state:TourState;total:number;missing:boolean;anchor?:{top:number;left:number};onAction:(action:TourAction)=>void}){
  const popup=useRef<HTMLDivElement>(null);
  useEffect(()=>{popup.current?.focus();},[state.phase,state.index]);
  const inStep=state.phase==='active';
  return <div ref={popup} tabIndex={-1} role="dialog" aria-modal="true"
-  aria-label="راهنمای گام‌به‌گام آزمایشی" className="odl-tour-panel" onKeyDown={event=>{
+  aria-label="راهنمای گام‌به‌گام آزمایشی" className="odl-tour-panel"
+  style={anchor ? {top:anchor.top,left:anchor.left,right:"auto",transform:"none"} : undefined} onKeyDown={event=>{
    if(event.key==='Escape'){event.preventDefault();onAction({type:'SKIP'});}
    if(event.key==='Tab'){
     const elements=Array.from(popup.current?.querySelectorAll('button:not(:disabled)')??[]) as HTMLButtonElement[];
@@ -75,6 +76,10 @@ export function GuidedTourPrototype(){
   return ()=>{window.removeEventListener('resize',measure);node?.removeEventListener('scroll',measure,true);};
  },[environment,width,state.phase,state.index,step]);
  const active=state.phase!=='idle';
+ const anchor=spot&&stage.current&&state.phase==='active'?{
+  top:Math.max(12,Math.min(Math.max(12,stage.current.clientHeight-280),spot.top+spot.height+12)),
+  left:Math.max(12,Math.min(Math.max(12,stage.current.clientWidth-370),spot.left))
+ }:undefined;
  const visibleIds=typeof document==='undefined'?[]:(Array.from(stage.current?.querySelectorAll('[data-tour-id]')??[]) as HTMLElement[])
   .filter(el=>el.getClientRects().length).map(el=>el.dataset.tourId??'');
  return <section className="odl-tour-prototype" aria-label="تور معرفی نمایشی">
@@ -92,7 +97,7 @@ export function GuidedTourPrototype(){
    {active&&<div className="odl-tour-layer">
     <TourSpotlight rect={state.phase==='active'&&!missingTarget(visibleIds,step.targetId)?spot:null}/>
     <TourStepPopover state={state} step={step} total={manifest.steps.length}
-     missing={missing} onAction={dispatch}/>
+     missing={missing} anchor={anchor} onAction={dispatch}/>
    </div>}
   </div>
  </section>;
