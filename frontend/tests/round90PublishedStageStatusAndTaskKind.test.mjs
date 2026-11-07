@@ -153,6 +153,24 @@ test('دکمه‌های انتشار و ویرایش محتوا سایهٔ بس�
   assert.ok(alpha * 100 <= 5, `شفافیت سایه باید حداکثر ۵٪ باشد، ولی ${Math.round(alpha * 100)}٪ است`);
 });
 
+test('دکمه‌های انتشار و ویرایش هنگام کلیک سایهٔ درونی می‌گیرند', async () => {
+  const css = await source('../src/index.css');
+  const hoverAt = css.indexOf('.ui-quiet-shadow:hover:not(:disabled)');
+  const activeAt = css.indexOf('.ui-quiet-shadow:active:not(:disabled)');
+  assert.ok(hoverAt > -1 && activeAt > -1, 'قاعدهٔ سایهٔ هاور و کلیک باید هر دو باشند');
+  // قاعدهٔ کلیک باید بعد از هاور بیاید؛ وگرنه با اختصاصی‌بودن برابر، هاور برنده می‌شود.
+  assert.ok(activeAt > hoverAt, 'قاعدهٔ سایهٔ کلیک باید بعد از هاور باشد');
+  const activeBlock = css.slice(activeAt, css.indexOf('}', activeAt));
+  assert.match(activeBlock, /box-shadow: inset 0 1px 3px rgb\(15 23 42 \/ \.16\)/);
+  assert.match(activeBlock, /!important/);
+  // سایهٔ بیرونیِ حالت عادی نباید در لحظهٔ کلیک باقی بماند.
+  assert.doesNotMatch(activeBlock, /^0 1px/);
+  // روی زمینهٔ پُررنگ (انتشار سبز / لغو انتشار خاکستری) سایهٔ درونی عمیق‌تر می‌شود.
+  const filledAt = css.indexOf('.ui-quiet-shadow.bg-emerald-600:active:not(:disabled)');
+  assert.ok(filledAt > activeAt, 'قاعدهٔ سایهٔ کلیکِ دکمهٔ پُررنگ پیدا نشد');
+  assert.match(css.slice(filledAt, css.indexOf('}', filledAt)), /inset 0 2px 5px rgb\(15 23 42 \/ \.38\)/);
+});
+
 // ── ۴ب. منوی وضعیت، وضعیت کنونی را درست نشان دهد ──
 test('منوی وضعیت مرحله گزینهٔ وضعیت کنونی را مشخص می‌کند، حتی با شناسه‌های هم‌معنا', async () => {
   const detail = await source('../src/components/content/ContentDetailView.tsx');
