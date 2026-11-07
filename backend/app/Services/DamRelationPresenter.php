@@ -27,8 +27,10 @@ final class DamRelationPresenter
         foreach ($assets as $asset) {
             $usedIn = $asset->relations->map(function ($relation) use ($contents, $tasks, $projects, $departments, $workspaceRecords): array {
                 $label = match ($relation->related_type) {
+                    // فقط نام محتوا؛ کد محتوا در ستون «ارتباط» خوانایی را کم می‌کرد و
+                    // برای بازکردن محتوا هم لازم نیست (شناسه جداگانه ارسال می‌شود).
                     'content' => ($content = $contents->get($relation->related_id))
-                        ? trim(((string) $content->code).' — '.$content->title, " —") : 'محتوا #'.$relation->related_id,
+                        ? trim((string) $content->title) : 'محتوا #'.$relation->related_id,
                     'task' => ($task = $tasks->get($relation->related_id))
                         ? $task->title : 'وظیفه #'.$relation->related_id,
                     'project' => ($project = $projects->get($relation->related_id))

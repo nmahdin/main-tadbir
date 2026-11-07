@@ -28,6 +28,15 @@ const queryString = (params?: object) => {
   return serialized ? `?${serialized}` : '';
 };
 
+/** نتیجهٔ یادآوری وظیفه (اعلان سامانه و ارسال بله در صورت اتصال). */
+export interface TaskReminderResult {
+  sent: boolean;
+  throttled: boolean;
+  reason?: string | null;
+  recipient?: { id: string; name: string } | null;
+  bale_linked?: boolean;
+}
+
 export const tasksApi = {
   list(params?: TaskListParams) {
     return request<ApiCollection<Task>>(`/tasks${queryString(params)}`);
@@ -35,6 +44,15 @@ export const tasksApi = {
 
   get(id: string, signal?: AbortSignal) {
     return request<ApiResponse<Task>>(`/tasks/${id}`, { signal });
+  },
+
+  /**
+   * یادآوری مسئول اجرا: اعلان سامانه + (در صورت اتصال حساب) پیام ربات بله.
+   * سرور در هر ساعت بیش از یک یادآوری برای هر وظیفه نمی‌سازد و در آن حالت
+   * پاسخ ۴۲۹ با پیام روشن برمی‌گرداند.
+   */
+  remind(id: string) {
+    return request<ApiResponse<TaskReminderResult>>(`/tasks/${id}/reminder`, { method: 'POST' });
   },
 
   create(payload: CreateTaskPayload) {

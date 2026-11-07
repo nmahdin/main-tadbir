@@ -3,9 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, ErrorState, Modal } from '../common/Primitives';
 import { Pagination } from '../common/WorkspacePatterns';
 import { TextAssetActions } from '../common/TextAssetActions';
+import { formatBytesFa } from '../../utils/bytes';
 import { TextAssetViewer } from '../common/TextAssetViewer';
 import type { PageResult } from '../../queries/workspacePages';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
+import { dataTableRowValueSummary } from '../../utils/dataTableRows';
 import { readTaskAssetLink } from '../../utils/taskDeepLink';
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
@@ -71,12 +73,8 @@ interface TaskTableDetail {
 
 const isNumericId = (id: string) => /^\d+$/.test(id);
 
-const formatSize = (bytes = 0) => {
-  if (!bytes) return '—';
-  const units = ['بایت', 'کیلوبایت', 'مگابایت', 'گیگابایت'];
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / (1024 ** i)).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} ${units[i]}`;
-};
+/** حجم فایل با واحدهای فارسی؛ تعریف مشترک در `utils/bytes` است. */
+const formatSize = (bytes = 0) => formatBytesFa(bytes, '—');
 
 const fileIcon = (name: string, mime?: string) => {
   const m = (mime || '').toLowerCase();
@@ -301,10 +299,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
     }
   };
 
-  const rowSummary = (row: TaskTableRow) => {
-    const values = Object.values(row.cells || {}).filter(v => String(v).trim() !== '').slice(0, 3);
-    return values.length ? values.join(' • ') : 'ردیف بدون مقدار';
-  };
+  const rowSummary = (row: TaskTableRow) => dataTableRowValueSummary(row.cells);
 
   const totalCount = task.attachments.length + (assetMeta?.total ?? related.length);
 
@@ -312,7 +307,7 @@ export const TaskAssetsSection: React.FC<{ task: Task }> = ({ task }) => {
     <div ref={sectionRef} className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
       {assetForm && numericTask && <Modal open onClose={closeAssetForm} title="افزودن دارایی" description={`مسیر پیش‌فرض: وظایف / ${toPersianDigits(task.id)}`} icon={<Paperclip className="h-5 w-5" />} busy={attachmentSaving} size="xl">
         <div className="max-h-[calc(88dvh-82px)] space-y-4 overflow-y-auto p-5">
-          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={attachmentSaving} title="دارایی‌های مرتبط با وظیفه" defaultFolderLabel={`وظایف / ${toPersianDigits(task.id)} (پیش‌فرض)`} />
+          <AttachmentComposer value={attachmentDraft} onChange={setAttachmentDraft} disabled={attachmentSaving} title="دارایی‌های مرتبط با وظیفه" defaultFolderLabel={`وظایف / ${toPersianDigits(task.id)} (پیش‌فرض)`} linkTarget={{ taskId: task.id }} />
           <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white py-3"><Button action="cancel" variant="secondary" disabled={attachmentSaving} onClick={closeAssetForm}>انصراف</Button><Button action="save" loading={attachmentSaving} disabled={attachmentDraftCount(attachmentDraft) === 0} onClick={() => void saveAttachmentDraft()}>ثبت و اتصال دارایی‌ها</Button></div>
         </div>
       </Modal>}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { AssetThumbnail } from './AssetThumbnail';
 import { Avatar } from '../common/Avatar';
+import { activityLabel } from '../../utils/activityLabels';
 import { 
   X, 
   Download, 
@@ -535,8 +536,9 @@ export const AssetDetailsDrawer: React.FC = () => {
                   className="comment-composer flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden"
                 />
                 <button
+                  data-button-action="save"
                   type="submit"
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  className="ui-form-action px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>ارسال</span>
@@ -554,7 +556,7 @@ export const AssetDetailsDrawer: React.FC = () => {
                     <Avatar user={actUser} size="xs" />
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-slate-900">
-                        {actUser?.name || 'کاربر سیستم'}: <span className="font-normal text-slate-700">{act.action}</span>
+                        {actUser?.name || 'کاربر سیستم'}: <span className="font-normal text-slate-700">{activityLabel(act.action)}</span>
                       </p>
                       {act.details && (
                         <p className="text-[11px] text-slate-600 mt-0.5 font-mono">{act.details}</p>

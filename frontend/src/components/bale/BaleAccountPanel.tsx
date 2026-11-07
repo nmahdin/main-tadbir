@@ -1,3 +1,4 @@
+import { formatPersianDate } from '../../utils/date';
 import React, { useEffect, useState } from 'react';
 import { Bell, Bot, CheckCircle2, Copy, Link2, LoaderCircle, Unlink } from 'lucide-react';
 import { baleApi, BaleAccount } from '../../api/bale';
@@ -8,14 +9,24 @@ export function BaleAccountPanel() {
   const [code, setCode] = useState<{ code: string; expires_at: string } | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [busy, setBusy] = useState(false);
+  // تا رسیدن پاسخ سرور، حالت لودینگ نشان داده می‌شود؛ پیش‌تر صفحه خالی می‌ماند
+  // و کاربر فکر می‌کرد چیزی اتفاق نمی‌افتد.
+  const [loadingAccount, setLoadingAccount] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [testResult, setTestResult] = useState('');
-  const load = async () => { const next = (await baleApi.account()).data; setAccount(next); return next; };
+  const load = async () => {
+    const next = (await baleApi.account()).data;
+    setAccount(next);
+    setLoadingAccount(false);
+    return next;
+  };
 
   useEffect(() => {
     let active = true;
-    baleApi.account().then(response => { if (active) setAccount(response.data); }).catch(caught => { if (active) setError(caught instanceof Error ? caught.message : 'دریافت وضعیت اتصال ناموفق بود.'); });
+    baleApi.account()
+      .then(response => { if (active) { setAccount(response.data); setLoadingAccount(false); } })
+      .catch(caught => { if (active) setLoadingAccount(false); if (active) setError(caught instanceof Error ? caught.message : 'دریافت وضعیت اتصال ناموفق بود.'); });
     return () => { active = false; };
   }, []);
 
@@ -29,6 +40,9 @@ export function BaleAccountPanel() {
       if (remaining === 0 && active) setCode(null);
     };
     const checkConnection = async () => {
+      // در تبِ پنهان هیچ درخواستی فرستاده نمی‌شود؛ با بازگشت به صفحه خودکار
+      // وضعیت تازه گرفته می‌شود (صرفه‌جویی در اینترنت و باتری موبایل).
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       if (checking || new Date(code.expires_at).getTime() <= Date.now()) return;
       checking = true;
       try {
@@ -43,9 +57,17 @@ export function BaleAccountPanel() {
     };
     updateCountdown();
     const countdown = window.setInterval(updateCountdown, 1_000);
-    const polling = window.setInterval(() => void checkConnection(), 3_000);
+    // هر ۵ ثانیه (پیش‌تر ۳ ثانیه) — همان تجربه، یک‌سومِ درخواست‌های کمتر.
+    const polling = window.setInterval(() => void checkConnection(), 5_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') void checkConnection(); };
+    document.addEventListener('visibilitychange', onVisible);
     void checkConnection();
-    return () => { active = false; window.clearInterval(countdown); window.clearInterval(polling); };
+    return () => {
+      active = false;
+      window.clearInterval(countdown);
+      window.clearInterval(polling);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [code]);
 
   const run = async (operation: () => Promise<void>) => {
@@ -67,6 +89,33 @@ export function BaleAccountPanel() {
     await load();
   };
 
+  /*
+   * حالت لودینگ: تا پاسخ سرور نرسیده، به‌جای صفحهٔ نیمه‌خالی یک اسکلت هم‌شکل
+   * همان بخش‌ها (وضعیت اتصال، اعلان‌ها و دکمه‌ها) نشان داده می‌شود تا کاربر
+   * مطمئن شود در حال دریافت اطلاعات است.
+   */
+  if (loadingAccount) {
+    return <section className="space-y-5 rounded-3xl border border-slate-200 bg-white p-6 sm:p-8" dir="rtl" role="status" aria-live="polite">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="flex items-center gap-2 font-bold"><Bot className="text-emerald-600" size={22} />اتصال به ربات بله</h3>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500"><LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />در حال دریافت وضعیت…</span>
+      </div>
+      <p className="text-sm leading-7 text-slate-500">در حال خواندن وضعیت اتصال حساب بله از سرور…</p>
+      <div className="flex flex-wrap gap-2" aria-hidden>
+        <span className="ui-skeleton h-7 w-24 rounded-full" />
+        <span className="ui-skeleton h-7 w-24 rounded-full" />
+        <span className="ui-skeleton h-7 w-32 rounded-full" />
+      </div>
+      <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4" aria-hidden>
+        {[0, 1, 2].map(index => <span key={index} className="ui-skeleton block h-10 rounded-xl" style={{ width: `${92 - index * 14}%` }} />)}
+      </div>
+      <div className="flex flex-wrap gap-2" aria-hidden>
+        <span className="ui-skeleton h-9 w-40 rounded-xl" />
+        <span className="ui-skeleton h-9 w-32 rounded-xl" />
+      </div>
+    </section>;
+  }
+
   return <section className="space-y-5 rounded-3xl border border-slate-200 bg-white p-6 sm:p-8" dir="rtl">
     <div className="flex items-center justify-between gap-3"><h3 className="flex items-center gap-2 font-bold"><Bot className="text-emerald-600" size={22} />اتصال به ربات بله</h3>{busy && <LoaderCircle className="h-4 w-4 animate-spin text-indigo-600" aria-label="در حال پردازش" />}</div>
     <p className="text-sm leading-7 text-slate-600">{account?.connected ? 'حساب بله شما به تدبیر متصل است.' : 'یک کد موقت بگیرید و آن را فقط در گفت‌وگوی خصوصی ربات رسمی ارسال کنید؛ وضعیت اتصال خودکار بررسی می‌شود.'}</p>
@@ -76,13 +125,12 @@ export function BaleAccountPanel() {
     {account && <div className="flex flex-wrap gap-2 text-xs">
       <span className={`rounded-full px-3 py-1.5 ${account.connected ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{account.connected ? '● متصل' : '○ متصل نشده'}</span>
       <span className="rounded-full bg-slate-50 px-3 py-1.5 text-slate-600">{account.notifications_enabled ? 'اعلان روشن' : 'اعلان خاموش'}</span>
-      {account.linked_at && <span className="px-2 py-1.5 text-slate-400">اتصال از {new Date(account.linked_at).toLocaleDateString('fa-IR')}</span>}
+      {account.linked_at && <span className="px-2 py-1.5 text-slate-400">اتصال از {formatPersianDate(account.linked_at)}</span>}
     </div>}
 
     {account && !account.installation_ready && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-xs leading-7 text-amber-800">{account.installation_message}</p>}
     {account && !account.bot_ready && !account.bot_enabled && <p className="rounded-xl bg-amber-50 p-3 text-xs leading-6 text-amber-800">ربات هنوز توسط مدیر سامانه فعال نشده است.</p>}
     {account && !account.bot_ready && account.bot_enabled && <p className="rounded-xl bg-amber-50 p-3 text-xs leading-6 text-amber-800">ربات فعال است، اما Webhook خودکار آن آماده نیست؛ مدیر سامانه باید اتصال را ترمیم کند.</p>}
-    {account?.bot_ready && !account.retry_runner_recent && <p className="rounded-xl bg-amber-50 p-3 text-xs leading-6 text-amber-800">دریافت پیام فعال است، اما heartbeat سرویس تلاش مجدد اخیر نیست. اعلان اولیه ارسال می‌شود، ولی بازیابی خطاهای موقت نیازمند scheduler فعال است.</p>}
 
     {code && !account?.connected && <div role="status" className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
       <div className="flex items-center justify-between gap-3"><p className="text-xs font-bold text-indigo-950">کد یک‌بارمصرف اتصال</p><span className="rounded-lg bg-white px-2 py-1 font-mono text-xs text-indigo-700">{countdownLabel}</span></div>

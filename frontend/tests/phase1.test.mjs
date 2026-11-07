@@ -46,7 +46,9 @@ test('legacy autosave never treats initial API reads as changes and isolates acc
 });
 test('AppContext no longer stores domain data in localStorage or imports INITIAL records', async () => {
   const app = await readFile(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf8');
-  assert.doesNotMatch(app, /localStorage|INITIAL_|data\/initial/);
+  assert.doesNotMatch(app, /INITIAL_|data\/initial/);
+  // Cached visual identity is allowed; domain entities remain server-owned.
+  assert.doesNotMatch(app, /localStorage\.setItem\(['\"](?:projects|tasks|users|contents)/);
   assert.match(app, /useServerState<Project\[\]>/);
   assert.match(app, /useAuth\(\)/); assert.match(app, /useUI\(\)/);
 });

@@ -37,6 +37,36 @@ export const damApi = {
     previewUrl(id: string | number) {
       return `${apiConfig.baseUrl}/dam/library/${id}/preview`;
     },
+    /**
+     * بندانگشتی سبک (دور ۸۴).
+     *
+     * پیش‌تر کارت‌ها و ردیف‌های ۴۰–۳۲۰ پیکسلی مخزن همین `previewUrl` (فایل
+     * اصلی) را می‌گرفتند؛ یک فهرست بیست‌ردیفی از عکس‌های موبایلی می‌توانست
+     * ده‌ها مگابایت شود. این مسیر نسخهٔ کوچکِ کش‌شده را می‌دهد (WebP در صورت
+     * پشتیبانی سرور) و مرورگر آن را یک هفته نگه می‌دارد.
+     */
+    thumbnailUrl(id: string | number, width: 96 | 160 | 320 | 640 = 320) {
+      return `${apiConfig.baseUrl}/dam/library/${id}/thumbnail?w=${width}`;
+    },
+    /**
+     * ویرایش متن یک دارایی متنی = ساخت نسخهٔ تازه روی همان دارایی.
+     * همان مسیری که «جزئیات دارایی» در مخزن استفاده می‌کند؛ تاریخ نسخه‌ها حفظ
+     * می‌شود و متن قبلی از بین نمی‌رود.
+     */
+    /**
+     * تغییر عنوان یک دارایی (مثلاً متن خروجی). عنوان همان چیزی است که در فهرست
+     * مخزن، کارت خروجی مرحله و پیش‌نمایش دیده می‌شود؛ جدا از نسخهٔ متن ذخیره
+     * می‌شود تا ویرایش عنوان نسخهٔ تازه نسازد.
+     */
+    updateTitle(id: string | number, title: string) {
+      return request<ApiResponse<CentralDamAssetResponse>>(`/dam/library/${id}`, { method: 'PATCH', body: { title } });
+    },
+    reviseText(id: string | number, body: string, changeDescription?: string) {
+      const form = new FormData();
+      form.append('body', body);
+      form.append('change_description', changeDescription || '');
+      return request<ApiResponse<CentralDamAssetResponse>>(`/dam/library/${id}/versions`, { method: 'POST', body: form });
+    },
   },
   folders: {
     list() {

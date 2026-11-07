@@ -78,7 +78,9 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en'),
+    // رابط کاربری و پیام‌های سرور فارسی است؛ پیام‌های اعتبارسنجی هم از
+    // `lang/fa/validation.php` خوانده می‌شوند تا خطای ۴۲۲ دلیلِ واقعی را بگوید.
+    'locale' => env('APP_LOCALE', 'fa'),
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 

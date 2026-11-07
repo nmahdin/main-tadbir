@@ -30,9 +30,11 @@ return [
 
     'disks' => [
 
+        // ریشهٔ فایل‌های کاربر با TADBIR_FILES_ROOT قابل انتقال به پوشه‌ای بیرون از
+        // پوشهٔ نرم‌افزار است. پیش‌فرض عوض نشده تا نصب فعلی بی‌وقفه بماند.
         'local' => [
             'driver' => 'local',
-            'root' => storage_path('app/private'),
+            'root' => env('TADBIR_FILES_ROOT') ?: storage_path('app/private'),
             'serve' => true,
             'throw' => false,
             'report' => false,

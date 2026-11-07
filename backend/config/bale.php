@@ -8,7 +8,12 @@ return [
     'webhook_base_url' => env('BALE_PUBLIC_BASE_URL'),
     'panel_url' => env('BALE_PANEL_URL') ?: 'https://tadbir.morvarid-daron.ir/',
     'code_lifetime_minutes' => 5,
-    'session_lifetime_minutes' => 15,
+    // جریانِ ناتمام (ثبت ردیف جدول، دریافت متن یا فایل) با هر تعامل تمدید می‌شود؛
+    // عددِ کوتاه باعث می‌شد کاربر وسطِ فرم به منوی اصلی برگردد.
+    'session_lifetime_minutes' => (int) env('BALE_SESSION_LIFETIME_MINUTES', 60),
+    // Enable temporarily on a live server for content-free lifecycle traces.
+    // Uses warning level so LOG_LEVEL=warning is sufficient.
+    'flow_diagnostics' => (bool) env('BALE_FLOW_DIAGNOSTICS', false),
     'request_timeout' => 4,
     'tick_seconds' => 15,
 ];

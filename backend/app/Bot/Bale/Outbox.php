@@ -6,6 +6,7 @@ use App\Bot\Bale\Client\BaleApiException;
 use App\Bot\Bale\Client\BaleClient;
 use App\Bot\Bale\Notifications\NotificationAccess;
 use App\Bot\Bale\Support\PanelLinks;
+use App\Bot\Bale\Support\ConversationCheckpoint;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\DamDataTable;
@@ -21,6 +22,7 @@ use App\Services\Organization\DepartmentConsolidation;
 use App\Services\TaskOperations;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 final class Outbox
 {
@@ -28,8 +30,11 @@ final class Outbox
 
     public function enqueue(string $key, string $chatId, array $payload, ?BaleUserLink $link = null, ?string $subjectType = null, ?int $subjectId = null): BaleOutbox
     {
+        $botId = (string) $this->settings->read()['bot_id'];
+        $payload = app(ConversationCheckpoint::class)->capture($key, $botId, $link, $payload);
+
         return BaleOutbox::firstOrCreate(['deduplication_key' => $key], [
-            'bot_id' => (string) $this->settings->read()['bot_id'], 'chat_id' => $chatId,
+            'bot_id' => $botId, 'chat_id' => $chatId,
             'link_id' => $link?->id, 'requires_link' => $link !== null, 'payload' => $payload,
             'subject_type' => $subjectType, 'subject_id' => $subjectId, 'available_at' => now(),
         ]);
@@ -58,6 +63,13 @@ final class Outbox
             if (microtime(true) + config('bale.request_timeout') >= $deadline || ! $this->settings->ready()) {
                 break;
             }
+            // Do not replay a delayed main-menu screen after a newer response.
+            // Other replies (including a successful save) must still be sent.
+            if ($this->supersededMenuResponse($message)) {
+                $message->update(['status' => 'cancelled', 'error_code' => 'superseded_flow_reply']);
+
+                continue;
+            }
             if (! $this->authorized($message)) {
                 $message->update(['status' => 'cancelled', 'error_code' => 'access_revoked']);
 
@@ -72,13 +84,25 @@ final class Outbox
             $message->update(['status' => 'sending', 'attempts' => $message->attempts + 1]);
             $cleanup = ($message->payload['_method'] ?? null) === 'deleteMessage' && ($message->payload['_ui_cleanup'] ?? false) === true;
             try {
-                $outbound = Arr::except($message->payload, ['_method', '_ui_cleanup', '_subject_ids', '_department_id', '_task_id', '_asset_text', '_automation']);
+                $outbound = Arr::except($message->payload, ['_method', '_ui_cleanup', '_subject_ids', '_department_id', '_task_id', '_asset_text', '_automation', '_file_disk', '_file_path', '_file_name', '_flow_checkpoint', '_flow_end']);
                 if (! $cleanup) {
                     $outbound = app(PanelLinks::class)->materialize($outbound, $message->link_id ? BaleUserLink::find($message->link_id) : null);
                 }
-                $result = $cleanup
-                    ? $this->client->call($this->settings->token(), 'deleteMessage', ['chat_id' => $message->chat_id, 'message_id' => $message->payload['message_id']])
-                    : $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...$outbound]);
+                if ($this->sendsDocument($message->payload)) {
+                    // ارسال پروندهٔ خروجی انتشار: محتوا همان لحظه از دیسک خوانده
+                    // می‌شود و در مسیر ارسال، در پایگاه داده نمی‌ماند.
+                    $file = $this->readFile($message->payload);
+                    if (! $file) {
+                        $message->update(['status' => 'failed', 'error_code' => 'file_unavailable']);
+
+                        continue;
+                    }
+                    $result = $this->client->call($this->settings->token(), 'sendDocument', ['chat_id' => $message->chat_id, ...$outbound, '_file' => $file]);
+                } else {
+                    $result = $cleanup
+                        ? $this->client->call($this->settings->token(), 'deleteMessage', ['chat_id' => $message->chat_id, 'message_id' => $message->payload['message_id']])
+                        : $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...$outbound]);
+                }
                 if (($cleanup && $result !== true) || (! $cleanup && (! is_array($result) || ! isset($result['message_id'])))) {
                     throw new BaleApiException('response_unknown');
                 }
@@ -108,6 +132,68 @@ final class Outbox
         }
 
         return $sent;
+    }
+
+    /**
+     * Drop only stale navigation/fallback screens once a newer interactive
+     * answer is queued. Personalized home has NO trailing dot; older code
+     * incorrectly compared only "به تدبیر خوش آمدید.", so delayed menus
+     * were replayed over active form prompts.
+     *
+     * Do not discard substantive replies (field prompts, confirmations, saves).
+     */
+    private function supersededMenuResponse(BaleOutbox $message): bool
+    {
+        $body = (string) ($message->payload['text'] ?? '');
+        $isNavigation = str_starts_with($body, 'به تدبیر خوش آمدید')
+            || str_starts_with($body, 'برای شروع، /menu را بفرستید.');
+        if (! $message->link_id || ! $isNavigation) {
+            return false;
+        }
+
+        $pattern = '/^'.preg_quote((string) $message->bot_id, '/').':[0-9]+$/D';
+        if (! preg_match($pattern, (string) $message->deduplication_key)) {
+            return false;
+        }
+
+        return BaleOutbox::query()
+            ->where('bot_id', $message->bot_id)
+            ->where('chat_id', $message->chat_id)
+            ->where('link_id', $message->link_id)
+            ->where('id', '>', $message->id)
+            ->whereNotIn('status', ['cancelled', 'failed'])
+            ->where('deduplication_key', 'like', $message->bot_id.':%')
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get(['deduplication_key'])
+            ->contains(fn (BaleOutbox $newer) => (bool) preg_match($pattern, (string) $newer->deduplication_key));
+    }
+
+    /** آیا این پیام باید به‌جای متن، یک پرونده بفرستد؟ */
+    private function sendsDocument(array $payload): bool
+    {
+        return ($payload['_method'] ?? null) === 'sendDocument';
+    }
+
+    /**
+     * خواندن پروندهٔ پیام از همان دیسک دارایی‌ها.
+     *
+     * @return array{contents: string, name: string}|null
+     */
+    private function readFile(array $payload): ?array
+    {
+        $disk = (string) ($payload['_file_disk'] ?? '');
+        $path = (string) ($payload['_file_path'] ?? '');
+        if ($disk === '' || $path === '' || ! Storage::disk($disk)->exists($path)) {
+            return null;
+        }
+        $size = (int) Storage::disk($disk)->size($path);
+        // سقف ۲۰ مگابایت: پرونده‌های بزرگ‌تر در بات ارسال نمی‌شوند.
+        if ($size <= 0 || $size > 20 * 1024 * 1024) {
+            return null;
+        }
+
+        return ['contents' => Storage::disk($disk)->get($path), 'name' => (string) ($payload['_file_name'] ?? 'file')];
     }
 
     private function authorized(BaleOutbox $message): bool
@@ -186,13 +272,22 @@ final class Outbox
             return true;
         }
         if ($message->subject_type === 'asset_tables') {
+            // فهرستِ جدول‌ها می‌تواند بدون دپارتمان باشد (قاعدهٔ خودکارسازی و
+            // مسیر «اطلاعات جدول» در منوی دارایی)؛ در آن حالت همان قاعدهٔ
+            // ویرایشِ کاربر سنجیده می‌شود، نه یک دپارتمانِ اجباری.
+            if (! $permissions->any($user, 'assets.view')) {
+                return false;
+            }
             $department = (int) ($message->payload['_department_id'] ?? 0);
-            if (! $permissions->any($user, 'assets.view') || ! Department::whereKey($department)->where('departments.status', 'active')->forMember($user)->exists()) {
+            if ($department > 0 && ! Department::whereKey($department)->where('departments.status', 'active')->forMember($user)->exists()) {
                 return false;
             }
             foreach (($message->payload['_subject_ids'] ?? []) as $id) {
                 $table = DamDataTable::find($id);
-                if (! $table || ! app(DamTableAccess::class)->botAllowed($user, $table, $department)) {
+                $allowed = $table && ($department > 0
+                    ? app(DamTableAccess::class)->botAllowed($user, $table, $department)
+                    : app(DamTableAccess::class)->canEdit($user, $table));
+                if (! $allowed) {
                     return false;
                 }
             }
@@ -201,8 +296,11 @@ final class Outbox
         }
         if ($message->subject_type === 'asset_table') {
             $table = DamDataTable::find($message->subject_id);
+            $department = (int) ($message->payload['_department_id'] ?? 0);
 
-            return $table && app(DamTableAccess::class)->botAllowed($user, $table, (int) ($message->payload['_department_id'] ?? 0));
+            return $table && ($department > 0
+                ? app(DamTableAccess::class)->botAllowed($user, $table, $department)
+                : app(DamTableAccess::class)->canEdit($user, $table));
         }
 
         return match ($message->subject_type) {

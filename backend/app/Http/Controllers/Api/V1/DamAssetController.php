@@ -21,6 +21,9 @@ use App\Services\DamService;
 use App\Services\TaskOperations;
 use App\Support\Dam\DamRelationRole;
 use App\Support\Dam\DamRichText;
+use App\Support\Media\DamFileKind;
+use App\Support\Media\DamThumbnail;
+use App\Support\Media\DamZipStream;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +31,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 
 class DamAssetController extends Controller
 {
@@ -88,6 +92,8 @@ class DamAssetController extends Controller
     {
         $data = $request->validate([
             'type' => ['nullable', Rule::in(['file', 'content'])],
+            // دستهٔ «نوع فایل» (تصویر/ویدیو/PDF/…)؛ فیلتر مستقل از نوع دارایی.
+            'file_kind' => ['nullable', Rule::in(DamFileKind::KINDS)],
             'search' => 'nullable|string|max:200',
             'project_id' => 'nullable|integer',
             'task_id' => 'nullable|integer',
@@ -128,6 +134,9 @@ class DamAssetController extends Controller
 
         if (! empty($data['type'])) {
             $query->where('type', $data['type']);
+        }
+        if (! empty($data['file_kind'])) {
+            DamFileKind::apply($query, $data['file_kind']);
         }
         if (! empty($data['search'])) {
             $term = '%'.addcslashes($data['search'], '%_\\').'%';
@@ -394,7 +403,16 @@ class DamAssetController extends Controller
             if ($asset->files) {
                 $payload['files'] = $asset->files->map($visible)->all();
             }
-            $payload['storage_root'] = rtrim((string) config('filesystems.disks.public.root', ''), '/');
+            // مسیر نمایش‌داده‌شده باید ریشهٔ همان دیسکی باشد که فایل روی آن است؛
+            // پیش‌تر ریشهٔ دیسک عمومی نمایش داده می‌شد که با محل واقعی فایل‌های
+            // خصوصی (disk=local) یکی نبود.
+            $disk = (string) ($asset->latestFile?->storage_disk ?: 'local');
+            $payload['storage_disk'] = $disk;
+            $payload['storage_root'] = rtrim((string) config("filesystems.disks.{$disk}.root", ''), '/');
+            $payload['storage_absolute_path'] = $asset->latestFile
+                ? \App\Support\Storage\StoragePaths::filePath($disk, (string) $asset->latestFile->storage_path)
+                : null;
+            $payload['storage_outside_application'] = ! \App\Support\Storage\StoragePaths::isInsideApplication($payload['storage_root']);
             $payload['preview_url'] = url("/api/v1/dam/library/{$asset->id}/preview");
             $payload['download_url'] = url("/api/v1/dam/library/{$asset->id}/download");
         }
@@ -422,6 +440,8 @@ class DamAssetController extends Controller
             'owner_id' => 'sometimes|required|integer|exists:users,id',
             'tags' => 'sometimes|array|max:20',
             'tags.*' => 'string|max:50',
+            // نام نمایشی فایل اصلی: فقط برچسب ذخیره‌شده عوض می‌شود، نه فایل روی هاست.
+            'original_filename' => 'sometimes|required|string|max:255',
         ]);
 
         if (array_intersect(array_keys($data), ['owner_id', 'status', 'confidentiality', 'access_grants'])) {
@@ -431,6 +451,8 @@ class DamAssetController extends Controller
             abort(403);
         }
 
+        $originalFilename = $data['original_filename'] ?? null;
+        unset($data['original_filename']);
         $oldFolder = $asset->folder_id;
         $oldStatus = $asset->status;
         $oldConfidentiality = $asset->confidentiality;
@@ -458,8 +480,18 @@ class DamAssetController extends Controller
         if (array_key_exists('owner_id', $data) && $oldOwner !== $asset->owner_id) {
             $events[] = ['action' => 'ownership_changed', 'metadata' => ['from' => $oldOwner, 'to' => $asset->owner_id]];
         }
+        if ($originalFilename !== null && $asset->latestFile && $originalFilename !== $asset->latestFile->original_filename) {
+            $previousName = $asset->latestFile->original_filename;
+            $nextName = $this->safeFilename($originalFilename, $asset->latestFile->extension);
+            $asset->latestFile->update(['original_filename' => $nextName]);
+            $events[] = ['action' => 'renamed', 'metadata' => ['from' => $previousName, 'to' => $nextName]];
+        }
         if ($events === []) {
-            $events[] = ['action' => 'updated', 'metadata' => ['fields' => array_keys($data)]];
+            $fields = array_keys($data);
+            if ($originalFilename !== null) {
+                $fields[] = 'original_filename';
+            }
+            $events[] = ['action' => 'updated', 'metadata' => ['fields' => $fields]];
         }
         foreach ($events as $event) {
             $asset->activities()->create([
@@ -469,7 +501,15 @@ class DamAssetController extends Controller
             ]);
         }
 
-        return ['data' => $asset->refresh()->load(['latestFile', 'contentItem', 'relations', 'tags', 'category', 'folder'])];
+        // پاسخ به‌روزرسانی همان شکل `show` را دارد تا مودال پس از ویرایش نام یا
+        // فراداده، تاریخچهٔ نسخه‌ها و فعالیت‌ها را از دست ندهد.
+        $asset = $asset->refresh()->load([
+            'latestFile', 'contentItem', 'relations', 'tags', 'category', 'folder',
+            'versions.file', 'versions.creator:id,name,username,avatar', 'activities.actor:id,name,avatar',
+        ]);
+        app(\App\Services\DamRelationPresenter::class)->attach(collect([$asset]));
+
+        return ['data' => $asset];
     }
 
     public function bulkMove(Request $request, DamFolderStorage $storage)
@@ -566,6 +606,57 @@ class DamAssetController extends Controller
         });
 
         return response()->json(['data' => ['archived' => $assets->count()]]);
+    }
+
+    /**
+     * دانلود گروهی دارایی‌های انتخاب‌شده به‌صورت یک فایل زیپ.
+     *
+     * فقط فایل‌های موجود در زیپ می‌آیند؛ دارایی متنی یا فایلی که روی دیسک نیست
+     * نادیده گرفته می‌شود و اگر هیچ فایلی نماند، پاسخ ۴۲۲ با پیام روشن می‌آید
+     * (به‌جای زیپ خالی که کاربر فکر کند خطای شبکه بوده است).
+     *
+     * سقف ۵۰ دارایی عمدی است: زیپ جریانی است و نمی‌خواهیم یک درخواست، ساعت‌ها
+     * اتصال سرور را بگیرد.
+     */
+    public function bulkDownload(Request $request)
+    {
+        abort_unless($request->user()->hasPermission('assets.download'), 403);
+        $data = $request->validate([
+            'ids' => 'required|array|min:1|max:50',
+            'ids.*' => 'required|integer|distinct|exists:dam_assets,id',
+        ]);
+        $assets = DamAsset::query()->whereIn('id', $data['ids'])->with('latestFile')->get();
+        abort_unless($assets->count() === count($data['ids']), 404);
+
+        $entries = [];
+        $downloaded = [];
+        foreach ($assets as $asset) {
+            $this->permitted($request, 'assets.download', $asset);
+            $file = $asset->latestFile;
+            if (! $file || ! Storage::disk($file->storage_disk)->exists($file->storage_path)) {
+                continue;
+            }
+            $entries[] = [
+                'name' => $file->original_filename ?: ($asset->title ?: 'file'),
+                'disk' => $file->storage_disk,
+                'path' => $file->storage_path,
+            ];
+            $downloaded[] = $asset;
+        }
+
+        abort_if($entries === [], 422, 'برای دارایی‌های انتخاب‌شده فایلی برای دانلود وجود ندارد.');
+
+        DB::transaction(function () use ($downloaded, $request): void {
+            foreach ($downloaded as $asset) {
+                $asset->activities()->create([
+                    'actor_id' => $request->user()->id,
+                    'action' => 'downloaded',
+                    'metadata' => ['bulk' => true],
+                ]);
+            }
+        });
+
+        return (new DamZipStream($entries, 'tadbir-assets-'.now()->format('Ymd-Hi').'.zip'))->response();
     }
 
     public function destroy(Request $request, DamAsset $asset)
@@ -691,6 +782,80 @@ class DamAssetController extends Controller
         return ['data' => $asset->load('relations')];
     }
 
+    /**
+     * انتقال یک داراییِ موجود به پوشهٔ پیش‌فرضِ همان بخش.
+     *
+     * ضمیمه‌ای که تازه آپلود می‌شود، خودکار در پوشهٔ همین رکورد (محتوا با
+     * تفکیک ورودی/خروجی/پیوست، ایده، جلسه، وظیفه یا پروژه) ذخیره می‌شود؛ دارایی
+     * موجودی که از مخزن به ضمیمه‌ها وصل می‌شود در پوشهٔ قبلی خود می‌ماند و در
+     * درخت پوشه‌ها پراکنده می‌شد. این مسیر همان مقصدِ پیش‌فرض را از سمت سرور
+     * تعیین می‌کند تا قاعدهٔ نام‌گذاری و ساخت پوشه یک‌جا بماند.
+     */
+    public function contextFolder(Request $request, DamAsset $asset, DamService $service)
+    {
+        $this->permitted($request, 'assets.edit_info', $asset);
+        abort_unless($request->user()->hasPermission('assets.move'), 403, 'برای انتقال دارایی به پوشهٔ این بخش، مجوز جابه‌جایی دارایی لازم است.');
+
+        $data = $request->validate([
+            'content_id' => 'nullable|integer|exists:contents,id',
+            'content_bucket' => ['nullable', Rule::in(['attachments', 'inputs', 'initial_input', 'working', 'outputs', 'final', 'publication'])],
+            'idea_id' => 'nullable|integer',
+            'meeting_id' => 'nullable|integer',
+            'task_id' => 'nullable|integer|exists:tasks,id',
+            'project_id' => 'nullable|integer|exists:projects,id',
+        ]);
+
+        abort_unless(array_filter($data, fn ($value) => $value !== null && $value !== ''), 422, 'زمینهٔ مقصد برای پوشهٔ این بخش مشخص نیست.');
+
+        if (! empty($data['content_id'])) {
+            $content = Content::findOrFail((int) $data['content_id']);
+            abort_unless(app(ContentAccess::class)->canView($request->user(), $content), 403);
+        }
+        if (! empty($data['idea_id'])) {
+            $this->guardWorkspaceContext($request, 'idea', (int) $data['idea_id']);
+        }
+        if (! empty($data['meeting_id'])) {
+            $this->guardWorkspaceContext($request, 'meeting', (int) $data['meeting_id']);
+        }
+        if (! empty($data['task_id'])) {
+            $this->permitted($request, 'tasks.view');
+            abort_unless(app(TaskOperations::class)->visibleTo($request->user())->whereKey((int) $data['task_id'])->exists(), 403);
+        }
+        if (! empty($data['project_id'])) {
+            app(\App\Services\ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['project_id']));
+        }
+
+        $folder = $service->contextFolder($data, $request->user());
+        abort_unless($folder, 422, 'پوشهٔ پیش‌فرض این بخش پیدا نشد.');
+
+        if ((int) $asset->folder_id === (int) $folder->id) {
+            return ['data' => [
+                'moved' => false,
+                'unchanged' => true,
+                'folder' => ['id' => $folder->id, 'name' => $folder->name],
+                'message' => 'این دارایی از قبل در پوشهٔ «'.$folder->name.'» است.',
+            ]];
+        }
+
+        DB::transaction(function () use ($asset, $folder, $request): void {
+            $from = $asset->folder_id;
+            $asset->update(['folder_id' => $folder->id, 'updated_by' => $request->user()->id]);
+            app(DamFolderStorage::class)->moveAsset($asset, $folder->id);
+            $asset->activities()->create([
+                'actor_id' => $request->user()->id,
+                'action' => 'moved',
+                'metadata' => ['from' => $from, 'to' => $folder->id, 'reason' => 'context_folder'],
+            ]);
+        });
+
+        return ['data' => [
+            'moved' => true,
+            'unchanged' => false,
+            'folder' => ['id' => $folder->id, 'name' => $folder->name],
+            'message' => 'دارایی به پوشهٔ «'.$folder->name.'» منتقل شد.',
+        ]];
+    }
+
     public function detach(Request $request, DamAsset $asset, int $relation)
     {
         return DB::transaction(function () use ($request, $asset, $relation) {
@@ -774,10 +939,48 @@ class DamAssetController extends Controller
             ]);
     }
 
+    /**
+     * فایلِ درخواست: نسخهٔ جاری یا نسخهٔ انتخابی (`?version=`).
+     *
+     * پیش‌نمایش نسخه‌های قبلی یک نیاز واقعی است (مقایسهٔ نسخه‌ها پیش از
+     * بازگردانی)، و همان مسیر پیش‌نمایش با پارامتر نسخه پاسخ می‌دهد تا مسیر و
+     * مجوز تازه‌ای ساخته نشود. مقدار، شناسهٔ نسخه یا شمارهٔ نسخه پذیرفته است.
+     */
+    private function versionFile(DamAsset $asset, Request $request)
+    {
+        $requested = $request->query('version');
+        if ($requested === null || $requested === '') {
+            return $asset->latestFile;
+        }
+        $version = $asset->versions()
+            ->where(fn ($query) => $query->whereKey(is_numeric($requested) ? (int) $requested : 0)
+                ->orWhere('version_number', is_numeric($requested) ? (int) $requested : 0))
+            ->first();
+        abort_unless($version, 404, 'نسخهٔ درخواستی برای این دارایی پیدا نشد.');
+
+        return $version->file;
+    }
+
+    /** نام فایل امن برای نمایش/دانلود؛ پسوند اصلی حفظ می‌شود. */
+    private function safeFilename(string $name, ?string $extension): string
+    {
+        $clean = trim(preg_replace('/[\/\\:*?"<>|]+/u', '-', $name) ?? '');
+        $clean = trim(preg_replace('/\s+/u', ' ', $clean) ?? '');
+        if ($clean === '') {
+            $clean = 'file';
+        }
+        $extension = ltrim((string) $extension, '.');
+        if ($extension !== '' && ! str_contains(mb_strtolower($clean), '.'.mb_strtolower($extension))) {
+            $clean .= '.'.$extension;
+        }
+
+        return mb_substr($clean, 0, 255);
+    }
+
     public function preview(Request $request, DamAsset $asset)
     {
         $this->permitted($request, 'assets.preview', $asset);
-        $file = $asset->latestFile;
+        $file = $this->versionFile($asset, $request);
         abort_unless($file && Storage::disk($file->storage_disk)->exists($file->storage_path), 404);
         $mime = strtolower($file->mime_type ?: 'application/octet-stream');
         $isPreviewable = str_starts_with($mime, 'image/') && $mime !== 'image/svg+xml'
@@ -785,20 +988,131 @@ class DamAssetController extends Controller
             || str_starts_with($mime, 'video/')
             || in_array($mime, ['application/pdf', 'text/plain'], true);
         abort_unless($isPreviewable, 415, 'پیش‌نمایش این قالب فایل در حال حاضر پشتیبانی نمی‌شود.');
-        $asset->activities()->create(['actor_id' => $request->user()->id, 'action' => 'previewed']);
+        // یک بازدید ثبت می‌شود، نه هر درخواست بازه‌ای (Range): پخش‌کنندهٔ صدا و
+        // ویدیو برای هر جابه‌جایی روی نوار زمان یک درخواست ۲۰۶ می‌فرستد.
+        if (! $request->headers->has('Range')) {
+            $asset->activities()->create(['actor_id' => $request->user()->id, 'action' => 'previewed']);
+        }
 
-        return Storage::disk($file->storage_disk)->response(
-            $file->storage_path,
-            $file->original_filename,
-            ['Content-Type' => $mime, 'X-Content-Type-Options' => 'nosniff'],
-            'inline',
+        return $this->mediaResponse($file->storage_disk, $file->storage_path, $file->original_filename, $mime);
+    }
+
+    /**
+     * بندانگشتی سبک تصویر برای کارت‌ها و ردیف‌های مخزن (دور ۸۴).
+     *
+     * پیش‌تر همین کادرهای کوچک، نشانی `preview` (فایل اصلی) را می‌گرفتند؛ یک
+     * فهرست بیست‌ردیفی از عکس‌های موبایلی می‌توانست ده‌ها مگابایت دانلود کند.
+     * اکنون نسخهٔ کوچک و کش‌شده (WebP در صورت پشتیبانی سرور) سرو می‌شود و
+     * پاسخ با `Cache-Control` بلندمدت + `ETag` همراه است تا مرورگر دوباره
+     * آن را نگیرد. اگر تبدیل تصویر روی این سرور ممکن نباشد، همان فایل اصلی
+     * برمی‌گردد تا بندانگشتی خالی نماند.
+     */
+    public function thumbnail(Request $request, DamAsset $asset)
+    {
+        $this->permitted($request, 'assets.preview', $asset);
+        $file = $this->versionFile($asset, $request);
+        abort_unless($file && Storage::disk($file->storage_disk)->exists($file->storage_path), 404);
+        $mime = strtolower($file->mime_type ?: 'application/octet-stream');
+        abort_unless(
+            str_starts_with($mime, 'image/') && $mime !== 'image/svg+xml',
+            415,
+            'بندانگشتی فقط برای تصاویر ساخته می‌شود.',
         );
+
+        $thumbnails = app(DamThumbnail::class);
+        $thumb = $thumbnails->forFile($file, $thumbnails->width($request->query('w')));
+        if ($thumb === null) {
+            // تبدیل تصویر روی این سرور ممکن نشد (نبود Imagick/GD یا دیسک ابری):
+            // همان فایل اصلی سرو می‌شود تا بندانگشتی خالی نماند؛ کش و ETag هم
+            // می‌مانند تا دست‌کم درخواست تکراری دانلود نشود.
+            $original = $this->mediaResponse($file->storage_disk, $file->storage_path, $file->original_filename, $mime);
+
+            return $this->withImageCache(
+                $original,
+                $request,
+                sprintf('"dam-file-%s-%s"', (string) ($file->id ?: 'file'), (string) ($file->checksum ?: $file->file_size)),
+            );
+        }
+
+        $response = response()->file($thumb['path'], [
+            'Content-Type' => $thumb['mime'],
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+
+        return $this->withImageCache($response, $request, $thumb['etag']);
+    }
+
+    /**
+     * کش مرورگری برای بندانگشتی.
+     *
+     * نسخهٔ کوچک با اثر انگشت نسخهٔ فایل نام‌گذاری می‌شود و نسخهٔ فایل هم پس از
+     * بارگذاری تغییر نمی‌کند؛ پس کش یک‌هفته‌ای امن است. درخواست تکراری با همان
+     * `ETag` به ۳۰۴ بدون بدنه پاسخ می‌گیرد.
+     */
+    private function withImageCache(Response $response, Request $request, string $etag): Response
+    {
+        $cache = 'private, max-age=604800';
+        $response->headers->set('ETag', $etag);
+        $response->headers->set('Cache-Control', $cache);
+
+        $ifNoneMatch = trim((string) $request->headers->get('If-None-Match', ''));
+        if ($ifNoneMatch === '') {
+            return $response;
+        }
+        foreach (explode(',', $ifNoneMatch) as $candidate) {
+            $candidate = trim($candidate);
+            if ($candidate === $etag || $candidate === 'W/'.$etag || $candidate === '*') {
+                $notModified = response('', 304, ['ETag' => $etag, 'Cache-Control' => $cache]);
+
+                return $notModified;
+            }
+        }
+
+        return $response;
+    }
+
+    /**
+     * پاسخ فایل رسانه با پشتیبانی از درخواست‌های بازه‌ای (HTTP Range).
+     *
+     * بدون پشتیبانی Range، مرورگر برای پخش صدا/ویدیو کل فایل را یک‌جا می‌خواست
+     * و «لود همراه پخش» ممکن نبود؛ با ۲۰۶، فقط همان بازه‌ای که پخش‌کننده لازم
+     * دارد فرستاده می‌شود و جابه‌جایی روی نوار زمان هم سریع است. فایل‌های دیسک
+     * محلی با `BinaryFileResponse` (که Range و ETag را خودش مدیریت می‌کند) و
+     * بقیهٔ دیسک‌ها با پاسخ جریانی سرو می‌شوند.
+     */
+    private function mediaResponse(string $disk, string $path, string $filename, string $mime)
+    {
+        $headers = [
+            'Content-Type' => $mime,
+            'X-Content-Type-Options' => 'nosniff',
+            'Accept-Ranges' => 'bytes',
+            // اجازهٔ ذخیرهٔ بازه‌های دیده‌شده با اعتبارسنجی مجدد: وقتی پخش‌کننده
+            // عقب/جلو می‌رود، بازهٔ خوانده‌شده دوباره دانلود نمی‌شود.
+            'Cache-Control' => 'private, no-cache',
+            // نام فایل هم برای نمایش درون‌مرورگری و هم برای دانلود مستقیم لازم
+            // است؛ نسخهٔ ASCII برای کلاینت‌های قدیمی و نسخهٔ UTF-8 برای نام فارسی.
+            'Content-Disposition' => sprintf(
+                'inline; filename="%s"; filename*=UTF-8\'\'%s',
+                str_replace(['"', '\\'], '', preg_replace('/[^\x20-\x7E]/', '_', $filename) ?: 'file'),
+                rawurlencode($filename),
+            ),
+        ];
+        try {
+            $absolute = Storage::disk($disk)->path($path);
+            if (is_file($absolute)) {
+                return response()->file($absolute, $headers);
+            }
+        } catch (\Throwable) {
+            // دیسک بیرونی/ابری مسیر محلی ندارد؛ پاسخ جریانی جایگزین است.
+        }
+
+        return Storage::disk($disk)->response($path, $filename, $headers, 'inline');
     }
 
     public function download(Request $request, DamAsset $asset)
     {
         $this->permitted($request, 'assets.download', $asset);
-        $file = $asset->latestFile;
+        $file = $this->versionFile($asset, $request);
         abort_unless($file && Storage::disk($file->storage_disk)->exists($file->storage_path), 404);
         $asset->activities()->create(['actor_id' => $request->user()->id, 'action' => 'downloaded']);
 

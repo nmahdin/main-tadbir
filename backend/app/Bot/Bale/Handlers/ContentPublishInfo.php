@@ -1,0 +1,404 @@
+<?php
+
+namespace App\Bot\Bale\Handlers;
+
+use App\Bot\Bale\Outbox;
+use App\Bot\Bale\Support\ContentLabels;
+use App\Bot\Bale\Support\PanelLinks;
+use App\Bot\Bale\Support\MenuNavigation;
+use App\Bot\Bale\Support\MessageText;
+use App\Bot\Bale\Support\PersianDate;
+use App\Models\BaleConversation;
+use App\Models\BaleUserLink;
+use App\Models\Content;
+use App\Models\DamAsset;
+use App\Models\DomainRecord;
+use App\Models\Task;
+use App\Models\User;
+use App\Services\ContentAccess;
+use App\Services\ContentPublication;
+use App\Services\TaskOperations;
+use Illuminate\Support\Facades\Storage;
+
+/**
+ * اطلاعات انتشار برای وظیفه‌های متصل به محتوا در بات بله.
+ *
+ * فقط وظیفه‌ای که واقعاً وظیفهٔ انتشار است (تسک خودکار انتشار یا تسکِ کاریِ
+ * مرحله‌ای با کلید «انتشار») این دکمه را می‌گیرد:
+ *
+ * - «دریافت اطلاعات انتشار»: تاریخ/ساعت انتشار، کانال‌ها، ناشر و متن کپشن؛
+ * - فایل‌های خروجی: برای هر خروجی یک دکمه؛ با زدن آن، همان فایل برای کاربر
+ *   فرستاده می‌شود (خروجیِ متنی به‌صورت پیام متنی می‌آید)؛
+ * - «کپی متن کپشن»: کپشن در یک پیام جدا فرستاده می‌شود تا بتوان آن را کپی کرد.
+ *
+ * دسترسی همان قاعدهٔ همیشگی وظایف است: فقط مسئول همان وظیفه و با مجوز مشاهدهٔ
+ * وظایف؛ هیچ پرونده یا فایلی از محتوای دیگر خوانده نمی‌شود.
+ */
+final class ContentPublishInfo
+{
+    /** سقف حجم پروندهٔ قابل ارسال در بات (بایت). */
+    private const MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+    /** بیشترین شمار خروجی‌ای که برای آن دکمه ساخته می‌شود. */
+    private const MAX_OUTPUT_BUTTONS = 8;
+
+    public function handle(string $key, string $chat, BaleUserLink $link, User $user, ?BaleConversation $session, string $action): bool
+    {
+        // یادآوری‌های انتشار (بدون وظیفه) هم دکمهٔ «دریافت اطلاعات انتشار» دارند؛
+        // مقصد این دکمه‌ها خودِ پروندهٔ محتواست، نه یک وظیفهٔ مشخص.
+        if (preg_match('/^pubinfo:content:(\d{1,18})$/', $action, $m)) {
+            $content = $this->visibleContent($user, (int) $m[1]);
+            $session?->delete();
+            $this->sendInfo($key, $chat, $link, null, $content);
+
+            return true;
+        }
+        if (preg_match('/^pubfile:content:(\d{1,18}):(\d{1,3})$/', $action, $m)) {
+            $content = $this->visibleContent($user, (int) $m[1]);
+            $session?->delete();
+            $this->sendOutput($key, $chat, $link, $user, null, $content, (int) $m[2]);
+
+            return true;
+        }
+        if (preg_match('/^pubcap:content:(\d{1,18})$/', $action, $m)) {
+            $content = $this->visibleContent($user, (int) $m[1]);
+            $session?->delete();
+            $this->sendCaption($key, $chat, $link, null, $content);
+
+            return true;
+        }
+        if (preg_match('/^pubpublish:content:(\d{1,18})$/', $action, $m)) {
+            $content = $this->visibleContent($user, (int) $m[1]);
+            app(ContentPublication::class)->authorize($user);
+            if (ContentPublication::published($content)) {
+                $this->reply($key, $chat, $link, 'این پرونده پیش‌تر منتشر شده است.',
+                    [[['text' => '📣 دریافت اطلاعات انتشار', 'callback_data' => 'pubinfo:content:'.$content->id]]], null, $content);
+
+                return true;
+            }
+            abort_unless(ContentPublication::workflowReady($content), 409, 'انتشار پس از تکمیل آخرین مرحلهٔ جریان محتوا فعال می‌شود.');
+            $pending = BaleConversation::updateOrCreate(['link_id' => $link->id], ['step' => 'publish_confirm', 'nonce' => bin2hex(random_bytes(12)),
+                'data' => ['task_id' => null, 'content_id' => (int) $content->id, 'expected' => ContentPublication::version($content)],
+                'expires_at' => MenuNavigation::lifetime()]);
+            $this->reply($key, $chat, $link, 'ثبت انتشارِ «'.MessageText::plain((string) $content->title, 120).'» تأیید شود؟'
+                ."\n\n".'با تأیید، وضعیت پرونده «منتشرشده» می‌شود و تاریخ و ساعت انتشار با زمانِ سازمان ثبت می‌گردد.',
+                [[['text' => '✅ تأیید ثبت انتشار', 'callback_data' => 'pubconfirm:'.$pending->nonce]],
+                    [['text' => 'انصراف', 'callback_data' => 'pubinfo:content:'.$content->id]]], null, $content);
+
+            return true;
+        }
+        if (preg_match('/^pubinfo:(\d{1,18})$/', $action, $m)) {
+            $task = app(TaskOperations::class)->ownForBale($user, $m[1]);
+            $content = $this->publishContent($task);
+            abort_unless($content, 404);
+            $session?->delete();
+            $this->sendInfo($key, $chat, $link, $task, $content);
+
+            return true;
+        }
+        if (preg_match('/^pubfile:(\d{1,18}):(\d{1,3})$/', $action, $m)) {
+            $task = app(TaskOperations::class)->ownForBale($user, $m[1]);
+            $content = $this->publishContent($task);
+            abort_unless($content, 404);
+            $session?->delete();
+            $this->sendOutput($key, $chat, $link, $user, $task, $content, (int) $m[2]);
+
+            return true;
+        }
+        if (preg_match('/^pubcap:(\d{1,18})$/', $action, $m)) {
+            $task = app(TaskOperations::class)->ownForBale($user, $m[1]);
+            $content = $this->publishContent($task);
+            abort_unless($content, 404);
+            $session?->delete();
+            $this->sendCaption($key, $chat, $link, $task, $content);
+
+            return true;
+        }
+        // «ثبت انتشار» از همان پیامِ اطلاعات انتشار: ابتدا پیش‌نمایش و تأیید،
+        // سپس همان سرویسِ انتشارِ پنل (با همان مجوز و بررسیِ نسخه).
+        if (preg_match('/^pubpublish:(\d{1,18})$/', $action, $m)) {
+            $task = app(TaskOperations::class)->ownForBale($user, $m[1]);
+            $content = $this->publishContent($task);
+            abort_unless($content, 404);
+            app(ContentPublication::class)->authorize($user);
+            if (ContentPublication::published($content)) {
+                $this->reply($key, $chat, $link, 'این پرونده پیش‌تر منتشر شده است.', [[['text' => '📣 دریافت اطلاعات انتشار', 'callback_data' => $this->infoAction($task, $content)]]], $task, $content);
+
+                return true;
+            }
+            abort_unless(ContentPublication::workflowReady($content), 409, 'انتشار پس از تکمیل آخرین مرحلهٔ جریان محتوا فعال می‌شود.');
+            $session = BaleConversation::updateOrCreate(['link_id' => $link->id], ['step' => 'publish_confirm', 'nonce' => bin2hex(random_bytes(12)),
+                'data' => ['task_id' => $task->id, 'content_id' => (int) $content->id, 'expected' => ContentPublication::version($content)],
+                'expires_at' => MenuNavigation::lifetime()]);
+            $this->reply($key, $chat, $link, 'ثبت انتشارِ «'.MessageText::plain((string) $content->title, 120).'» تأیید شود؟'
+                ."\n\n".'با تأیید، وضعیت پرونده «منتشرشده» می‌شود و تاریخ و ساعت انتشار با زمانِ سازمان ثبت می‌گردد.',
+                [[['text' => '✅ تأیید ثبت انتشار', 'callback_data' => 'pubconfirm:'.$session->nonce]],
+                    [['text' => 'انصراف', 'callback_data' => $this->infoAction($task, $content)]]], $task, $content);
+
+            return true;
+        }
+        if (preg_match('/^pubconfirm:([a-f0-9]{24})$/', $action, $m)) {
+            abort_unless($session?->step === 'publish_confirm' && hash_equals($session->nonce, $m[1]), 409);
+            $data = $session->data;
+            $session->delete();
+            // نشستِ تأیید ممکن است از پیامِ یک وظیفه آمده باشد یا از یادآوریِ
+            // خودِ پرونده؛ هر دو مسیر به همان سرویس انتشار می‌رسند.
+            $task = (int) ($data['task_id'] ?? 0) > 0
+                ? app(TaskOperations::class)->ownForBale($user, $data['task_id'])
+                : null;
+            $content = $task ? $this->publishContent($task) : $this->visibleContent($user, (int) ($data['content_id'] ?? 0));
+            abort_unless($content && (int) $content->id === (int) ($data['content_id'] ?? 0), 404);
+            $published = app(ContentPublication::class)->publish($user, $content, (string) ($data['expected'] ?? ''));
+            $info = is_array($published->payload['publishInfo'] ?? null) ? $published->payload['publishInfo'] : [];
+            $this->reply($key, $chat, $link, '✅ انتشارِ «'.MessageText::plain((string) $published->title, 120).'» ثبت شد.'
+                ."\n".'تاریخ: '.PersianDate::format($info['date'] ?? null)
+                .(empty($info['time']) ? '' : ' · ساعت '.MessageText::plain((string) $info['time'], 10)),
+                [[['text' => '📣 دریافت اطلاعات انتشار', 'callback_data' => $this->infoAction($task, $published)]]], $task, $published);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * دکمه‌های اعلان: فقط برای اعلانی که به وظیفهٔ انتشارِ خودِ کاربر وصل است.
+     *
+     * @return array<int, array<int, array<string, string>>>
+     */
+    public function notificationRows(User $user, DomainRecord $record, ?BaleUserLink $link = null): array
+    {
+        $taskId = (int) ($record->payload['linkTaskId'] ?? 0);
+        if ($taskId > 0) {
+            $task = Task::whereKey($taskId)->where('assignee_id', $user->id)->first();
+            // پروندهٔ همین وظیفه؛ پیش‌تر متغیرِ `$content` تعریف نشده بود و
+            // ساختنِ دکمه با خطای نوع شکست می‌خورد.
+            $content = $task ? $this->publishContent($task) : null;
+            if (! $content) {
+                return [];
+            }
+
+            return [[['text' => '📣 دریافت اطلاعات انتشار', 'callback_data' => $this->infoAction($task, $content)]]];
+        }
+
+        // یادآوریِ انتشار به وظیفه گره نخورده است؛ شناسهٔ پرونده در payload
+        // هست. این پیام دو دکمه می‌گیرد: اطلاعات انتشار و باز کردن خود محتوا.
+        $contentId = (int) ($record->payload['linkContentId'] ?? 0);
+        if ($contentId < 1) {
+            return [];
+        }
+        $content = Content::find($contentId);
+        if (! $content || ! app(ContentAccess::class)->canView($user, $content)) {
+            return [];
+        }
+
+        return [
+            [['text' => '📣 دریافت اطلاعات انتشار', 'callback_data' => 'pubinfo:content:'.$content->id]],
+            ...app(PanelLinks::class)->buttons($link, 'content', (int) $content->id, '🗂 باز کردن محتوا'),
+        ];
+    }
+
+    /** پرونده‌ای که این کاربر حق دیدنش را دارد؛ ۴۰۴/۴۰۳ واقعی، نه پیام ساختگی. */
+    private function visibleContent(User $user, int $contentId): Content
+    {
+        $content = $contentId > 0 ? Content::find($contentId) : null;
+        abort_unless($content, 404);
+        abort_unless(app(ContentAccess::class)->canView($user, $content), 403);
+
+        return $content;
+    }
+
+    /** شناسهٔ callback برای همان مقصدی که پیام از آن آمده است (وظیفه یا پرونده). */
+    private function infoAction(?Task $task, Content $content): string
+    {
+        // پیش‌تر این متد خودش را صدا می‌زد و برای هر وظیفهٔ انتشار، بازگشتِ
+        // بی‌پایان و خطای ۵۰۰ می‌داد.
+        return $task ? 'pubinfo:'.$task->id : 'pubinfo:content:'.$content->id;
+    }
+
+    private function outputAction(?Task $task, Content $content, int $index): string
+    {
+        return ($task ? 'pubfile:'.$task->id : 'pubfile:content:'.$content->id).':'.$index;
+    }
+
+    private function captionAction(?Task $task, Content $content): string
+    {
+        return $task ? 'pubcap:'.$task->id : 'pubcap:content:'.$content->id;
+    }
+
+    private function publishAction(?Task $task, Content $content): string
+    {
+        return $task ? 'pubpublish:'.$task->id : 'pubpublish:content:'.$content->id;
+    }
+
+    /** پروندهٔ محتوا فقط وقتی که این وظیفه واقعاً وظیفهٔ انتشار همان پرونده است. */
+    public function publishContent(Task $task): ?Content
+    {
+        $content = $task->content;
+        if (! $content) {
+            return null;
+        }
+        if ($task->kind === ContentPublication::KIND) {
+            return $content;
+        }
+        $stages = collect(is_array($content->payload['stages'] ?? null) ? $content->payload['stages'] : [])
+            ->filter(fn ($stage) => is_array($stage));
+        $stage = $stages->first(fn (array $stage) => (string) ($stage['id'] ?? '') === (string) $task->content_stage_id);
+
+        return $stage && ($stage['stageKey'] ?? null) === 'publish' ? $content : null;
+    }
+
+    /**
+     * خروجی‌های ثبت‌شدهٔ همهٔ مراحل، به همان ترتیب ثبت.
+     *
+     * @return array<int, array{type: string, label: string, asset: ?DamAsset, disk: ?string, path: ?string, name: ?string, text: string}>
+     */
+    private function outputs(Content $content): array
+    {
+        $items = [];
+        $stages = is_array($content->payload['stages'] ?? null) ? $content->payload['stages'] : [];
+        foreach ($stages as $stage) {
+            if (! is_array($stage)) {
+                continue;
+            }
+            foreach (($stage['outputs'] ?? []) as $output) {
+                if (! is_array($output)) {
+                    continue;
+                }
+                $assetId = is_numeric($output['assetId'] ?? null) ? (int) $output['assetId'] : 0;
+                $asset = $assetId > 0 ? DamAsset::with(['latestFile', 'contentItem'])->find($assetId) : null;
+                $file = $asset?->latestFile;
+                $text = trim((string) ($output['value'] ?? ''));
+                if ($text === '' && $asset && $asset->type === 'content') {
+                    $text = trim((string) ($asset->contentItem?->content_body ?? ''));
+                }
+                $label = MessageText::plain((string) ($output['name'] ?? $output['fileName'] ?? ''), 60);
+                if ($file) {
+                    $items[] = ['type' => 'file', 'label' => $label !== '' ? $label : ($file->original_filename ?: 'فایل خروجی'),
+                        'asset' => $asset, 'disk' => $file->storage_disk, 'path' => $file->storage_path,
+                        'name' => $file->original_filename ?: 'خروجی', 'text' => $text];
+                    continue;
+                }
+                if ($text !== '') {
+                    $items[] = ['type' => 'text', 'label' => $label !== '' ? $label : 'متن خروجی',
+                        'asset' => $asset, 'disk' => null, 'path' => null, 'name' => null, 'text' => $text];
+                }
+            }
+        }
+
+        return $items;
+    }
+
+    private function sendInfo(string $key, string $chat, BaleUserLink $link, ?Task $task, Content $content): void
+    {
+        $labels = app(ContentLabels::class);
+        $payload = is_array($content->payload) ? $content->payload : [];
+        $info = is_array($payload['publishInfo'] ?? null) ? $payload['publishInfo'] : [];
+        $publisher = is_numeric($payload['publisherId'] ?? null) ? User::find((int) $payload['publisherId']) : null;
+        // نام کانال‌ها و وضعیت پرونده از تنظیماتِ سازمان خوانده می‌شود تا در پیام
+        // بات به‌جای کلیدِ انگلیسی، نام فارسی دیده شود.
+        $channels = $labels->channels(is_array($info['channels'] ?? null) ? $info['channels'] : []);
+        $caption = trim((string) ($info['caption'] ?? ''));
+
+        $body = "📣 *اطلاعات انتشار محتوا* \n\n"
+            .'📌 '.MessageText::plain((string) $content->title, 180)."\n"
+            .'🧩 کد: '.MessageText::plain((string) ($content->code ?? '—'), 60)."\n"
+            .'📅 تاریخ انتشار: '.PersianDate::format($info['date'] ?? null)
+            .(empty($info['time']) ? '' : ' · ساعت '.MessageText::plain((string) $info['time'], 10))."\n"
+            .'📡 کانال‌ها: '.($channels !== '' ? $channels : 'تعیین نشده')."\n"
+            .'👤 ناشر: '.MessageText::plain($publisher?->name ?? 'تعیین نشده', 120)."\n"
+            .'🏷 وضعیت پرونده: '.MessageText::plain($labels->status($content->status), 40);
+
+        $outputs = $this->outputs($content);
+        if ($outputs === []) {
+            $body .= "\n\nهیچ خروجی‌ای برای این پرونده ثبت نشده است.";
+        } else {
+            $body .= "\n\nبرای دریافت هر خروجی، دکمهٔ همان خروجی را بزنید.";
+        }
+        if ($caption !== '') {
+            $body .= "\n\n📝 *متن کپشن* \n".MessageText::plain($caption, 1200);
+        } else {
+            $body .= "\n\nکپشنی برای این پرونده ثبت نشده است.";
+        }
+
+        $rows = [];
+        foreach (array_slice($outputs, 0, self::MAX_OUTPUT_BUTTONS) as $index => $item) {
+            $label = $item['type'] === 'file' ? '📎 '.$item['label'] : '📝 '.$item['label'];
+            $rows[] = [['text' => mb_substr($label, 0, 60), 'callback_data' => $this->outputAction($task, $content, $index)]];
+        }
+        if ($caption !== '') {
+            $rows[] = [['text' => '📋 کپی متن کپشن', 'callback_data' => $this->captionAction($task, $content)]];
+        }
+        // «ثبت انتشار» مستقیم از همین پیام؛ فقط وقتی جریان محتوا کامل شده باشد.
+        if (ContentPublication::workflowReady($content) && ! ContentPublication::published($content)) {
+            $rows[] = [['text' => '✅ ثبت انتشار', 'callback_data' => $this->publishAction($task, $content)]];
+        }
+
+        $this->reply($key, $chat, $link, $body, $rows, $task, $content);
+    }
+
+    private function sendOutput(string $key, string $chat, BaleUserLink $link, User $user, ?Task $task, Content $content, int $index): void
+    {
+        $outputs = $this->outputs($content);
+        $item = $outputs[$index] ?? null;
+        if (! $item) {
+            $this->reply($key, $chat, $link, 'این خروجی دیگر در دسترس نیست؛ دکمهٔ «دریافت اطلاعات انتشار» را دوباره بزنید.', [[['text' => '📣 دریافت اطلاعات انتشار', 'callback_data' => $this->infoAction($task, $content)]]], $task, $content);
+
+            return;
+        }
+        if ($item['type'] === 'file') {
+            $size = $item['disk'] && $item['path'] ? (int) Storage::disk($item['disk'])->size($item['path']) : 0;
+            if ($size <= 0 || $size > self::MAX_FILE_BYTES) {
+                $this->reply($key, $chat, $link, 'حجم این خروجی برای ارسال در بات مناسب نیست؛ آن را از پنل تدبیر دریافت کنید.', [[['text' => '📣 دریافت اطلاعات انتشار', 'callback_data' => $this->infoAction($task, $content)]]], $task, $content);
+
+                return;
+            }
+            $item['asset']?->activities()->create(['actor_id' => $user->id, 'action' => 'bale_sent',
+                'metadata' => ['task_id' => $task?->id, 'content_id' => $content->id, 'source' => 'publish_info']]);
+            app(Outbox::class)->enqueue($key, $chat, [
+                '_method' => 'sendDocument',
+                '_file_disk' => (string) $item['disk'],
+                '_file_path' => (string) $item['path'],
+                '_file_name' => (string) $item['name'],
+                'caption' => mb_substr('خروجی انتشار: '.$content->title, 0, 900),
+            ], $link, $task ? 'task' : null, $task?->id);
+
+            return;
+        }
+        $body = "📝 *خروجی متنی انتشار* \n\n".MessageText::plain((string) $item['text'], 2800);
+        $this->reply($key, $chat, $link, $body, [[['text' => '📣 دریافت اطلاعات انتشار', 'callback_data' => $this->infoAction($task, $content)]]], $task, $content);
+    }
+
+    private function sendCaption(string $key, string $chat, BaleUserLink $link, ?Task $task, Content $content): void
+    {
+        $payload = is_array($content->payload) ? $content->payload : [];
+        $info = is_array($payload['publishInfo'] ?? null) ? $payload['publishInfo'] : [];
+        $caption = trim((string) ($info['caption'] ?? ''));
+        if ($caption === '') {
+            $this->reply($key, $chat, $link, 'کپشنی برای این پرونده ثبت نشده است.', [[['text' => '📣 دریافت اطلاعات انتشار', 'callback_data' => $this->infoAction($task, $content)]]], $task, $content);
+
+            return;
+        }
+        // متن در یک بلوک تک‌فاصله فرستاده می‌شود تا با لمسِ طولانی قابل کپی باشد.
+        $safe = str_replace(['[', ']', '(', ')', '*', '_', '`'], ['［', '］', '（', '）', '＊', '＿', 'ˋ'], mb_substr($caption, 0, 3000));
+        $body = "برای کپی، متن را لمسِ طولانی کنید و «کپی» را بزنید.\n\n```\n".$safe."\n```";
+        $this->reply($key, $chat, $link, $body, [[['text' => '📣 دریافت اطلاعات انتشار', 'callback_data' => $this->infoAction($task, $content)]]], $task, $content);
+    }
+
+    /**
+     * @param  array<int, array<int, array<string, string>>>  $rows
+     */
+    private function reply(string $key, string $chat, BaleUserLink $link, string $text, array $rows, ?Task $task, Content $content): void
+    {
+        if ($task) {
+            $rows[] = [['text' => '↩️ بازگشت به تسک', 'callback_data' => 'task:'.$task->id]];
+        } else {
+            // پیامِ بدون وظیفه: تنها راه بازگشت، باز کردن همان پرونده در سامانه است.
+            $rows = [...$rows, ...app(PanelLinks::class)->buttons($link, 'content', (int) $content->id, '🗂 باز کردن محتوا')];
+        }
+        app(Outbox::class)->enqueue($key, $chat, [
+            'text' => $text,
+            'reply_markup' => ['inline_keyboard' => [...$rows, ...MenuNavigation::rows($link)]],
+        ], $link, $task ? 'task' : null, $task?->id);
+    }
+}

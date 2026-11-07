@@ -2,25 +2,92 @@ import React from 'react';
 import { ContentStatus } from '../types';
 import { useApp } from '../context/AppContext';
 
-export const getContentStatusBadge = (status: ContentStatus) => {
-  switch (status) {
-    case 'idea': return <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded-md text-[10px] font-bold border border-slate-200 whitespace-nowrap">ایده اولیه</span>;
-    case 'planning': return <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-[10px] font-bold border border-blue-200 whitespace-nowrap">برنامه‌ریزی</span>;
-    case 'producing': return <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded-md text-[10px] font-bold border border-amber-200 whitespace-nowrap">در حال تولید</span>;
-    case 'reviewing': return <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded-md text-[10px] font-bold border border-purple-200 whitespace-nowrap">در انتظار بازبینی</span>;
-    case 'revising': return <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-[10px] font-bold border border-rose-200 whitespace-nowrap">نیازمند اصلاح</span>;
-    case 'approving': return <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-bold border border-indigo-200 whitespace-nowrap">در انتظار تأیید</span>;
-    case 'approved': return <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-bold border border-emerald-200 whitespace-nowrap">تأییدشده</span>;
-    case 'ready_to_publish': return <span className="px-2 py-1 bg-teal-50 text-teal-700 rounded-md text-[10px] font-bold border border-teal-200 whitespace-nowrap">آماده انتشار</span>;
-    case 'published': return <span className="px-2 py-1 bg-green-50 text-green-700 rounded-md text-[10px] font-bold border border-green-200 whitespace-nowrap">منتشرشده</span>;
-    case 'suspended': return <span className="px-2 py-1 bg-orange-50 text-orange-700 rounded-md text-[10px] font-bold border border-orange-200 whitespace-nowrap">تعلیق</span>;
-    case 'cancelled': return <span className="px-2 py-1 bg-red-50 text-red-700 rounded-md text-[10px] font-bold border border-red-200 whitespace-nowrap">لغو شده</span>;
-    case 'archived': return <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded-md text-[10px] font-bold border border-slate-200 whitespace-nowrap">آرشیو</span>;
-    default: return <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded-md text-[10px] font-bold border border-slate-200 whitespace-nowrap">{status}</span>;
-  }
+/**
+ * هندسهٔ یکسان نشانگرهای صفحهٔ جزئیات (وضعیت، مجموعه، دپارتمان) تا ارتفاع،
+ * اندازهٔ متن و فاصلهٔ داخلی همه یکسان بماند. رنگ معنایی از داده می‌آید.
+ */
+export const DETAIL_BADGE_CLASS = 'inline-flex h-7 items-center gap-1 rounded-xl border px-3 text-[10px] font-bold leading-none whitespace-nowrap';
+
+const TONES: Record<string, string> = {
+  idea: 'border-slate-200 bg-slate-100 text-slate-700',
+  planning: 'border-blue-200 bg-blue-50 text-blue-700',
+  // «تأخیر» وضعیتی مشتق از مهلت واقعی مراحل است؛ رنگ بنفش ملایم آن با نشان
+  // مهلت مرحله در صفحهٔ جزئیات هم‌راستا است.
+  delayed: 'border-violet-200 bg-violet-50 text-violet-700',
+  producing: 'border-amber-200 bg-amber-50 text-amber-700',
+  reviewing: 'border-purple-200 bg-purple-50 text-purple-700',
+  revising: 'border-rose-200 bg-rose-50 text-rose-700',
+  // وضعیت بازنشستهٔ approving فقط برای نمایش صحیح دادهٔ قدیمی پیش از مایگریشن نگه داشته شده است.
+  approving: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+  approved: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  ready_to_publish: 'border-teal-200 bg-teal-50 text-teal-700',
+  published: 'border-green-200 bg-green-50 text-green-700',
+  suspended: 'border-orange-200 bg-orange-50 text-orange-700',
+  cancelled: 'border-red-200 bg-red-50 text-red-700',
+  archived: 'border-slate-200 bg-slate-100 text-slate-500',
 };
 
-export const ContentStatusBadge: React.FC<{ status: ContentStatus }> = ({ status }) => {
+const LABELS: Record<string, string> = {
+  idea: 'ایده اولیه',
+  planning: 'برنامه‌ریزی',
+  delayed: 'در تأخیر',
+  producing: 'در حال تولید',
+  reviewing: 'در انتظار بازبینی',
+  revising: 'نیازمند اصلاح',
+  approving: 'در انتظار بازبینی (وضعیت بازنشسته)',
+  approved: 'تأییدشده',
+  ready_to_publish: 'آماده انتشار',
+  published: 'منتشرشده',
+  suspended: 'تعلیق',
+  cancelled: 'لغو شده',
+  archived: 'آرشیو',
+};
+
+/** برچسب فارسی وضعیت برای فهرست‌هایی که از داده ساخته می‌شوند (بدون JSX). */
+export const contentStatusLabel = (status: string): string => LABELS[status] || String(status);
+
+/** رنگ نشانگر وضعیت برای نمودارها و تخته‌ها؛ مقدار نامشخص، خاکستری می‌ماند. */
+export const contentStatusColor = (status: string): string => {
+  const tone = TONES[status] || '';
+  const match = tone.match(/bg-(\w+)-50/);
+  return ({ slate: '#64748b', blue: '#3b82f6', amber: '#f59e0b', purple: '#a855f7', rose: '#f43f5e', violet: '#7c3aed', indigo: '#4f46e5', emerald: '#10b981', teal: '#14b8a6', green: '#22c55e', orange: '#f97316', red: '#ef4444' } as Record<string, string>)[match?.[1] || 'slate'] || '#64748b';
+};
+
+export type BadgeSize = 'sm' | 'md';
+
+const sizeClass = (size: BadgeSize) => size === 'md' ? DETAIL_BADGE_CLASS : 'px-2 py-1 rounded-md text-[10px] border whitespace-nowrap overflow-hidden';
+
+/** رنگ نشانگر «نوع محتوا» از پیکربندی همان نوع خوانده می‌شود؛ مقدار نامعتبر به رنگ سامانه برمی‌گردد. */
+export const contentTypeBadgeColor = (color?: string | null, fallback = '#4f46e5'): string =>
+  typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color) ? color : fallback;
+
+/** سبک یکسان نشانگر نوع محتوا؛ بدون نقطهٔ رنگ کنار متن تا خوانایی در فهرست حفظ شود. */
+export const contentTypeBadgeStyle = (color?: string | null): React.CSSProperties => {
+  const tone = contentTypeBadgeColor(color);
+  return { color: tone, backgroundColor: `${tone}14`, borderColor: `${tone}38` };
+};
+
+/** نشانگر نوع محتوا با رنگ خودِ نوع محتوا (منبع: تنظیمات سامانه) و بدون نقطهٔ تزئینی. */
+export const ContentTypeBadge: React.FC<{ color?: string | null; label: string; size?: BadgeSize; className?: string }> = ({ color, label, size = 'sm', className = '' }) => (
+  <span
+    className={`${size === 'md' ? DETAIL_BADGE_CLASS : 'inline-flex items-center rounded-lg border px-2.5 py-1 text-[10px] font-bold whitespace-nowrap'} ${className}`}
+    style={contentTypeBadgeStyle(color)}
+    title={`نوع محتوا: ${label}`}
+  >
+    {label}
+  </span>
+);
+
+export const getContentStatusBadge = (status: ContentStatus, size: BadgeSize = 'sm') => {
+  const tone = TONES[status] || 'border-slate-200 bg-slate-100 text-slate-700';
+  const label = LABELS[status] || String(status);
+  if (size === 'md') {
+    return <span className={`${DETAIL_BADGE_CLASS} ${tone}`}>{label}</span>;
+  }
+  return <span className={`${sizeClass(size)} font-bold ${tone}`}>{label}</span>;
+};
+
+export const ContentStatusBadge: React.FC<{ status: ContentStatus; size?: BadgeSize; className?: string }> = ({ status, size = 'sm', className = '' }: { status: ContentStatus; size?: BadgeSize; className?: string }) => {
   let contentStatuses: { id: string; label: string; color: string }[] = [];
   try {
     contentStatuses = useApp().contentStatuses;
@@ -28,10 +95,23 @@ export const ContentStatusBadge: React.FC<{ status: ContentStatus }> = ({ status
     contentStatuses = [];
   }
   const setting = contentStatuses.find(st => st.id === status);
-  if (!setting) return <>{getContentStatusBadge(status)}</>;
+  if (!setting) {
+    const badge = getContentStatusBadge(status, size);
+    return className ? <span className={`inline-flex ${className}`}>{badge}</span> : badge;
+  }
+  if (size === 'md') {
+    return (
+      <span
+        className={`${DETAIL_BADGE_CLASS} ${className}`}
+        style={{ backgroundColor: `${setting.color}14`, color: setting.color, borderColor: `${setting.color}40` }}
+      >
+        {setting.label}
+      </span>
+    );
+  }
   return (
     <span
-      className="px-2 py-1 rounded-md text-[10px] font-bold border whitespace-nowrap"
+      className={`px-2 py-1 rounded-md text-[10px] font-bold border whitespace-nowrap font-bold ${className}`}
       style={{ backgroundColor: `${setting.color}14`, color: setting.color, borderColor: `${setting.color}40` }}
     >
       {setting.label}

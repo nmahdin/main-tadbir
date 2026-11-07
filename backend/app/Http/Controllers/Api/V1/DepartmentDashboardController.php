@@ -11,6 +11,8 @@ use App\Models\Content;
 use App\Models\Department;
 use App\Models\Project;
 use App\Models\Task;
+use App\Services\ContentDeadlineSweep;
+use App\Support\AutomationThrottle;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +29,10 @@ final class DepartmentDashboardController extends Controller
             403,
             'این داشبورد فقط برای مدیر دپارتمان و مدیران سامانه قابل مشاهده است.',
         );
+
+        // داشبورد دپارتمان هم باید وضعیت مشتق را تازه ببیند؛ همان تازه‌سازی محدود
+        // و idempotent که فهرست محتوا و گزارش استفاده می‌کنند.
+        AutomationThrottle::once('content-deadline-sweep', 60, fn () => app(ContentDeadlineSweep::class)->refreshDue(50));
 
         $department->load(['users:id,name', 'members:id,name']);
         $memberIds = $department->users->merge($department->members)->pluck('id')

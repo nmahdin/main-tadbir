@@ -46,6 +46,15 @@ class WorkspaceRecordRequest extends FormRequest
                 'date' => ['sometimes', 'string', 'max:50'],
                 'time' => ['sometimes', 'string', 'max:20'],
                 'duration' => ['sometimes', 'nullable', 'string', 'max:80'],
+                // ساعت شروع/پایان واقعی جلسه در صورت‌جلسه ثبت می‌شود و در payload
+                // همان رکورد می‌ماند؛ قالب سخت‌گیرانه گرفته نمی‌شود تا ارقام
+                // فارسی و ساعت تک‌رقمی هم پذیرفته شوند.
+                'startTime' => ['sometimes', 'nullable', 'string', 'max:10', 'regex:/^[0-9۰-۹]{1,2}:[0-9۰-۹]{2}$/u'],
+                'endTime' => ['sometimes', 'nullable', 'string', 'max:10', 'regex:/^[0-9۰-۹]{1,2}:[0-9۰-۹]{2}$/u'],
+                // مهمان‌ها کاربر سامانه نیستند؛ فقط نام آن‌ها نگه داشته می‌شود.
+                'guests' => ['sometimes', 'array', 'max:50'],
+                'guests.*' => ['string', 'max:120'],
+                'locationType' => ['sometimes', 'nullable', Rule::in(['in_person', 'online', 'hybrid'])],
                 'locationDetails' => ['sometimes', 'nullable', 'string', 'max:1000'],
                 'archivedFromStatus' => ['sometimes', 'nullable', Rule::in(['scheduled', 'in_progress', 'completed', 'cancelled'])],
             ] : []),

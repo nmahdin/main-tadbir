@@ -50,7 +50,7 @@ class BaleExperienceTest extends TestCase
 
     private function meeting(User $owner, array $attendees = [], string $title = 'جلسه مجاز'): WorkspaceRecord
     {
-        return WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_MEETING, 'owner_id' => $owner->id, 'title' => $title, 'status' => 'scheduled', 'payload' => ['attendeeIds' => $attendees, 'date' => '2026-09-28', 'time' => '۱۰:۳۰', 'duration' => '۹۰ دقیقه', 'locationDetails' => 'اتاق یک', 'agenda' => [['title' => 'مرور کارها']]]]);
+        return WorkspaceRecord::create(['kind' => WorkspaceRecord::KIND_MEETING, 'owner_id' => $owner->id, 'title' => $title, 'status' => 'scheduled', 'payload' => ['attendeeIds' => $attendees, 'date' => now('Asia/Tehran')->addDays(2)->toDateString(), 'time' => '۱۰:۳۰', 'duration' => '۹۰ دقیقه', 'locationDetails' => 'اتاق یک', 'agenda' => [['title' => 'مرور کارها']]]]);
     }
 
     public function test_menu_profile_and_textual_task_list_have_requested_identity(): void
@@ -76,7 +76,9 @@ class BaleExperienceTest extends TestCase
         $this->tick([$this->buttonUpdate(4, 'task:'.$task->id)]);
         $this->assertStringContainsString('📌 *', end($this->sent)['text']);
         $this->assertStringContainsString('taskasset:'.$task->id, json_encode(end($this->sent)));
-        $this->assertStringContainsString('status:'.$task->id, json_encode(end($this->sent)));
+        // منوی تغییر وضعیت حذف شده است: وظیفه مستقیم «تکمیل» می‌شود.
+        $this->assertStringContainsString('done:'.$task->id, json_encode(end($this->sent)));
+        $this->assertStringNotContainsString('status:'.$task->id, json_encode(end($this->sent)));
     }
 
     public function test_meetings_are_scoped_by_current_membership_and_have_detail_buttons(): void
@@ -98,11 +100,86 @@ class BaleExperienceTest extends TestCase
         $this->assertStringNotContainsString($hidden->title, $body);
         $this->tick([$this->buttonUpdate(2, 'meeting:'.$invited->id)]);
         $this->assertStringContainsString('مرور کارها', end($this->sent)['text']);
-        $this->assertStringContainsString('۱۴۰۵/۰۷/۰۶', end($this->sent)['text']);
+        $this->assertStringContainsString(\App\Bot\Bale\Support\PersianDate::format($invited->payload['date']), end($this->sent)['text']);
         $invited->update(['payload' => ['attendeeIds' => []]]);
         $this->tick([$this->buttonUpdate(3, 'meeting:'.$invited->id), $this->buttonUpdate(4, 'meeting:'.$hidden->id)]);
         $this->assertStringNotContainsString('جلسه بیگانه', end($this->sent)['text']);
         $this->assertStringNotContainsString('جلسه دعوت‌شده', $this->sent[count($this->sent) - 2]['text']);
+    }
+
+    public function test_my_meetings_shows_only_future_scheduled_entries_including_jalali_dates(): void
+    {
+        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-30 12:00:00', 'Asia/Tehran'));
+        $this->ready();
+        $user = $this->user();
+        $this->grant($user, ['meetings.view']);
+        $this->link($user);
+        $other = $this->user();
+
+        $today = now('Asia/Tehran')->toDateString();
+        $future = now('Asia/Tehran')->addDays(2)->toDateString();
+        $past = now('Asia/Tehran')->subDay()->toDateString();
+
+        $early = $this->meeting($user, [], 'امروز گذشته');
+        $early->update(['payload' => [...$early->payload, 'date' => $today, 'time' => '۱۰:۳۰']]);
+
+        $later = $this->meeting($user, [], 'امروز آینده');
+        $later->update(['payload' => [...$later->payload, 'date' => $today, 'time' => '۱۴:۰۰']]);
+
+        $held = $this->meeting($user, [], 'برگزار شده');
+        $held->update(['payload' => [...$held->payload, 'date' => $past]]);
+
+        $completed = $this->meeting($user, [], 'تکمیل شده');
+        $completed->update(['status' => 'completed', 'payload' => [...$completed->payload, 'date' => $future]]);
+
+        $cancelled = $this->meeting($user, [], 'لغو شده');
+        $cancelled->update(['status' => 'cancelled', 'payload' => [...$cancelled->payload, 'date' => $future]]);
+
+        $jalali = $this->meeting($other, [$user->id], 'جلسه شمسی آینده');
+        $jalali->update(['payload' => [...$jalali->payload,
+            'date' => \App\Bot\Bale\Support\PersianDate::format($future),
+            'time' => '۱۰:۳۰']]);
+
+        $this->meeting($other, [], 'جلسه خصوصی دیگران');
+
+        $this->tick([$this->buttonUpdate(1, 'meetings')]);
+        $body = end($this->sent)['text'];
+        $this->assertStringContainsString('امروز آینده', $body);
+        $this->assertStringContainsString('جلسه شمسی آینده', $body);
+        foreach (['امروز گذشته', 'برگزار شده', 'تکمیل شده', 'لغو شده', 'جلسه خصوصی دیگران'] as $excluded) {
+            $this->assertStringNotContainsString($excluded, $body);
+        }
+        $buttons = json_encode(end($this->sent)['reply_markup'], JSON_UNESCAPED_UNICODE);
+        $this->assertStringNotContainsString('meeting:'.$held->id, $buttons);
+        $this->assertStringNotContainsString('meeting:'.$completed->id, $buttons);
+        $this->assertStringContainsString('meeting:'.$later->id, $buttons);
+        $this->assertStringContainsString('meeting:'.$jalali->id, $buttons);
+    }
+
+    public function test_future_meetings_paginate_after_filtering_past_entries(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->grant($user, ['meetings.view']);
+        $this->link($user);
+        foreach (range(1, 8) as $day) {
+            $meeting = $this->meeting($user, [], 'آینده '.$day);
+            $meeting->update(['payload' => [...$meeting->payload,
+                'date' => now('Asia/Tehran')->addDays($day)->toDateString()]]);
+        }
+        foreach (range(1, 7) as $day) {
+            $meeting = $this->meeting($user, [], 'قدیمی '.$day);
+            $meeting->update(['payload' => [...$meeting->payload,
+                'date' => now('Asia/Tehran')->subDays($day)->toDateString()]]);
+        }
+        $this->tick([$this->buttonUpdate(1, 'meetings')]);
+        $this->assertStringContainsString('آینده 1', end($this->sent)['text']);
+        $this->assertStringNotContainsString('قدیمی', end($this->sent)['text']);
+        $this->assertStringContainsString('meetings:1', json_encode(end($this->sent)['reply_markup'], JSON_UNESCAPED_UNICODE));
+
+        $this->tick([$this->buttonUpdate(2, 'meetings:1')]);
+        $this->assertStringContainsString('آینده 6', end($this->sent)['text']);
+        $this->assertStringNotContainsString('قدیمی', end($this->sent)['text']);
     }
 
     public function test_pending_meeting_text_is_not_sent_after_invitation_is_revoked(): void
@@ -139,7 +216,7 @@ class BaleExperienceTest extends TestCase
         $this->assertStringContainsString($meeting->title, end($this->sent)['text']);
     }
 
-    public function test_missing_notification_preference_keeps_api_error_and_stale_menu_returns_home(): void
+    public function test_missing_notification_preference_keeps_api_error_and_stale_action_gives_guidance(): void
     {
         $this->ready();
         $user = $this->user();
@@ -148,7 +225,7 @@ class BaleExperienceTest extends TestCase
         Sanctum::actingAs($user);
         $this->putJson('/api/v1/bale/account/preferences', ['notifications_enabled' => true])->assertStatus(503)->assertJsonPath('message', OperationsSchema::MESSAGE);
         $this->tick([$this->buttonUpdate(1, 'notifications')]);
-        $this->assertStringContainsString('به تدبیر خوش آمدید', end($this->sent)['text']);
+        $this->assertStringContainsString('/menu', end($this->sent)['text']);
     }
 
     public function test_notification_test_is_self_only_opt_in_rate_limited_and_deduplicated(): void
@@ -228,7 +305,9 @@ class BaleExperienceTest extends TestCase
         $this->assertDatabaseCount('dam_assets', 0);
         $this->tick([$this->buttonUpdate(6, 'assettext:'.$task->id), $this->message(7, 'عنوان'), $this->message(8, 'محتوا')]);
         $nonce = BaleConversation::first()->nonce;
-        $this->travel(11)->minutes();
+        // نشستِ رهاشده پس از پایانِ عمرِ تنظیم‌شده منقضی می‌شود و تأییدِ کهنه
+        // چیزی ثبت نمی‌کند؛ عمرِ جریان با هر تعامل تمدید می‌شود.
+        $this->travel((int) config('bale.session_lifetime_minutes') + 1)->minutes();
         $this->tick([$this->buttonUpdate(9, 'confirm:'.$nonce)]);
         $this->assertDatabaseCount('dam_assets', 0);
         $this->travelBack();
@@ -245,10 +324,17 @@ class BaleExperienceTest extends TestCase
         $department->members()->attach($user);
         $table = DamDataTable::create(['name' => 'جدول', 'created_by' => $user->id, 'columns' => [['id' => 'name', 'name' => 'نام', 'type' => 'text']]]);
         $table->departments()->attach($department);
-        $this->tick([$this->buttonUpdate(1, 'assetrows:'.$task->id), $this->buttonUpdate(2, 'departmenttables:'.$department->id.':0'), $this->buttonUpdate(3, 'departmentform:'.$department->id.':'.$table->id), $this->message(4, 'ثبت')]);
+        // The redesigned flow lists editable tables directly, without the
+        // removed departmenttables/departments navigation branch.
+        $this->tick([$this->buttonUpdate(1, 'assetrows:'.$task->id)]);
+        $this->assertSame('asset_context', BaleConversation::first()?->step);
+        $selectNonce = BaleConversation::first()->nonce;
+        $this->tick([$this->buttonUpdate(2, 'assettable:'.$selectNonce.':0')]);
+        $this->assertSame('asset_field', BaleConversation::first()?->step);
+        $this->tick([$this->message(3, 'ثبت')]);
         $this->assertSame($task->id, BaleConversation::first()->data['task_id']);
         $nonce = BaleConversation::first()->nonce;
-        $this->tick([$this->buttonUpdate(5, 'confirm:'.$nonce)]);
+        $this->tick([$this->buttonUpdate(4, 'confirm:'.$nonce)]);
         $this->assertDatabaseHas('dam_data_rows', ['task_id' => $task->id, 'table_id' => $table->id]);
     }
 

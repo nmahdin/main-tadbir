@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   X,
   Lightbulb,
@@ -22,15 +22,21 @@ import {
   Trash2,
   CheckCircle2,
   ExternalLink,
-  MessageCircle,
   TrendingUp,
   FileText,
   Edit3,
-  Download
+  Download,
+  LoaderCircle,
 } from 'lucide-react';
 import { Idea, IdeaStatus, IdeaVoteOption, Priority } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
+import { formatPersianIsoDateTime } from '../../utils/date';
+import { useModalExit } from '../common/useModalExit';
+
+/** لحظهٔ ثبت را شمسی نشان می‌دهد؛ مقدار ناخوانا دست‌نخورده می‌ماند. */
+const persianMoment = (value?: string | null): string =>
+  formatPersianIsoDateTime(value) || (value ? String(value) : '');
 
 interface IdeaDetailsModalProps {
   ideaId: string;
@@ -39,6 +45,11 @@ interface IdeaDetailsModalProps {
   onOpenConvertToProject: (idea: Idea) => void;
   onOpenConvertToTask: (idea: Idea) => void;
   onEdit?: (idea: Idea) => void;
+  /**
+   * پیوند بات بله با دکمهٔ «نظر دادن»: مودال روی تب گفتگو باز می‌شود و کادر
+   * دیدگاه فوکوس می‌گیرد تا کاربر بدون گشتن دنبال آن، مستقیم بنویسد.
+   */
+  focusComment?: boolean;
 }
 
 export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
@@ -47,7 +58,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   onClose,
   onOpenConvertToProject,
   onOpenConvertToTask,
-  onEdit
+  onEdit,
+  focusComment = false,
 }) => {
   const {
     ideas,
@@ -63,7 +75,6 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
     votePollOption,
     addIdeaComment,
     toggleIdeaCommentReaction,
-    startDirectChatWithUser,
     hasPermission,
     triggerCelebration
   } = useApp();
@@ -73,10 +84,24 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   const [voteComment, setVoteComment] = useState('');
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<'discussion' | 'votes' | 'timeline' | 'poll'>('discussion');
+  const commentInput = useRef<HTMLInputElement | null>(null);
 
   const idea = ideas.find(i => i.id === ideaId);
 
-  if (!isOpen || !idea) return null;
+  // «نظر دادن» از بات: تب گفتگو و فوکوس روی کادر دیدگاه، پس از بازشدن مودال.
+  useEffect(() => {
+    if (!isOpen || !focusComment) return;
+    setActiveTab('discussion');
+    const timer = window.setTimeout(() => {
+      commentInput.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      commentInput.current?.focus({ preventScroll: true });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, focusComment, ideaId]);
+
+    // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
+  const presence = useModalExit(isOpen, onClose);
+  if (!presence.visible) return null;
 
   const creator = users.find(u => u.id === idea.creatorId);
   const team = departments.find(t => t.id === idea.departmentId);
@@ -150,9 +175,9 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
   const emojiList = ['👍', '👏', '💡', '🔥', '❤️', '🚀'];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div data-state={presence.state} className="ui-modal-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div
-        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
+        data-state={presence.state} className="ui-modal-panel bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] "
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Bar */}
@@ -196,7 +221,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={presence.requestClose}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-xl transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
@@ -272,7 +297,8 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                   <p className="mt-1 text-[11px] text-slate-500">پیشروی ایده طبق همین مراحل ثبت‌شده انجام می‌شود.</p>
                 </div>
                 {hasPermission('thinktank.edit_idea') && idea.flowStages.some(stage => stage.status !== 'completed') && (
-                  <button type="button" disabled={workflowBusy} onClick={() => void advanceWorkflow()} className="ui-button ui-button-primary text-xs">
+                  <button type="button" aria-busy={workflowBusy || undefined} disabled={workflowBusy} onClick={() => void advanceWorkflow()} className="ui-button ui-button-primary inline-flex items-center gap-1.5 text-xs disabled:cursor-wait">
+                    {workflowBusy && <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />}
                     {workflowBusy ? 'در حال ثبت…' : 'تکمیل مرحله جاری و ادامه'}
                   </button>
                 )}
@@ -527,7 +553,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                               {author && <Avatar user={author} size="sm" />}
                               <div>
                                 <span className="font-bold text-xs text-slate-800">{author?.name}</span>
-                                <span className="text-[10px] text-slate-400 mr-2">{comment.timestamp}</span>
+                                <span className="text-[10px] text-slate-400 mr-2">{persianMoment(comment.timestamp)}</span>
                               </div>
                             </div>
 
@@ -598,10 +624,12 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                   )}
                   <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl border border-slate-200">
                     <input
+                      ref={commentInput}
                       type="text"
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
                       placeholder="دیدگاه، تحلیل کارشناسی یا پیشنهاد تکمیلی خود را بنویسید..."
+                      aria-label="متن دیدگاه"
                       className="comment-composer flex-1 border-0 bg-transparent px-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none sm:text-sm"
                     />
                     <button
@@ -636,7 +664,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                         {voter && <Avatar user={voter} size="sm" />}
                         <div>
                           <div className="font-bold text-slate-800">{voter?.name}</div>
-                          <div className="text-[11px] text-slate-400">{vote.timestamp}</div>
+                          <div className="text-[11px] text-slate-400">{persianMoment(vote.timestamp)}</div>
                           {vote.comment && (
                             <p className="mt-1 text-slate-600 bg-white p-2 rounded-lg border border-slate-100 text-xs">
                               {vote.comment}
@@ -666,7 +694,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
                       <div className="flex-1">
                         <span className="font-bold text-slate-800">{actor?.name} </span>
                         <span className="text-slate-600">{act.action}</span>
-                        <div className="text-[10px] text-slate-400 mt-0.5">{act.timestamp}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{persianMoment(act.timestamp)}</div>
                       </div>
                     </div>
                   );
@@ -676,22 +704,9 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
           </div>
         </div>
 
-        {/* Footer Actions: Convert to Project / Convert to Task / Direct Chat / Delete */}
+        {/* Footer Actions: Edit / Delete */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            {creator && creator.id !== currentUser.id && (
-              <button
-                onClick={() => {
-                  startDirectChatWithUser(creator.id);
-                  onClose();
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs cursor-pointer"
-              >
-                <MessageCircle className="w-4 h-4 text-indigo-600" />
-                گفتگو با طراح ایده
-              </button>
-            )}
-
             {onEdit && hasPermission('thinktank.edit_idea') && (
               <button
                 onClick={() => onEdit(idea)}
@@ -708,7 +723,7 @@ export const IdeaDetailsModal: React.FC<IdeaDetailsModalProps> = ({
             onClick={() => {
               if (window.confirm(`آیا از حذف ایده «${idea.title}» اطمینان دارید؟`)) {
                 deleteIdea(idea.id);
-                onClose();
+                presence.requestClose();
               }
             }}
             className="ui-form-action inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"

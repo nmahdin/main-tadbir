@@ -32,22 +32,54 @@ class TaskController extends Controller
         // List rows intentionally exclude comments, files and history. Those
         // relations are loaded only by show(); eager-loading them for every row
         // made task navigation grow with the complete audit history.
+        /**
+         * دامنهٔ «تسک‌های یک محتوا» (دور ۸۵).
+         *
+         * صفحهٔ «تسک‌های من» فقط تسک‌های خودِ کاربر را می‌دهد و همین درست است؛
+         * اما فهرست تسک‌های یک پروندهٔ محتوا باید همهٔ وظایف آن پرونده را نشان
+         * دهد، وگرنه کارهای تکمیل‌شده یا کارهای دیگران (ارزیاب/ناشر) غایب
+         * می‌مانند و تب «تسک‌های مربوط» ناقص دیده می‌شود.
+         *
+         * قاعده: اگر `content_id` آمده باشد و کاربر مجوز دیدن همان محتوا را
+         * داشته باشد، فیلتر «مسئول من» برداشته می‌شود. بدون مجوز یا بدون
+         * `content_id`، همان دامنهٔ شخصی قبلی سر جایش است.
+         */
+        $contentScope = $request->integer('content_id');
+        $contentTasksVisible = $contentScope
+            && ($content = Content::find($contentScope))
+            && app(ContentAccess::class)->canView($request->user(), $content);
+
         $tasks = Task::query()
+            /**
+             * نام محتوا/پروژهٔ مرتبط برای نمایش زیر عنوان تسک (دور ۸۹).
+             *
+             * پیش‌تر رابط کاربری نام را از فهرست محتواهای بارگذاری‌شده پیدا
+             * می‌کرد؛ آن فهرست محدود است و برای تسک‌های بیرونِ آن، خط دوم خالی
+             * می‌ماند. حالا خودِ سرور فقط دو ستون سبک (عنوان/نام) را با همان
+             * کوئری می‌آورد.
+             */
+            ->with(['content:id,title', 'project:id,name'])
             // The personal task page is a server-enforced scope: request filters
             // may narrow these rows, but can never expose another assignee's task.
-            ->where('assignee_id', $request->user()->id)
+            ->when(! $contentTasksVisible, fn ($query) => $query->where('assignee_id', $request->user()->id))
             ->when($request->filled('due'), function ($query) use ($request): void {
                 $due = $request->string('due')->toString();
                 $query->whereNotIn('status', ['completed', 'archived']);
                 if ($due === 'near') {
-                    $query->whereDate('deadline', '>=', today()->toDateString())
-                        ->whereDate('deadline', '<=', today()->addDays(5)->toDateString());
+                    // «موعد نزدیک» یک معنا در همهٔ سامانه دارد: تسک‌های عقب‌افتاده
+                    // به‌همراه موعدهای هفت روز آینده. بدون کران پایین، گذشته‌ها هم
+                    // می‌آیند و با `sort=deadline&direction=asc` اول فهرست می‌نشینند.
+                    $query->whereDate('deadline', '<=', today()->addDays(7)->toDateString());
                 } else {
                     $query->whereDate('deadline', $due === 'today' ? '=' : '<', today()->toDateString());
                 }
             })
             ->when($request->filled('priority'), fn ($query) => $query->where('priority', $request->input('priority')))
             ->when($request->integer('content_id'), fn ($query, int $id) => $query->where('content_id', $id))
+            // «وظیفه‌های محتوا» در کارتابل: وظایفی که به یک پروندهٔ محتوا وصل‌اند
+            // و تغییر وضعیتشان از جریان همان پرونده می‌آید، نه از کارتابل عمومی.
+            ->when($request->string('linked')->toString() === 'content', fn ($query) => $query->whereNotNull('content_id')->with('content:id,title,payload'))
+            ->when($request->string('linked')->toString() === 'none', fn ($query) => $query->whereNull('content_id'))
             ->when($request->integer('project_id'), fn ($query, int $id) => $query->where('project_id', $id))
             ->when($request->filled('status'), fn ($query) => $request->input('status') === 'open'
                 ? $query->whereNotIn('status', ['completed', 'cancelled', 'archived']) : $query->where('status', $request->input('status')))

@@ -2,7 +2,7 @@ import { Modal } from '../common/Primitives';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ProjectTemplate, TemplateTask, Priority, TaskStatus } from '../../types';
-import { X, Plus, Trash2, Layers, Check, Sparkles, Palette, Pipette } from 'lucide-react';
+import { X, Plus, Trash2, Layers, Check, Sparkles, Palette, Pipette, LoaderCircle } from 'lucide-react';
 
 export const TemplateEditorModal: React.FC = () => {
   const {
@@ -30,7 +30,7 @@ export const TemplateEditorModal: React.FC = () => {
 
   // Stages State
   const [stages, setStages] = useState<{ id: TaskStatus; name: string; color: string }[]>([
-    { id: 'backlog', name: 'بک‌لاگ', color: '#94a3b8' },
+    { id: 'backlog', name: 'در انتظار بررسی', color: '#94a3b8' },
     { id: 'in_progress', name: 'در حال انجام', color: '#3b82f6' },
     { id: 'review', name: 'در حال بازبینی', color: '#8b5cf6' },
     { id: 'completed', name: 'تکمیل شده', color: '#10b981' }
@@ -461,7 +461,8 @@ export const TemplateEditorModal: React.FC = () => {
               type="submit" disabled={submitting}
               className="ui-form-action px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
             >
-              {editingTemplate ? 'ذخیره تغییرات الگو' : 'ایجاد و ذخیره الگو'}
+              {submitting && <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden />}
+              {submitting ? 'در حال ذخیره…' : editingTemplate ? 'ذخیره تغییرات الگو' : 'ایجاد و ذخیره الگو'}
             </button>
           </div>
         </form>

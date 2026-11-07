@@ -10,6 +10,8 @@ use App\Models\Department;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Content\StageDependencies;
+use App\Support\OrganizationTime;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -85,7 +87,16 @@ final class TaskOperations
         return DB::transaction(function () use ($actor, $task, $status, $expectedStatus, $source): Task {
             $fresh = Task::whereKey($task->id)->lockForUpdate()->firstOrFail();
             if ($source === 'bale') {
-                abort_unless((int) $fresh->assignee_id === (int) $actor->id && ! $fresh->content_id && in_array($fresh->kind, [null, 'general'], true), 403);
+                abort_unless((int) $fresh->assignee_id === (int) $actor->id, 403);
+                // در بات، وظیفه‌های متصل به محتوا فقط «تکمیل» می‌شوند؛ همان
+                // جریان محتوا وضعیتِ مرحله را پیش می‌برد و وظیفهٔ انتشار، ثبت
+                // انتشار را انجام می‌دهد. انتخابِ وضعیتِ دلخواه از پنل است.
+                $general = in_array($fresh->kind, [null, 'general'], true);
+                if ($general) {
+                    abort_if($fresh->content_id, 403);
+                } else {
+                    abort_if(! $fresh->content_id || $status !== 'completed', 403);
+                }
             }
             $allowed = $this->allowedStatuses($actor, $fresh);
             abort_if($allowed === [], 403, 'اجازه تغییر وضعیت این وظیفه را ندارید.');
@@ -189,7 +200,10 @@ final class TaskOperations
                 abort_unless((int) $task->assignee_id === (int) $actor->id, 403);
             }
             abort_if($version !== null && ! hash_equals($this->editVersion($task), $version), 409, 'وظیفه تغییر کرده است؛ دوباره آن را باز کنید.');
-            abort_if(array_diff(array_keys($data), array_keys($this->detailRules($task))) !== [], 422);
+            // پیش‌تر این ۴۲۲ هیچ پیامی نداشت و رابط فقط «اطلاعات واردشده معتبر
+            // نیست» نشان می‌داد. حالا همان فیلدهای غیرمجاز نام برده می‌شوند.
+            $rejected = array_values(array_diff(array_keys($data), array_keys($this->detailRules($task))));
+            abort_if($rejected !== [], 422, 'این بخش‌ها از مسیر ویرایش مشخصات قابل تغییر نیستند: '.implode('، ', $rejected).' — وضعیت و چک‌لیست را از دستور خودشان تغییر دهید.');
             $data = Validator::make($data, $this->detailRules($task))->validate();
             $task->fill($data);
             if ($task->isDirty()) {
@@ -290,6 +304,11 @@ final class TaskOperations
         if ($index === false || in_array($stages[$index]['status'] ?? '', ['approved', 'completed', 'skipped'], true)) {
             return;
         }
+        // مرحله‌ای که پیش‌نیازش تمام نشده با تکمیل تسک پیش نمی‌رود؛ همان قانونی که
+        // ساخت تسک را به تعویق می‌اندازد، اینجا جلوی پیش‌بردن زودهنگام را می‌گیرد.
+        if (StageDependencies::blockingReason($stages, (string) $task->content_stage_id) !== null) {
+            return;
+        }
 
         $reviewRequired = (bool) ($stages[$index]['reviewRequired'] ?? true);
         $stageStatus = match ($taskStatus) {
@@ -301,7 +320,7 @@ final class TaskOperations
         };
         $stages[$index]['status'] = $stageStatus;
         if ($taskStatus === 'completed' && ! $reviewRequired) {
-            $stages[$index]['completedAt'] = today()->toDateString();
+            $stages[$index]['completedAt'] = app(OrganizationTime::class)->date();
             if (isset($stages[$index + 1]) && ($stages[$index + 1]['status'] ?? '') === 'pending_dependency') {
                 $stages[$index + 1]['status'] = 'not_started';
                 $stages[$index + 1]['inputs'] = array_map(fn ($input) => [...$input, 'isReady' => true], $stages[$index + 1]['inputs'] ?? []);

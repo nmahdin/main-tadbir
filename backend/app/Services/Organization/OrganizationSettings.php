@@ -2,6 +2,8 @@
 
 namespace App\Services\Organization;
 
+use App\Support\Content\ContentStatusPolicy;
+
 use App\Models\User;
 use App\Services\TaskOperations;
 use App\Support\Content\StageAdvanceMode;
@@ -34,11 +36,12 @@ final class OrganizationSettings
         'dam_statuses',
         'content_statuses',
         'google_meet',
+        'maintenance',
     ];
 
-    private const ADMINISTRATIVE_KEYS = ['notifications', 'security'];
+    private const ADMINISTRATIVE_KEYS = ['notifications', 'security', 'maintenance'];
 
-    private const OBJECT_KEYS = ['general', 'notifications', 'security', 'google_meet'];
+    private const OBJECT_KEYS = ['general', 'notifications', 'security', 'google_meet', 'maintenance'];
 
     public const DEFAULTS = [
         'general' => [
@@ -49,6 +52,11 @@ final class OrganizationSettings
             'calendar' => 'jalali',
             'loginDescription' => '',
             'themeColor' => '#4f46e5',
+            // رنگ دوم سامانه: جزئیات، دکمه‌های کم‌اهمیت‌تر و تأکیدهای ثانویه.
+            'secondaryColor' => '#0ea5e9',
+            // هویت بصری آپلودی؛ مسیر ذخیره‌شده روی دیسک عمومی (`/storage/...`).
+            'logoUrl' => '',
+            'faviconUrl' => '',
             'secretariatEnabled' => true,
         ],
         'notifications' => [
@@ -74,6 +82,14 @@ final class OrganizationSettings
             'timezone' => 'Asia/Tehran',
             'sendUpdates' => 'none',
             'defaultDurationMinutes' => 60,
+        ],
+        // حالت تعمیر: تا وقتی روشن است، تنها دارندگان نقش مدیریت کل سیستم
+        // (`admin`) می‌توانند وارد شوند یا از API استفاده کنند.
+        'maintenance' => [
+            'enabled' => false,
+            'message' => '',
+            'startedAt' => null,
+            'updatedBy' => null,
         ],
     ];
 
@@ -101,6 +117,14 @@ final class OrganizationSettings
 
     public function canWrite(User $actor, string $key): bool
     {
+        // روشن‌کردن حالت تعمیر، همهٔ کاربران غیرمدیر را بیرون می‌گذارد؛ بنابراین
+        // تنها نقش «مدیریت کل سیستم» می‌تواند آن را تغییر دهد. سپردن این کلید به
+        // مجوز `settings.manage` این خطر را داشت که دارندهٔ مجوز، خودش را بیرون
+        // از سامانه قفل کند.
+        if ($key === 'maintenance') {
+            return $actor->isAdmin();
+        }
+
         return $actor->isAdmin()
             || $actor->hasPermission('settings.manage')
             || ($key === 'idea_categories' && $actor->hasPermission('thinktank.create_idea'))
@@ -179,7 +203,7 @@ final class OrganizationSettings
                 $id = trim((string) ($status['id'] ?? $status['key'] ?? $status['status'] ?? $fallbackId));
                 $canonicalId = strtolower($id);
                 if ($id === '' || preg_match('/^[A-Za-z0-9_-]+$/', $id) !== 1
-                    || in_array($canonicalId, ['in_progress', 'completed'], true)
+                    || in_array($canonicalId, ['in_progress', 'completed', ...array_keys(ContentStatusPolicy::RETIRED)], true)
                     || isset($seen[$canonicalId])) {
                     continue;
                 }
@@ -201,7 +225,7 @@ final class OrganizationSettings
 
         $rules = match ($key) {
             'general' => [
-                'value' => ['present', 'array:orgName,workspaceSlug,sprintLength,timezone,calendar,loginDescription,themeColor,secretariatEnabled'],
+                'value' => ['present', 'array:orgName,workspaceSlug,sprintLength,timezone,calendar,loginDescription,themeColor,secondaryColor,logoUrl,faviconUrl,secretariatEnabled'],
                 'value.orgName' => ['sometimes', 'string', 'max:160'],
                 'value.workspaceSlug' => ['sometimes', 'string', 'max:80', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/'],
                 'value.sprintLength' => ['sometimes', 'string', 'max:32'],
@@ -209,6 +233,12 @@ final class OrganizationSettings
                 'value.calendar' => ['sometimes', Rule::in(['jalali', 'gregorian'])],
                 'value.loginDescription' => ['sometimes', 'nullable', 'string', 'max:240'],
                 'value.themeColor' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+                'value.secondaryColor' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+                // مسیر هویت بصری؛ خالی‌بودن یعنی «بدون فایل سفارشی». هر دو شکل
+                // «مسیر ذخیره‌شده» و «نشانی مطلق برگشتی API» پذیرفته و در کنترلر
+                // به شکل کانونیک `/storage/brand/...` نرمال می‌شود.
+                'value.logoUrl' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:#^(/storage/brand/[A-Za-z0-9._-]+|https?://[^\s]+/(?:api/v1/media|storage)/brand/[A-Za-z0-9._-]+(?:\?[^\s]*)?)?$#'],
+                'value.faviconUrl' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:#^(/storage/brand/[A-Za-z0-9._-]+|https?://[^\s]+/(?:api/v1/media|storage)/brand/[A-Za-z0-9._-]+(?:\?[^\s]*)?)?$#'],
                 'value.secretariatEnabled' => ['sometimes', 'boolean'],
             ],
             'notifications' => [
@@ -222,6 +252,16 @@ final class OrganizationSettings
                 'value.passwordMinLength' => ['sometimes', 'integer', 'between:8,128'],
                 'value.sessionLifetimeMinutes' => ['sometimes', 'integer', 'between:15,43200'],
                 'value.maxLoginAttempts' => ['sometimes', 'integer', 'between:1,100'],
+            ],
+            'maintenance' => [
+                // `startedAt`/`updatedBy` فقط برای سازگاری با کلاینتی است که مقدار
+                // خوانده‌شده را دوباره می‌فرستد؛ سرور هر دو را بازنویسی می‌کند.
+                'value' => ['present', 'array:enabled,message,startedAt,updatedBy'],
+                'value.enabled' => ['required', 'boolean'],
+                // پیام خالی مجاز است و در پاسخ، متن پیش‌فرض جای آن می‌نشیند.
+                'value.message' => ['sometimes', 'nullable', 'string', 'max:500'],
+                'value.startedAt' => ['sometimes', 'nullable', 'string', 'max:64'],
+                'value.updatedBy' => ['sometimes', 'nullable', 'string', 'max:160'],
             ],
             'google_meet' => [
                 'value' => ['present', 'array:enabled,driveEnabled,docsEnabled,sheetsEnabled,driveFolderId,calendarId,delegatedUser,timezone,sendUpdates,defaultDurationMinutes'],
@@ -251,7 +291,7 @@ final class OrganizationSettings
             'task_priorities' => $this->orderedOptionsRules(self::TASK_PRIORITIES),
             'task_statuses' => $this->orderedOptionsRules(TaskOperations::STATUSES),
             'dam_statuses' => $this->orderedOptionsRules(minItems: 1, maxIdLength: 30),
-            'content_statuses' => $this->orderedOptionsRules(forbiddenIds: ['in_progress', 'completed']),
+            'content_statuses' => $this->orderedOptionsRules(forbiddenIds: ['in_progress', 'completed', ...array_keys(ContentStatusPolicy::RETIRED)]),
             'content_code_policies' => [
                 'value' => ['present', 'array', 'list', 'max:100'],
                 'value.*' => ['array:id,scope,matchId,prefix,padding,description'],

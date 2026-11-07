@@ -1,4 +1,6 @@
+import { useExitPresence } from '../common/useExitPresence';
 import React, { useState, useRef, useEffect } from 'react';
+import { BrandLogo } from '../common/BrandLogo';
 import { useQuery } from '@tanstack/react-query';
 import { useApp } from '../../context/AppContext';
 import { departmentsApi } from '../../api/departments';
@@ -32,6 +34,7 @@ import {
   Archive,
   Mail
 } from 'lucide-react';
+import { Collapsible } from '../common/Collapsible';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -61,9 +64,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsCreateProjectOpen,
     setIsCreateContentOpen,
     setIsTemplatesModalOpen,
-    requestMeetingModal,
+    setIsCreateIdeaOpen,
+    setIsCreateMeetingOpen,
+    requestContentSeriesModal,
     roles,
     generalSettings,
+    isWorkspaceLoading,
     hasPermission
   } = useApp();
 
@@ -78,6 +84,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const activeProjectsCount = (projects || []).filter(p => !['completed', 'cancelled', 'archived'].includes(p.status)).length;
 
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  // منوی «ایجاد جدید» با انیمیشن نرم باز و بسته می‌شود.
+  const quickAddMenu = useExitPresence(isQuickAddOpen);
   const [isContentMenuOpen, setIsContentMenuOpen] = useState(['content', 'content-series', 'content-publishing'].includes(activeView));
   const quickAddRef = useRef<HTMLDivElement>(null);
 
@@ -147,13 +155,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-indigo-100 text-indigo-700',
       permission: 'tasks.view'
     },
-    {
+    ...(false ? [{
       id: 'messages' as ActiveView,
       label: 'پیام‌ها و گفتگوها',
       icon: <MessageSquare className="w-4 h-4" />,
       badge: unreadMessagesCount > 0 ? unreadMessagesCount : null,
       badgeColor: 'bg-emerald-100 text-emerald-800',
-    },
+    }] as any : []),
     {
       id: 'projects' as ActiveView,
       label: 'پروژه‌ها',
@@ -282,12 +290,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Workspace Brand Header */}
         <div className="h-16 px-5 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
-              <Building2 className="w-5 h-5" />
+            {/* Reserve the logo slot without briefly showing the Building icon.
+                A verified cached logo may be used during workspace hydration. */}
+            <div className="relative w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-2xl bg-indigo-50 ring-1 ring-indigo-100 shadow-xs text-indigo-600 overflow-hidden">
+              <BrandLogo
+                url={generalSettings.logoUrl || (isWorkspaceLoading ? (() => {
+                  try { return window.localStorage.getItem('tadbir:brand-logo'); }
+                  catch { return null; }
+                })() : null)}
+                priority
+                plain
+                fallback={isWorkspaceLoading && !generalSettings.logoUrl ? null : <Building2 className="w-5 h-5" />}
+                className="absolute inset-0 h-full w-full"
+                imgClassName="object-contain bg-white"
+              />
             </div>
             <div className="min-w-0">
               <span className="block truncate text-base font-extrabold tracking-tight text-slate-900">سامانه تدبیر</span>
-              <span className="mt-0.5 block truncate text-[10px] font-medium text-slate-400">مدیریت یکپارچه کار و دانش سازمان</span>
             </div>
           </div>
         </div>
@@ -304,8 +323,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span>ایجاد جدید</span>
               <ChevronDown className="w-3.5 h-3.5 opacity-70" />
             </button>
-            {isQuickAddOpen && (
-              <div className="absolute top-full right-0 left-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 text-right">
+            {quickAddMenu.visible && (
+              <div data-state={quickAddMenu.state} className="ui-pop absolute top-full right-0 left-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
                 <button
                   onClick={() => { setIsCreateTaskOpen(true); setIsQuickAddOpen(false); }}
                   className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
@@ -340,9 +359,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span>محتوای جدید</span>
                   </button>
                 )}
+                {hasPermission('content.create') && (
+                  <button
+                    onClick={() => { handleNavClick('content-series'); requestContentSeriesModal(); setIsQuickAddOpen(false); }}
+                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                  >
+                    <Layers className="w-4 h-4 text-indigo-600" />
+                    <span>مجموعه محتوای جدید</span>
+                  </button>
+                )}
                 {hasPermission('thinktank.create_idea') && (
                   <button
-                    onClick={() => { handleNavClick('thought-room'); setIsQuickAddOpen(false); }}
+                    onClick={() => { setIsCreateIdeaOpen(true); setIsQuickAddOpen(false); }}
                     className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2.5 transition-colors cursor-pointer"
                   >
                     <Lightbulb className="w-4 h-4 text-amber-500" />
@@ -351,7 +379,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {hasPermission('meetings.create') && (
                   <button
-                    onClick={() => { handleNavClick('thought-room'); requestMeetingModal(); setIsQuickAddOpen(false); }}
+                    onClick={() => { setIsCreateMeetingOpen(true); setIsQuickAddOpen(false); }}
                     className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 transition-colors cursor-pointer"
                   >
                     <CalendarPlus className="w-4 h-4 text-emerald-600" />
@@ -392,12 +420,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <button id={`nav-item-${item.id}`} onClick={() => { handleNavClick(item.id); setIsContentMenuOpen(true); }} aria-current={isActive ? 'page' : undefined} className={`min-w-0 flex-1 ${itemClassName}`}>{buttonContent}</button>
                         <button type="button" aria-label="نمایش زیرمنوی محتوا" aria-expanded={isContentMenuOpen} onClick={() => setIsContentMenuOpen(value => !value)} className="flex h-9 w-8 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronDown className={`h-3.5 w-3.5 transition-transform ${isContentMenuOpen ? 'rotate-180' : ''}`} /></button>
                       </div>
-                      {isContentMenuOpen && <div className="mr-6 mt-1 space-y-0.5 border-r border-slate-200 pr-2">
+                      <Collapsible open={isContentMenuOpen} innerClassName="mr-6 mt-1 space-y-0.5 border-r border-slate-200 pr-2">
                         {contentSubmenuItems.map(child => {
                           const childActive = activeView === child.id;
                           return <button key={child.id} id={`nav-item-${child.id}`} onClick={() => handleNavClick(child.id)} aria-current={childActive ? 'page' : undefined} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-colors ${childActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><span className={childActive ? 'text-indigo-600' : 'text-slate-400'}>{child.icon}</span><span className="truncate">{child.label}</span></button>;
                         })}
-                      </div>}
+                      </Collapsible>
                     </div>;
                   })}
                 </div>
@@ -409,10 +437,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div>
             <div className="mb-1.5 px-3">
               <h2 className="text-[10px] font-black tracking-wide text-slate-500">مدیریت سامانه</h2>
-              <p className="mt-0.5 text-[9px] leading-4 text-slate-400">دیدگاه‌ها، کاربران، نقش‌ها و تنظیمات</p>
             </div>
             <div className="space-y-1">
-              <button
+              {false && <button
                 id="nav-item-comments"
                 onClick={() => handleNavClick('comments')}
                 className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -425,7 +452,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <MessageSquare className={`w-4 h-4 ${activeView === 'comments' ? 'text-indigo-600' : 'text-slate-500'}`} />
                   <span>دیدگاه‌ها</span>
                 </div>
-              </button>
+              </button>}
 
               {canManageUsers && (
                 <button

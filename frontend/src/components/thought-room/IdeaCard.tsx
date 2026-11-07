@@ -116,7 +116,9 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
 
   return (
     <div 
-      className="group bg-white rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden"
+      // کارت ایده کمی گردتر از قبل (دور ۸۵): گوشه‌ها با بقیهٔ کارت‌های سامانه
+      // هم‌خوان شدند و کارت‌های شبکه‌ای کنار هم یکدست دیده می‌شوند.
+      className="group bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden"
     >
       {/* Top Bar Header */}
       <div className="p-5 pb-3">
@@ -163,7 +165,7 @@ export const IdeaCard: React.FC<IdeaCardProps> = ({
             {hasPermission('thinktank.edit_idea') && (
               <button
                 onClick={(event) => { event.stopPropagation(); void updateIdea(idea.id, { status: idea.status === 'archived' ? 'draft' : 'archived' }); }}
-                className="p-1.5 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                 title={idea.status === 'archived' ? 'بازگردانی از بایگانی' : 'بایگانی ایده'}
               >
                 {idea.status === 'archived' ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}

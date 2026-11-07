@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, CornerUpLeft, Send, CheckCircle2, Paperclip } from 'lucide-react';
 import { SecretariatLetter } from '../../types';
 import { useApp } from '../../context/AppContext';
+import { useModalExit } from '../common/useModalExit';
 
 interface LetterReplyModalProps {
   originalLetter: SecretariatLetter | null;
@@ -24,7 +25,9 @@ export const LetterReplyModal: React.FC<LetterReplyModalProps> = ({
       : ''
   );
 
-  if (!isOpen || !originalLetter) return null;
+  // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
+  const presence = useModalExit(isOpen, onClose);
+  if (!presence.visible) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,13 +39,13 @@ export const LetterReplyModal: React.FC<LetterReplyModalProps> = ({
       content: content.trim()
     });
 
-    onClose();
+    presence.requestClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div data-state={presence.state} className="ui-modal-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div 
-        className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+        data-state={presence.state} className="ui-modal-panel bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-5 bg-gradient-to-r from-blue-900 to-indigo-950 text-white flex items-center justify-between">
@@ -57,7 +60,7 @@ export const LetterReplyModal: React.FC<LetterReplyModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={presence.requestClose}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10"
           >
             <X className="w-5 h-5" />
@@ -107,14 +110,15 @@ export const LetterReplyModal: React.FC<LetterReplyModalProps> = ({
           <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
             <button data-button-action="cancel"
               type="button"
-              onClick={onClose}
-              className="ui-form-action px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
+              onClick={presence.requestClose}
+              className="ui-form-action px-4 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
             >
               انصراف
             </button>
             <button
+              data-button-action="save"
               type="submit"
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md flex items-center gap-1.5"
+              className="ui-form-action px-5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5"
             >
               <Send className="w-4 h-4" />
               <span>صدور و ارسال نامه صادره</span>

@@ -1,9 +1,11 @@
+import { formatPersianDateLong, formatPersianNumber } from '../../utils/date';
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useApp } from '../../context/AppContext';
 import { activityLogsApi } from '../../api';
 import { runtime } from '../../config/runtime';
 import { PersianDatePicker } from '../common/PersianDatePicker';
+import { activityDetails, activityLabel } from '../../utils/activityLabels';
 import { Avatar } from '../common/Avatar';
 import { ActivityType } from '../../types';
 import {
@@ -18,23 +20,6 @@ import {
   Layers,
   Users
 } from 'lucide-react';
-
-const DETAIL_FIELD_LABELS: Record<string, string> = {
-  name: 'نام', description: 'توضیحات', status: 'وضعیت', managerId: 'مدیر', parentId: 'ساختار والد', members: 'اعضا',
-  title: 'عنوان', deadline: 'سررسید', priority: 'اولویت', assigneeId: 'مسئول', permissions: 'مجوزها',
-};
-
-const readableDetails = (value?: string) => {
-  const text = value?.trim();
-  if (!text) return null;
-  const fields = text.match(/fields:([A-Za-z0-9_,.-]+)/)?.[1]?.split(',').map(field => DETAIL_FIELD_LABELS[field] || '').filter(Boolean);
-  if (fields?.length) return `موارد تغییرکرده: ${fields.join('، ')}`;
-  if (/^(?:department|role|task|project|content|user)_?id\s*[:=]\s*\d+/i.test(text) || /^[a-z0-9_.-]+:\d+(?:\s|$)/i.test(text)) {
-    return 'جزئیات فنی این رویداد در گزارش امن سامانه ثبت شده است.';
-  }
-  if (/^[a-z][a-z0-9_.-]+$/i.test(text)) return null;
-  return text;
-};
 
 export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { 
@@ -134,13 +119,14 @@ export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = fals
       const date = new Date(isoString);
       const diffMinutes = Math.floor((Date.now() - date.getTime()) / 60000);
       if (diffMinutes < 1) return 'هم‌اکنون';
-      if (diffMinutes < 60) return `${diffMinutes} دقیقه پیش`;
+      if (diffMinutes < 60) return `${formatPersianNumber(diffMinutes)} دقیقه پیش`;
       const diffHours = Math.floor(diffMinutes / 60);
-      if (diffHours < 24) return `${diffHours} ساعت پیش`;
+      if (diffHours < 24) return `${formatPersianNumber(diffHours)} ساعت پیش`;
       const diffDays = Math.floor(diffHours / 24);
       if (diffDays === 1) return 'دیروز';
-      if (diffDays < 7) return `${diffDays} روز پیش`;
-      return date.toLocaleDateString('fa-IR');
+      if (diffDays < 7) return `${formatPersianNumber(diffDays)} روز پیش`;
+      // تاریخ شمسی قطعی از ابزار مشترک؛ نه خروجی وابسته به منطقه‌زمانی/مرورگر.
+      return formatPersianDateLong(date);
     } catch {
       return 'اخیراً';
     }
@@ -221,8 +207,9 @@ export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = fals
               const user = users.find(u => u.id === act.userId);
               const project = act.projectId ? projects.find(p => p.id === act.projectId) : null;
               const badge = getActionBadge(act.type);
-              const details = readableDetails(act.details);
-              const action = /^[a-z][a-z0-9_.-]+$/i.test(act.action || '') ? badge.label : act.action;
+              const details = activityDetails(act.details);
+              // کد ماشینی هرگز خام نمایش داده نمی‌شود؛ در نبود ترجمه، برچسب نوع رویداد می‌آید.
+              const action = activityLabel(act.action, badge.label);
 
               return (
                 <div key={act.id} className="relative group">

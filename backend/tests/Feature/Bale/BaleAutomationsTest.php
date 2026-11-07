@@ -72,7 +72,9 @@ class BaleAutomationsTest extends TestCase
         $homeButtons = collect(end($this->sent)['reply_markup']['inline_keyboard'])->flatten(1);
         $panelUrl = $homeButtons->pluck('web_app.url')->filter()->first();
         $this->assertMatchesRegularExpression('~#bale-login=[a-f0-9]{64}$~', $panelUrl);
-        $this->assertSame($panelUrl, $homeButtons->pluck('url')->filter()->last());
+        // همهٔ دکمه‌ها در همان مینی‌اپ باز می‌شوند؛ هیچ نشانی‌ای برای مرورگر
+        // بیرونی ساخته نمی‌شود.
+        $this->assertSame([], $homeButtons->pluck('url')->filter()->values()->all());
         $this->assertStringContainsString('ثبت دارایی', json_encode(end($this->sent), JSON_UNESCAPED_UNICODE));
         $this->assertStringNotContainsString(self::TOKEN, json_encode(end($this->sent)));
         $this->tick([$this->buttonUpdate(2, 'profile')]);
@@ -101,7 +103,8 @@ class BaleAutomationsTest extends TestCase
         $this->grant($user);
         $this->link($user);
         $this->tick([$this->buttonUpdate(1, 'assets')]);
-        $this->assertSame(['assetfile:0', 'assettext:0', 'assetrows', 'home'], $this->callbacks(end($this->sent)));
+        // «فرستادن فایل در همین بات» هم در کنار فرم امن و ثبت متن پیشنهاد می‌شود.
+        $this->assertSame(['assetsend:0', 'assetfile:0', 'assettext:0', 'assetrows', 'home'], $this->callbacks(end($this->sent)));
         $this->tick([$this->buttonUpdate(2, 'assettext:0')]);
         $this->assertContains('cancel', $this->callbacks(end($this->sent)));
         $this->tick([$this->message(3, '/cancel')]);
@@ -177,7 +180,7 @@ class BaleAutomationsTest extends TestCase
         $this->tick([$this->message(1, ' يك   پيام ')]);
         $this->assertCount(1, $this->sent);
         $this->tick([$this->message(2, 'یک پیام دیگر')]);
-        $this->assertStringContainsString('به تدبیر خوش آمدید', end($this->sent)['text']);
+        $this->assertStringContainsString('/menu', end($this->sent)['text']);
     }
 
     public function test_command_opens_specific_table_and_commits_one_row_after_confirmation(): void
@@ -275,7 +278,7 @@ class BaleAutomationsTest extends TestCase
         $this->link($this->user());
         $this->configure([$this->rule()]);
         $this->tick([$this->buttonUpdate(1, 'automation_reply')]);
-        $this->assertStringContainsString('به تدبیر خوش آمدید', end($this->sent)['text']);
+        $this->assertStringContainsString('/menu', end($this->sent)['text']);
     }
 
     public function test_trigger_rate_limit_is_per_link_and_duplicate_update_does_not_consume_it(): void
@@ -317,6 +320,142 @@ class BaleAutomationsTest extends TestCase
             ->assertOk()->assertJsonPath('data.rules.0.enabled', false);
         $this->putJson('/api/v1/bale/settings/automations', ['revision' => 2, 'rules' => []])->assertOk()->assertJsonPath('data.rules', []);
         $this->assertSame(self::TOKEN, app(Settings::class)->token());
+    }
+
+    public function test_table_choices_include_tables_that_have_no_department(): void
+    {
+        $this->ready();
+        $admin = $this->user(true);
+        Sanctum::actingAs($admin);
+        $columns = fn () => [['id' => 'body', 'name' => 'متن', 'type' => 'text', 'required' => true]];
+        $plain = DamDataTable::create(['name' => 'جدول بدون دپارتمان', 'created_by' => $admin->id, 'columns' => $columns()]);
+        $department = Department::create(['name' => 'تیم جدول', 'status' => 'active']);
+        $scoped = DamDataTable::create(['name' => 'جدول دپارتمانی', 'created_by' => $admin->id, 'columns' => $columns()]);
+        $scoped->departments()->attach($department);
+
+        $tables = collect($this->getJson('/api/v1/bale/settings/automations')->assertOk()->json('data.tables'));
+
+        // قبلاً فقط جدول‌های متصل به دپارتمان برمی‌گشتند و انتخاب ممکن نبود.
+        $this->assertTrue($tables->pluck('id')->contains($plain->id));
+        $this->assertTrue($tables->pluck('id')->contains($scoped->id));
+        $this->assertSame(['id', 'name'], array_keys($tables->first()));
+    }
+
+    public function test_table_row_rule_without_department_opens_the_form_and_commits_a_row(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->link($user);
+        $this->grant($user);
+        $table = DamDataTable::create(['name' => 'روایات بی‌دپارتمان', 'created_by' => $user->id,
+            'columns' => [['id' => 'body', 'name' => 'متن روایت', 'type' => 'text', 'required' => true]]]);
+        $this->configure([$this->rule('table_row', ['table_id' => $table->id])]);
+
+        // دپارتمان دیگر بخشی از قاعده نیست و مقدار قدیمی هم ذخیره نمی‌شود.
+        $this->assertNull(app(Automations::class)->read()['rules'][0]['department_id']);
+
+        $this->tick([$this->message(1, '/revayat')]);
+        $this->assertSame('asset_field', BaleConversation::first()->step);
+        $this->assertSame($table->id, BaleConversation::first()->data['table_id']);
+        $this->assertNull(BaleConversation::first()->data['department_id']);
+        $this->tick([$this->message(2, 'ردیف بدون دپارتمان')]);
+        $nonce = BaleConversation::first()->nonce;
+        $this->tick([$this->buttonUpdate(3, 'confirm:'.$nonce)]);
+        $this->assertSame(1, $table->rows()->count());
+        $this->assertSame('ردیف بدون دپارتمان', $table->rows()->first()->cells['body']);
+    }
+
+    /**
+     * ویرایش قاعده میانِ فرم نباید پاسخِ فیلدها را ببندد؛ پیش‌تر نشست پاک
+     * می‌شد و پیام بعدی کاربر «منوی اصلی» می‌آمد.
+     */
+    public function test_field_answers_survive_a_rule_edit_in_the_middle_of_the_form(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->link($user);
+        [$department, $table] = $this->table($user);
+        $table->update(['columns' => [
+            ['id' => 'body', 'name' => 'متن روایت', 'type' => 'text', 'required' => true],
+            ['id' => 'note', 'name' => 'یادداشت', 'type' => 'text', 'required' => false],
+        ]]);
+        $rule = $this->rule('table_row', ['table_id' => $table->id, 'department_id' => $department->id]);
+        $this->configure([$rule]);
+
+        $this->tick([$this->message(1, '/revayat')]);
+        $this->assertSame('asset_field', BaleConversation::first()->step);
+
+        // قاعده در پنل ویرایش می‌شود (نام و شناسهٔ نسخه عوض می‌شود).
+        $this->configure([[...$rule, 'name' => 'روایت ویرایش‌شده']]);
+
+        $this->tick([$this->message(2, 'متن اول')]);
+        $this->assertSame('asset_field', BaleConversation::first()->step);
+        $this->assertSame(1, BaleConversation::first()->data['index']);
+        $this->assertStringContainsString('یادداشت', (string) end($this->sent)['text']);
+        $this->assertStringNotContainsString('به تدبیر خوش آمدید', (string) end($this->sent)['text']);
+    }
+
+    /** فرمِ چندستونی با متن‌های بلند هم باید به مرحلهٔ تأیید برسد، نه خطا. */
+    public function test_long_multi_column_form_reaches_confirmation_without_aborting(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->link($user);
+        [$department, $table] = $this->table($user);
+        $columns = [];
+        foreach (range(1, 40) as $i) {
+            $columns[] = ['id' => 'c'.$i, 'name' => 'ستون '.$i, 'type' => 'text', 'required' => true];
+        }
+        $table->update(['columns' => $columns]);
+        $this->configure([$this->rule('table_row', ['table_id' => $table->id, 'department_id' => $department->id])]);
+
+        $this->tick([$this->message(1, '/revayat')]);
+        $updates = [];
+        for ($i = 2; $i <= 41; $i++) {
+            $updates[] = $this->message($i, str_repeat('متن ', 400));
+        }
+        foreach (array_chunk($updates, 10) as $chunk) {
+            $this->tick($chunk);
+        }
+
+        $this->assertSame('asset_confirm', BaleConversation::first()->step);
+        $this->assertStringContainsString('تأیید ثبت', json_encode(end($this->sent), JSON_UNESCAPED_UNICODE));
+        // پیش‌نمایشِ بلند کوتاه می‌شود، ولی فرم بسته نمی‌شود و همهٔ ستون‌ها ثبت می‌شوند.
+        $this->assertStringContainsString('ستون دیگر', (string) end($this->sent)['text']);
+
+        $nonce = BaleConversation::first()->nonce;
+        $this->tick([$this->buttonUpdate(42, 'confirm:'.$nonce)]);
+        $this->assertSame(1, $table->rows()->count());
+    }
+
+    /** تغییر تعریف جدول میانِ فرم: همان فیلد دوباره پرسیده شود، نه منوی اصلی. */
+    public function test_table_schema_change_mid_form_reasks_the_field_instead_of_returning_home(): void
+    {
+        $this->ready();
+        $user = $this->user();
+        $this->link($user);
+        [$department, $table] = $this->table($user);
+        $table->update(['columns' => [
+            ['id' => 'body', 'name' => 'متن روایت', 'type' => 'text', 'required' => true],
+            ['id' => 'note', 'name' => 'یادداشت', 'type' => 'text', 'required' => false],
+        ]]);
+        $this->configure([$this->rule('table_row', ['table_id' => $table->id, 'department_id' => $department->id])]);
+        $this->tick([$this->message(1, '/revayat')]);
+
+        $table->update(['columns' => [
+            ['id' => 'body', 'name' => 'متن روایت', 'type' => 'text', 'required' => true],
+            ['id' => 'note', 'name' => 'یادداشت', 'type' => 'text', 'required' => false],
+            ['id' => 'tag', 'name' => 'برچسب', 'type' => 'text', 'required' => false],
+        ]]);
+
+        $this->tick([$this->message(2, 'متن اول')]);
+        $this->assertSame('asset_field', BaleConversation::first()->step);
+        $this->assertSame(0, BaleConversation::first()->data['index']);
+        $this->assertStringContainsString('تعریف این جدول', (string) end($this->sent)['text']);
+
+        // فیلد با تعریف تازه دوباره پرسیده می‌شود و ردیف سالم پیش می‌رود.
+        $this->tick([$this->message(3, 'متن اول')]);
+        $this->assertSame(1, BaleConversation::first()->data['index']);
     }
 
     public function test_table_schema_change_during_custom_form_blocks_creation(): void

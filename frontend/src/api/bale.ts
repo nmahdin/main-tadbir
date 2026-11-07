@@ -57,8 +57,10 @@ export interface BaleAccount {
 export interface BaleRule {
   id: string; name: string; enabled: boolean; trigger_type: 'command' | 'text'; trigger: string;
   action: 'reply' | 'table_row' | 'asset_text' | 'asset_file' | 'assets' | 'tasks' | 'meetings';
-  response: string | null; table_id: number | null; department_id: number | null;
+  response: string | null; table_id: number | null;
 }
+/** قاعدهٔ قدیمی دپارتمان داشت؛ این فیلد دیگر در فرم نیست و هنگام ذخیره حذف می‌شود. */
+export type StoredBaleRule = BaleRule & { department_id?: number | null };
 export interface BaleDeliveryState {
   status: 'pending' | 'sending' | 'sent' | 'failed' | 'unknown' | 'cancelled';
   error_code: string | null;
@@ -66,7 +68,8 @@ export interface BaleDeliveryState {
 }
 export interface BaleAutomations {
   revision: number; rules: BaleRule[];
-  tables: { id: number; name: string; departments: { id: number; name: string }[] }[];
+  /** همهٔ جدول‌های اطلاعاتی مخزن؛ دپارتمان بخشی از قاعده یا این فهرست نیست. */
+  tables: { id: number; name: string }[];
   executions: Record<string, BaleDeliveryState>;
 }
 export const baleApi = {

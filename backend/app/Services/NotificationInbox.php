@@ -50,7 +50,17 @@ final class NotificationInbox
                 foreach ($preceding as $prior) {
                     $q->orWhere(fn ($p) => $p->whereNotNull('payload->'.$prior)->where('payload->'.$prior, '!=', ''));
                 }
-                if ($permission === 'content.view' ? app(ContentAccess::class)->canEnter($user) : $user->hasPermission($permission)) {
+                /*
+                 * محتوای مرتبط: دامنه را همین زیرکوئری تعیین می‌کند (مالک، دپارتمان
+                 * یا هر نقش درون پرونده). پیش‌تر درگاه `canEnter` جلوی دیده‌شدن
+                 * یادآوری برای «مسئول انتشار»ی را می‌گرفت که مجوز سراسری
+                 * «مشاهده محتوا» نداشت؛ اکنون تنهاشرط، حساب و نقش فعال است و
+                 * محدودسازی واقعی همان `orWhereIn` روی پرونده‌های مرتبط می‌ماند.
+                 */
+                $allowed = $permission === 'content.view'
+                    ? ($user->isActive() && (bool) $user->role?->is_active)
+                    : $user->hasPermission($permission);
+                if ($allowed) {
                     $q->orWhereIn('payload->'.$field, $ids);
                 }
             });

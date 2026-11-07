@@ -34,9 +34,12 @@ test('content creation and workflow corrections retain required and themed behav
   assert.match(workflow, /این مرحله به مرحله قبل وابسته است/);
   assert.match(workflow, /dependsOnStageIds/);
   assert.doesNotMatch(detail, /font-mono[^\n]*formatPersianDate\(stage\.deadline\)/);
-  assert.match(detail, /<footer className="flex shrink-0[^>]*border-t/);
+  // پایینِ فرم در بدنهٔ پیمایش‌شوندهٔ مدال «چسبان» است تا دکمهٔ ثبت همیشه در دسترس بماند.
+  assert.match(detail, /<footer className="sticky bottom-0 z-10 flex shrink-0[^>]*border-t/);
   assert.match(detail, /ui-button ui-button-secondary/);
-  assert.match(detail, /ui-button ui-button-primary/);
+  // دور ۸۵: دکمه‌های شروع/ارسال/تأیید/اصلاح مرحله با همان Button سامانه یکپارچه شدند.
+  assert.match(detail, /<Button\s+variant="primary"\s+loading=\{stageActionKey === `start:\$\{stage\.id\}`\}/);
+  assert.match(detail, /<Button variant="danger"[\s\S]{0,400}?نیازمند اصلاح</);
 });
 
 test('compact form-action styling is explicit and does not leak into headers, tabs, menus, or cards', async () => {
@@ -58,11 +61,20 @@ test('compact form-action styling is explicit and does not leak into headers, ta
   assert.match(primitives, /aria-busy=\{loading \|\| undefined\}/);
   assert.doesNotMatch(primitives, /className=\{`ui-button ui-button-\$\{variant\} \$\{FORM_ACTION_REFERENCE_CLASS\}/);
 
-  assert.match(css, /--form-action-min-height: 2\.125rem/);
+  assert.match(css, /--form-action-min-height: var\(--button-height\)/);
   assert.match(css, /\.ui-form-action \{[\s\S]*?padding: var\(--form-action-padding-block\) var\(--form-action-padding-inline\)/);
   assert.match(css, /\.ui-form-action\[data-button-action='cancel'\]/);
+  // قاعدهٔ پایهٔ دکمه‌ها فقط ارتفاع استاندارد ۳۶px، نبودِ سایه و انیمیشن
+  // فشرده‌شدن را تعیین می‌کند؛ پدینگ/اندازهٔ قلم همچنان به همان الگوی فشرده تعلق دارد.
   const globalButtonRule = css.match(/button, \[role='button'\] \{([^}]*)\}/)?.[1] || '';
-  assert.doesNotMatch(globalButtonRule, /min-height|padding|font-size|font-weight|letter-spacing/);
+  assert.match(globalButtonRule, /min-height: var\(--button-height\)/);
+  assert.match(globalButtonRule, /box-shadow: none !important/);
+  assert.doesNotMatch(globalButtonRule, /padding|font-size|font-weight|letter-spacing/);
+  // نوبت ۶۸: فشار دادن فقط به سمت درون کوچک می‌کند و جابه‌جایی به پایین ندارد.
+  assert.match(css, /button:active:not\(:disabled\)[^{]*\{[^}]*transform: scale\(\.965\) !important/);
+  assert.doesNotMatch(css, /translateY\(1px\)/);
+  // فقط دکمه‌های اقدام سایهٔ جزئی «ثبت خروجی»/ذخیره/انصراف را برمی‌گردانند.
+  assert.match(css, /\.ui-form-action,\s*\n\[data-button-action\],[\s\S]*?box-shadow: var\(--button-shadow\) !important/);
 
   assert.match(createContent, /action="cancel"/);
   assert.match(createContent, /action=\{createdContent \? undefined : 'create'\}/);
@@ -90,9 +102,10 @@ test('queued files keep editable display titles while original browser filenames
   assert.doesNotMatch(composer, /نام فایل اصلی:/);
   assert.match(composer, /\{sizeLabel\(file\.size\)\}/);
   assert.match(composer, /نام نمایشی فایل/);
-  assert.match(library, /displayTitle: string/);
-  assert.match(library, /item\.displayTitle\.trim\(\)/);
-  assert.match(library, /مستقل از نام فایل اصلی/);
+  // مدال مخزن همان سازندهٔ ضمیمه را سوار می‌کند؛ صف مستقل و تکراری حذف شده است.
+  assert.match(library, /<AttachmentComposer\b/);
+  assert.match(library, /persistAttachmentDraft\(/);
+  assert.doesNotMatch(library, /displayTitle/);
 });
 
 test('the cached theme is restored before first paint and refreshed only after hydration', async () => {

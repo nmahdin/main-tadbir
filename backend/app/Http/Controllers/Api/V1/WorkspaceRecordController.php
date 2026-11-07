@@ -173,6 +173,9 @@ class WorkspaceRecordController extends Controller
                     if ($kind === WorkspaceRecord::KIND_MEETING) {
                         app(MeetingNotifications::class)->created($record);
                     }
+                    if ($kind === WorkspaceRecord::KIND_IDEA) {
+                        app(\App\Services\IdeaNotifications::class)->created($record);
+                    }
                     $this->logProjectRecordLink($record, $request->user()->id);
 
                     return $record;

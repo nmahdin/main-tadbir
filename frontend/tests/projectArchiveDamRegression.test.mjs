@@ -18,7 +18,9 @@ test('project creation and editing share one stable modal with a fixed action fo
   assert.match(modal, /shrink-0 border-t border-slate-200/);
   assert.match(modal, /if \(isEditing && projectToEdit\)/);
   assert.match(modal, /editProject\.mutateAsync/);
-  assert.match(primitives, /panelScroll \? 'overflow-auto' : 'overflow-hidden'/);
+  // مدال یک ناحیهٔ پیمایش دارد: بدنه؛ کادر مدال جداگانه اسکرول نمی‌شود.
+  assert.match(primitives, /ui-modal ui-modal-panel flex flex-col overflow-hidden/);
+  assert.match(primitives, /data-modal-body className="min-h-0 flex-1 overflow-y-auto overscroll-contain"/);
 });
 
 test('project list hides advanced filters and no longer ships a preview action or modal', async () => {
@@ -29,7 +31,8 @@ test('project list hides advanced filters and no longer ships a preview action o
 
   assert.match(workspace, /aria-expanded=\{filtersOpen\}/);
   assert.match(workspace, /فیلترها/);
-  assert.match(workspace, /\{filtersOpen && <div/);
+  // نوبت ۶۷: پنل فیلترها با کامپوننت مشترک جمع‌شو و انیمیشن ارتفاع رندر می‌شود.
+  assert.match(workspace, /<Collapsible open=\{filtersOpen\}>/);
   assert.match(workspace, /module === 'projects' && <label/);
   assert.doesNotMatch(workspace, /next\.set\('preview'/);
   assert.doesNotMatch(app, /EntityPreview|DetailContext/);
@@ -92,7 +95,9 @@ test('sidebar keeps the requested RTL identity and grouped operational navigatio
   for (const title of ['کار روزانه', 'برنامه‌ریزی و اجرا', 'سازمان و پایش', 'مدیریت سامانه']) {
     assert.match(sidebar, new RegExp(title));
   }
-  assert.match(sidebar, /مدیریت یکپارچه کار و دانش سازمان/);
+  // دور ۷۵: توضیح زیر عنوان سامانه در سایدبار حذف شد؛ فقط برند و لوگو می‌مانند.
+  assert.doesNotMatch(sidebar, /مدیریت یکپارچه کار و دانش سازمان/);
+  assert.match(sidebar, /<BrandLogo/);
   assert.match(sidebar, /contentSubmenuItems/);
   assert.match(sidebar, /aria-label="نمایش زیرمنوی محتوا"/);
   assert.match(sidebar, /aria-expanded=\{isContentMenuOpen\}/);

@@ -157,7 +157,9 @@ export function parseToJalali(dateInput?: string | Date | null): JalaliDate {
   const str = toEnglishDigits(String(dateInput).trim());
 
   // Check if it's already a Jalali string like 1404/05/12 or 1404-05-12
-  const jalaliMatch = str.match(/^(13\d{2}|14\d{2})[\/\-\.](0?[1-9]|1[0-2])[\/\-\.](0?[1-9]|[12]\d|3[01])/);
+  // ترتیب شاخه‌های regex مهم است: `0?[1-9]` پیش از `[12]\d` می‌آمد و روزهای
+  // ۱۰ تا ۲۹ را یک‌رقمی می‌خواند (۱۵ شهریور → ۱ شهریور). دو رقمی‌ها اول می‌آیند.
+  const jalaliMatch = str.match(/^(13\d{2}|14\d{2})[\/\-\.](1[0-2]|0?[1-9])[\/\-\.](3[01]|[12]\d|0?[1-9])/);
   if (jalaliMatch) {
     return {
       jy: parseInt(jalaliMatch[1], 10),

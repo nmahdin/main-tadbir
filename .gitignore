@@ -20,6 +20,8 @@ backend/storage/framework/views/**/*
 !backend/storage/framework/views/.gitignore
 backend/storage/logs/**/*
 !backend/storage/logs/.gitignore
+backend/storage/j_*.xml
+backend/storage/junit*.xml
 backend/bootstrap/cache/**/*
 !backend/bootstrap/cache/.gitignore
 

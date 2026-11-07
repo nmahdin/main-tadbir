@@ -14,6 +14,12 @@ final class ContentAssetRelations
     /** @param array<int, mixed> $stages */
     public function normalize(User $actor, ?Content $content, array $stages): array
     {
+        // نوبت ۱۷: با ثبت اولین خروجی، وضعیت مرحله از in_progress به ready_for_review می‌رود (فرانت هم همین را می‌کند؛ بک‌اند هم تضمین می‌کند).
+        $isDelivered = function (array $output): bool {
+            return ! empty($output['isDelivered']) || ! empty($output['value']) || ! empty($output['url']) || ! empty($output['assetId']) || ! empty($output['fileName']);
+        };
+        $oldById = $content ? collect($content->payload['stages'] ?? [])->filter(fn ($s) => is_array($s) && ! empty($s['id']))->keyBy('id') : collect([]);
+
         foreach ($stages as $stageIndex => $stage) {
             if (! is_array($stage)) {
                 continue;
@@ -31,6 +37,13 @@ final class ContentAssetRelations
                         && (string) ($candidate['id'] ?? '') === (string) ($output['id'] ?? '')
                         && (string) ($candidate['assetId'] ?? '') === (string) ($output['assetId'] ?? ''),
                 ) : null;
+                // خروجی‌ای که همین حالا هم به همین دارایی وصل بوده، مرجع تاریخی
+                // است: اگر دارایی بعداً از مخزن حذف شده باشد، نباید هر ذخیرهٔ
+                // بعدیِ همان محتوا (ویرایش جریان، ثبت خروجی تازه، تغییر مهلت) را
+                // با خطای «دارایی در دسترس نیست» ببندد. فراداده دست‌نخورده می‌ماند.
+                if (! $asset && is_array($legacyOutput)) {
+                    continue;
+                }
                 $alreadyLinked = $asset && $content && $asset->relations()
                     ->where('related_type', 'content')->where('related_id', $content->id)->exists();
                 if (! $asset || (! is_array($legacyOutput) && ! $alreadyLinked && ! app(DamAssetAccess::class)->canView($actor, $asset))) {
@@ -50,6 +63,20 @@ final class ContentAssetRelations
                 $stages[$stageIndex]['outputs'][$outputIndex]['assetId'] = (string) $asset->id;
                 $stages[$stageIndex]['outputs'][$outputIndex]['assetVersionId'] = (string) $version->id;
                 $stages[$stageIndex]['outputs'][$outputIndex]['assetVersionNumber'] = (int) $version->version_number;
+            }
+
+            // اگر این مرحله قبلاً خروجی نداشته و حالا حداقل یک خروجی تحویل‌شده دارد و در حال انجام است، به آمادهٔ بررسی برود.
+            if (is_array($stage) && ! empty($stage['id'])) {
+                $oldStage = $oldById->get((string) $stage['id']);
+                if (is_array($oldStage)) {
+                    $oldDelivered = collect($oldStage['outputs'] ?? [])->filter(fn ($o) => is_array($o) && $isDelivered($o))->count();
+                    $newDelivered = collect($stages[$stageIndex]['outputs'] ?? [])->filter(fn ($o) => is_array($o) && $isDelivered($o))->count();
+                    $oldStatus = (string) ($oldStage['status'] ?? '');
+                    $newStatus = (string) ($stages[$stageIndex]['status'] ?? $oldStatus);
+                    if ($oldDelivered === 0 && $newDelivered > 0 && $oldStatus === 'in_progress' && $newStatus === 'in_progress') {
+                        $stages[$stageIndex]['status'] = 'ready_for_review';
+                    }
+                }
             }
         }
 

@@ -11,6 +11,7 @@ use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\ContentPublication;
+use App\Services\ContentStageTaskSync;
 use App\Services\TaskAutomationProcessor;
 use App\Services\TaskOperations;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
@@ -284,6 +285,35 @@ class ContentPublicationTasksTest extends TestCase
         $this->assertSame('backlog', $task->fresh()->status);
         $this->publish($content)->assertOk();
         $this->assertSame('completed', $task->fresh()->status);
+    }
+
+    /**
+     * لغو انتشار: وظیفهٔ مربوط به انتشار باید از «تکمیل‌شده» بیرون بیاید و در
+     * «در انتظار بررسی» بماند — حتی بعد از هم‌زمان‌سازی بعدی، که پیش‌تر آن را
+     * دوباره تکمیل می‌کرد.
+     */
+    public function test_unpublish_keeps_the_publication_task_open_after_resync(): void
+    {
+        $actor = $this->actor();
+        $content = $this->content($actor, ['stages' => [
+            ['id' => 'publish-1', 'stageKey' => 'publish', 'status' => 'approved'],
+        ]]);
+        $publication = $this->task($actor, $content, 'content_publish');
+        $stageTask = $this->task($actor, $content, 'content_work', 'publish-1');
+
+        $this->publish($content)->assertOk();
+        $this->assertSame('completed', $publication->fresh()->status);
+        $this->assertSame('completed', $stageTask->fresh()->status);
+
+        $this->postJson('/api/v1/contents/'.$content->id.'/unpublish', ['expectedVersion' => ContentPublication::version($content->refresh())])->assertOk();
+        $this->assertSame('backlog', $publication->fresh()->status);
+        $this->assertNotSame('completed', $stageTask->fresh()->status);
+
+        // هم‌زمان‌سازی بعدی نباید وظیفه را دوباره «تکمیل‌شده» کند.
+        app(ContentStageTaskSync::class)->sync($content->refresh());
+        $this->assertSame('backlog', $publication->fresh()->status);
+        $this->assertNotSame('completed', $stageTask->fresh()->status);
+        $this->assertSame('ready_to_publish', $content->refresh()->status);
     }
 
     public function test_history_records_actor_source_event_entity_and_status_transition(): void

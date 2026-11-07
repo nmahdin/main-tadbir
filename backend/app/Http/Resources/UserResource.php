@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Services\ContentAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Support\Media\PublicMedia;
 
 /**
  * خروجی استاندارد کاربر برای فرانت‌اند.
@@ -50,7 +51,8 @@ class UserResource extends JsonResource
             'id' => (string) $this->id,
             'name' => $this->name,
             'username' => $this->username,
-            'avatar' => $this->avatar,
+            // نشانی مطلق و کارا روی هر دامنه (بدون وابستگی به /storage).
+            'avatar' => PublicMedia::url($this->avatar),
             'bio' => $this->bio,
             'phone' => $this->phone,
             'location' => $this->location,

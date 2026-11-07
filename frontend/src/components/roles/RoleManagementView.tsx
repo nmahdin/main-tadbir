@@ -422,7 +422,7 @@ export const RoleManagementView: React.FC = () => {
                             <button
                               role="checkbox" aria-checked={hasPerm} aria-label={`${role.name}: ${perm.label}`} disabled={!canToggle}
                               onClick={() => togglePermissionDraft(role, perm.id)}
-                              className={`w-7 h-7 rounded-xl mx-auto flex items-center justify-center transition-all ${
+                              className={`permission-toggle transition-all ${
                                 hasPerm
                                   ? 'bg-indigo-600 text-white shadow-xs hover:bg-indigo-700'
                                   : 'bg-slate-100 text-slate-300 hover:bg-slate-200'

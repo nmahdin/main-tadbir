@@ -1,8 +1,13 @@
-import React from 'react';
-import { ContentStatusBadge } from '../../utils/statusBadges';
+import React, { useState } from 'react';
+import { ContentTypeBadge } from '../../utils/statusBadges';
 import { formatPersianDate } from '../../utils/date';
+import { toIsoDateKey } from '../../utils/isoDate';
 import { useApp } from '../../context/AppContext';
+import type { Content } from '../../types';
+import { sortPublishedNewestFirst } from '../../utils/publicationTiming';
 import { Button, IconButton } from '../common/Primitives';
+import { PersianDatePicker } from '../common/PersianDatePicker';
+import { Collapsible } from '../common/Collapsible';
 import {
   FileText,
   Video,
@@ -14,13 +19,14 @@ import {
   Send,
   RotateCcw,
   ArrowRight,
-  Copy
+  Copy,
+  SlidersHorizontal,
+  Search
 } from 'lucide-react';
 
 export const ContentPublishedView: React.FC = () => {
   const {
     contents,
-    departments,
     users,
     contentTypes,
     setActiveView,
@@ -48,7 +54,77 @@ export const ContentPublishedView: React.FC = () => {
     }
   };
 
-  const publishedContents = contents.filter(content => content.status === 'published');
+  /**
+   * پیش‌فرض این صفحه: **جدیدترین انتشار بالا و قدیمی‌ترین در پایان**.
+   *
+   * پیش‌تر ترتیب از `sortByPublicationMoment` می‌آمد که فقط تاریخ میلادی را
+   * می‌شناسد؛ تاریخ‌های شمسیِ ثبت‌شده «بدون تاریخ» حساب می‌شدند و فهرست عملاً
+   * به هم می‌ریخت. حالا کلید مقایسه با `toIsoDateKey` ساخته می‌شود (شمسی و
+   * میلادی هر دو به یک کلید تبدیل می‌شوند) و ساعت هم در همان کلید می‌آید؛
+   * پروندهٔ بدون تاریخ انتشار در پایان می‌ماند.
+   */
+  const publishedContents = sortPublishedNewestFirst<Content>(
+    contents.filter(content => content.status === 'published'),
+    content => ({
+      publication: { date: content.publishInfo?.date, time: content.publishInfo?.time, status: 'published' },
+      fallbackDate: content.updatedAt,
+    }),
+  );
+
+  /**
+   * فیلترهای همین صفحه (دور ۸۷): نوع محتوا، ناشر و بازهٔ تاریخ انتشار.
+   *
+   * بخش فیلتر بازشو است تا فهرست منتشرشده‌ها در حالت عادی شلوغ نشود؛ همهٔ
+   * مقایسه‌های تاریخ با کلید میلادیِ نرمال‌شده انجام می‌شود تا تاریخ‌های شمسی
+   * ثبت‌شده در دادهٔ قدیمی هم در بازه بیایند.
+   */
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [publisherFilter, setPublisherFilter] = useState('all');
+  /** فیلتر «مجموعهٔ محتوا»: همان سری‌ای که محتوا به آن پیوند خورده است. */
+  const [seriesFilter, setSeriesFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const publishers = users.filter(user => contents.some(content => content.status === 'published' && content.publisherId === user.id));
+  /**
+   * گزینه‌های مجموعه از خودِ محتواهای منتشرشده ساخته می‌شود (نه فهرست همهٔ
+   * مجموعه‌ها) تا فقط مجموعه‌هایی بیایند که واقعاً پروندهٔ منتشرشده دارند؛
+   * گزینهٔ «بدون مجموعه» هم برای پرونده‌های مستقل می‌ماند.
+   */
+  const seriesOptions = Array.from(new Map(
+    publishedContents
+      .filter(content => content.seriesId)
+      .map(content => [String(content.seriesId), content.seriesName || content.seriesCode || `مجموعهٔ ${content.seriesId}`] as const),
+  ).entries()).map(([id, name]) => ({ id, name }));
+  const filteredContents = publishedContents.filter(content => {
+    const needle = query.trim().toLowerCase();
+    if (needle) {
+      const haystack = `${content.title} ${content.code || ''}`.toLowerCase();
+      if (!haystack.includes(needle)) return false;
+    }
+    if (typeFilter !== 'all' && content.type !== typeFilter) return false;
+    if (publisherFilter !== 'all' && String(content.publisherId || '') !== publisherFilter) return false;
+    if (seriesFilter === 'none' && content.seriesId) return false;
+    if (seriesFilter !== 'all' && seriesFilter !== 'none' && String(content.seriesId || '') !== seriesFilter) return false;
+    if (dateFrom || dateTo) {
+      const day = toIsoDateKey(content.publishInfo?.date);
+      if (!day) return false;
+      if (dateFrom && day < dateFrom) return false;
+      if (dateTo && day > dateTo) return false;
+    }
+    return true;
+  });
+  const activeFilterCount = [Boolean(query.trim()), typeFilter !== 'all', publisherFilter !== 'all', seriesFilter !== 'all', Boolean(dateFrom), Boolean(dateTo)].filter(Boolean).length;
+  const resetFilters = () => {
+    setQuery('');
+    setTypeFilter('all');
+    setPublisherFilter('all');
+    setSeriesFilter('all');
+    setDateFrom('');
+    setDateTo('');
+  };
 
   const handleOpenContent = (id: string) => {
     setSelectedContentId(id);
@@ -66,12 +142,65 @@ export const ContentPublishedView: React.FC = () => {
           <div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">محتوای منتشرشده</h1>
             <p className="text-sm text-slate-500 mt-1 font-medium">
-              {publishedContents.length} محتوای منتشرشده در سامانه
+              {activeFilterCount > 0
+                ? `${filteredContents.length} از ${publishedContents.length} محتوای منتشرشده`
+                : `${publishedContents.length} محتوای منتشرشده در سامانه`}
             </p>
           </div>
         </div>
 
+        <button
+          type="button"
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen(value => !value)}
+          className="ui-button ui-button-secondary text-xs"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          فیلترها
+          {activeFilterCount > 0 && <span className="rounded-full bg-emerald-600 px-1.5 text-[9px] font-black text-white">{activeFilterCount.toLocaleString('fa-IR')}</span>}
+        </button>
       </div>
+
+      <Collapsible open={filtersOpen}>
+        <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="فیلتر محتواهای منتشرشده">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs font-black text-slate-700"><SlidersHorizontal className="h-4 w-4 text-emerald-600" />فیلتر محتواهای منتشرشده</div>
+            <span className="text-[11px] text-slate-500">{filteredContents.length.toLocaleString('fa-IR')} نتیجه</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="text-[11px] font-bold text-slate-600">
+              <span className="inline-flex items-center gap-1"><Search className="h-3.5 w-3.5 text-slate-400" />جست‌وجوی عنوان یا کد</span>
+              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="بخشی از عنوان یا کد محتوا" className="ui-input mt-1.5 text-xs" />
+            </label>
+            <label className="text-[11px] font-bold text-slate-600">نوع محتوا
+              <select value={typeFilter} onChange={event => setTypeFilter(event.target.value)} className="ui-input mt-1.5 text-xs">
+                <option value="all">همه انواع</option>
+                {contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+              </select>
+            </label>
+            <label className="text-[11px] font-bold text-slate-600">ناشر
+              <select value={publisherFilter} onChange={event => setPublisherFilter(event.target.value)} className="ui-input mt-1.5 text-xs">
+                <option value="all">همه ناشران</option>
+                {publishers.map(user => <option key={user.id} value={user.id}>{user.name} {user.family || ''}</option>)}
+              </select>
+            </label>
+            <label className="text-[11px] font-bold text-slate-600">مجموعهٔ محتوا
+              <select value={seriesFilter} onChange={event => setSeriesFilter(event.target.value)} className="ui-input mt-1.5 text-xs">
+                <option value="all">همهٔ مجموعه‌ها</option>
+                <option value="none">بدون مجموعه</option>
+                {seriesOptions.map(series => <option key={series.id} value={series.id}>{series.name}</option>)}
+              </select>
+            </label>
+            {/* انتخابگر تاریخ با `portal` رندر می‌شود؛ وگرنه کادر تقویم داخل
+                باکس فیلتر بریده می‌شد و بخشی از روزها/ماه‌ها دیده نمی‌شد. */}
+            <div className="text-[11px] font-bold text-slate-600">از تاریخ انتشار<PersianDatePicker className="mt-1.5" value={dateFrom} onChange={setDateFrom} placeholder="از تاریخ شمسی…" portal /></div>
+            <div className="text-[11px] font-bold text-slate-600">تا تاریخ انتشار<PersianDatePicker className="mt-1.5" value={dateTo} onChange={setDateTo} placeholder="تا تاریخ شمسی…" portal /></div>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button type="button" onClick={resetFilters} disabled={activeFilterCount === 0} className="ui-button ui-button-secondary text-[11px] disabled:opacity-50">پاک کردن فیلترها</button>
+          </div>
+        </section>
+      </Collapsible>
 
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
@@ -80,27 +209,24 @@ export const ContentPublishedView: React.FC = () => {
               <tr className="bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
                 <th className="p-4 whitespace-nowrap">عنوان محتوا</th>
                 <th className="p-4 whitespace-nowrap">نوع</th>
-                <th className="p-4 whitespace-nowrap">وضعیت</th>
-                <th className="p-4 whitespace-nowrap">دپارتمان</th>
-                <th className="p-4 whitespace-nowrap">مسئول اصلی</th>
                 <th className="p-4 whitespace-nowrap">ناشر</th>
                 <th className="p-4 whitespace-nowrap">تاریخ و ساعت انتشار</th>
-                <th className="p-4 w-64 whitespace-nowrap">عملیات</th>
+                <th className="p-4 w-44 whitespace-nowrap">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {publishedContents.length === 0 ? (
+              {filteredContents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-10 text-center">
+                  <td colSpan={5} className="p-10 text-center">
                     <CheckCircle2 className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                    <p className="text-sm font-bold text-slate-500">هنوز محتوایی منتشر نشده است.</p>
+                    <p className="text-sm font-bold text-slate-500">{publishedContents.length === 0 ? 'هنوز محتوایی منتشر نشده است.' : 'هیچ محتوای منتشرشده‌ای با این فیلترها پیدا نشد.'}</p>
                   </td>
                 </tr>
               ) : (
-                publishedContents.map(content => {
-                  const dept = departments.find(d => d.id === content.departmentId);
-                  const owner = users.find(u => u.id === content.ownerId);
-                  const typeName = contentTypes.find(ct => ct.id === content.type)?.name || content.type;
+                filteredContents.map(content => {
+                  // رنگ نشانگر نوع محتوا از تنظیمات همان نوع می‌آید، نه یک رنگ ثابت.
+                  const typeSetting = contentTypes.find(ct => ct.id === content.type);
+                  const typeName = typeSetting?.name || content.type;
                   return (
                     <tr
                       key={content.id}
@@ -120,37 +246,13 @@ export const ContentPublishedView: React.FC = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="p-4">
-                        <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg whitespace-nowrap">
-                          {typeName}
-                        </span>
-                      </td>
-                      <td className="p-4"><ContentStatusBadge status={content.status} /></td>
-                      <td className="p-4">
-                        <span className="text-xs font-medium text-slate-700">
-                          {dept?.name || 'دپارتمان رسانه'}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          {owner ? (
-                            <>
-                              <img src={owner.avatar} alt={owner.name} className="w-6 h-6 rounded-full object-cover" />
-                              <span className="text-xs font-medium text-slate-700">{owner.name}</span>
-                            </>
-                          ) : (
-                            <span className="text-xs text-slate-400">نامشخص</span>
-                          )}
-                        </div>
-                      </td>
+                      <td className="p-4"><ContentTypeBadge color={typeSetting?.color} label={typeName} /></td>
                       <td className="p-4">
                         {(() => {
                           const publisher = users.find(u => u.id === content.publisherId);
+                          // فقط نام ناشر؛ عکس مسئول انتشار در این فهرست نمایش داده نمی‌شود.
                           return publisher ? (
-                            <div className="flex items-center gap-2">
-                              <img src={publisher.avatar} alt={publisher.name} className="w-6 h-6 rounded-full object-cover" />
-                              <span className="text-xs font-medium text-slate-700">{publisher.name}</span>
-                            </div>
+                            <span className="text-xs font-medium text-slate-700">{publisher.name}</span>
                           ) : (
                             <span className="text-xs text-slate-400">—</span>
                           );
@@ -169,10 +271,10 @@ export const ContentPublishedView: React.FC = () => {
                             disabled={pendingMutationKeys.includes('contents:create')}
                             onClick={(event) => { event.stopPropagation(); void duplicateContent(content.id); }}
                             title="ساخت یک کپی از محتوا"
-                            className="min-h-9 px-3 py-2 text-xs"
+                            aria-label="ساخت یک کپی از محتوا"
+                            className="ui-action-button ui-icon-button"
                           >
                             <Copy className="h-4 w-4" />
-                            <span>کپی</span>
                           </Button>}
                           <Button
                             variant="warning"
@@ -185,7 +287,7 @@ export const ContentPublishedView: React.FC = () => {
                             loading={publishingContentIds.includes(content.id)}
                             disabled={!hasPermission('content.publish')}
                             title="لغو انتشار"
-                            className="min-h-9 px-3 py-2 text-xs"
+                            className="ui-action-button px-3 text-xs"
                           >
                             <RotateCcw className="w-4 h-4" />
                             <span>لغو انتشار</span>
@@ -199,10 +301,10 @@ export const ContentPublishedView: React.FC = () => {
                               }
                             }}
                             title="بایگانی محتوا"
-                            className="min-h-9 px-3 py-2 text-xs"
+                            aria-label="بایگانی محتوا"
+                            className="ui-action-button ui-icon-button"
                           >
                             <Archive className="w-4 h-4" />
-                            <span>بایگانی</span>
                           </Button>
                         </div>
                       </td>

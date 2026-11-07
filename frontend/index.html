@@ -11,10 +11,20 @@
           document.documentElement.style.setProperty('--color-primary', color);
           document.documentElement.style.setProperty('--color-primary-hover', `color-mix(in srgb, ${color} 85%, black)`);
         }
+        // رنگ دوم هم پیش از رنگ‌آمیزی اولیه اعمال می‌شود تا پرش رنگ دیده نشود.
+        const secondary = localStorage.getItem('tadbir:theme-secondary');
+        if (/^#[0-9a-f]{6}$/i.test(secondary || '')) {
+          document.documentElement.style.setProperty('--brand-secondary', secondary);
+          document.documentElement.style.setProperty('--color-secondary', secondary);
+        }
       } catch (_) { /* storage can be disabled by the browser */ }
     </script>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>سامانه تدبیر — سامانه جامع مدیریت پروژه، تیم‌ها، وظایف و کاربران</title>
+    <!-- Hint browsers about the API origin (replaced at build time; empty in dev). -->
+    __TADBIR_API_HINTS__
+    <!-- Browser-owned stable favicon: no React bootstrap or image swapping on reload. -->
+    <link rel="icon" href="__TADBIR_FAVICON_URL__" data-tadbir-favicon="stable" />
+
+    <title>داشبورد | پلتفرم تدبیر</title>
     <meta name="description" content="سامانه تدبیر، پلتفرم مدرن و سازمانی مدیریت پروژه‌ها، تیم‌ها، وظایف، احراز هویت، مدیریت کاربران و سطوح دسترسی به زبان فارسی." />
     <meta property="og:title" content="سامانه تدبیر — سامانه جامع مدیریت پروژه، تیم‌ها، وظایف و کاربران" />
     <meta property="og:description" content="سامانه تدبیر، پلتفرم مدرن و سازمانی مدیریت پروژه‌ها، تیم‌ها، وظایف، احراز هویت، مدیریت کاربران و سطوح دسترسی به زبان فارسی." />

@@ -11,9 +11,14 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { UIProvider } from './context/UIContext';
 import { ProtectedRoute } from './routing/ProtectedRoute';
 import { RouteEntity } from './routing/RouteEntity';
-import { readTaskLink } from './utils/taskDeepLink';
+import { PageTitle } from './routing/PageTitle';
+import { readContentLink, readIdeaLink, readTaskLink } from './utils/taskDeepLink';
+import { preloadGlobalSearch } from './routing/lazyOverlays';
 import { runtime } from './config/runtime';
+import { installModalExitLayer } from './utils/modalExitLayer';
+import { ConnectionBanner } from './components/common/ConnectionBanner';
 import { LoadingState, ErrorState } from './components/common/Primitives';
+import { MaintenanceScreen } from './components/maintenance/MaintenanceScreen';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopNavbar } from './components/layout/TopNavbar';
@@ -45,7 +50,7 @@ const DamMainView = React.lazy(() => import('./components/dam/DamMainView').then
 const ChatView = React.lazy(() => import('./components/chat/ChatView').then(m => ({default:m.ChatView})));
 const ThoughtRoomMainView = React.lazy(() => import('./components/thought-room/ThoughtRoomMainView').then(m => ({default:m.ThoughtRoomMainView})));
 const SecretariatMainView = React.lazy(() => import('./components/secretariat/SecretariatMainView').then(m => ({default:m.SecretariatMainView})));
-const ContentMainView = React.lazy(() => import('./components/content/ContentMainView').then(m => ({default:m.ContentMainView})));
+
 const ContentSeriesView = React.lazy(() => import('./components/content/ContentSeriesView').then(m => ({default:m.ContentSeriesView})));
 const IntegrityView = React.lazy(() => import('./components/settings/IntegrityView').then(m => ({default:m.IntegrityView})));
 const ContentDetailView = React.lazy(() => import('./components/content/ContentDetailView').then(m => ({default:m.ContentDetailView})));
@@ -64,7 +69,12 @@ const TemplateEditorModal = React.lazy(() => import('./components/templates/Temp
 const UserModal = React.lazy(() => import('./components/users/UserModal').then(m => ({default:m.UserModal})));
 const RoleModal = React.lazy(() => import('./components/roles/RoleModal').then(m => ({default:m.RoleModal})));
 const CreateContentModal = React.lazy(() => import('./components/content/CreateContentModal').then(m => ({default:m.CreateContentModal})));
+// «ایده جدید» و «جلسه جدید» از نوار کنار مستقیم روی همان صفحه باز می‌شوند؛
+// دیگر لازم نیست کاربر اول به اتاق فکر برود.
+const CreateIdeaModal = React.lazy(() => import('./components/thought-room/CreateIdeaModal').then(m => ({default:m.CreateIdeaModal})));
+const CreateMeetingModal = React.lazy(() => import('./components/thought-room/CreateMeetingModal').then(m => ({default:m.CreateMeetingModal})));
 import { ErrorBoundary, ToastViewport, WorkspaceLoader } from './components/common/Feedback';
+import { CustomSelectLayer } from './components/common/CustomSelectLayer';
 
 const PageTransitionReady: React.FC<{ view: ActiveView; onReady: (view: ActiveView) => void }> = ({ view, onReady }) => {
   React.useEffect(() => {
@@ -81,8 +91,27 @@ const MainLayout: React.FC = () => {
     isCreateTaskOpen, isCreateProjectOpen, isEditProjectOpen, isCreateContentOpen,
     isTemplatesModalOpen, isTemplateEditorOpen,
     isCreateUserOpen, isEditUserOpen, isCreateRoleOpen, isEditRoleOpen,
+    isCreateIdeaOpen, setIsCreateIdeaOpen, isCreateMeetingOpen, setIsCreateMeetingOpen,
   } = useApp();
+  const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  /*
+   * بستهٔ «جست‌وجوی سراسری» بیرون از بستهٔ اولیه است تا صفحهٔ ورود سبک بماند.
+   * در زمان بیکاری از پیش گرفته می‌شود تا اولین ضربه روی آیکون (خصوصاً روی
+   * موبایل) بدون انتظار و با کیبورد باز شود.
+   */
+  React.useEffect(() => {
+    const idle = (window as Window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number }).requestIdleCallback;
+    if (typeof idle === 'function') {
+      const handle = idle(() => { void preloadGlobalSearch(); }, { timeout: 2_500 });
+      return () => {
+        const cancel = (window as Window & { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback;
+        if (typeof cancel === 'function') cancel(handle);
+      };
+    }
+    const timer = window.setTimeout(() => { void preloadGlobalSearch(); }, 1_500);
+    return () => window.clearTimeout(timer);
+  }, []);
   const [pendingSidebarView, setPendingSidebarView] = React.useState<ActiveView | null>(null);
   React.useEffect(() => {
     const handleGlobalSearchKey = (event: KeyboardEvent) => {
@@ -106,16 +135,39 @@ const MainLayout: React.FC = () => {
     return () => window.clearTimeout(timeout);
   }, [pendingSidebarView]);
 
+  // انیمیشن خروج مدال‌های دست‌ساز: یک شنوندهٔ سراسری که پیش از بسته‌شدن،
+  // پوشش و کادر مدال را محو می‌کند و سپس همان کلیک را تکرار می‌کند.
+  React.useEffect(() => installModalExitLayer(), []);
+
   React.useEffect(() => {
     // Keep the cached color applied during workspace hydration; replacing it
     // with the default here would cause a visible flash before settings load.
     if (isWorkspaceLoading) return;
     const color = /^#[0-9a-f]{6}$/i.test(generalSettings.themeColor || '') ? generalSettings.themeColor! : '#4f46e5';
+    // رنگ دوم هم مثل رنگ اصلی از تنظیمات می‌آید؛ همان توکن CSS در همهٔ اجزای
+    // ثانویه استفاده می‌شود تا تعریف رنگ دوم یک نقطهٔ حقیقت داشته باشد.
+    const secondary = /^#[0-9a-f]{6}$/i.test(generalSettings.secondaryColor || '')
+      ? generalSettings.secondaryColor!
+      : '#0ea5e9';
     const style = document.documentElement.style;
     style.setProperty('--color-primary', color);
     style.setProperty('--color-primary-hover', `color-mix(in srgb, ${color} 85%, black)`);
-    try { window.localStorage.setItem('tadbir:theme-color', color); } catch { /* storage may be unavailable */ }
-  }, [generalSettings.themeColor, isWorkspaceLoading]);
+    style.setProperty('--brand-secondary', secondary);
+    style.setProperty('--color-secondary', secondary);
+    try {
+      window.localStorage.setItem('tadbir:theme-color', color);
+      window.localStorage.setItem('tadbir:theme-secondary', secondary);
+    } catch { /* storage may be unavailable */ }
+  }, [generalSettings.themeColor, generalSettings.secondaryColor, isWorkspaceLoading]);
+
+  // Remember sidebar logo for immediate rendering on the next reload.
+  React.useEffect(() => {
+    if (isWorkspaceLoading) return;
+    try {
+      if (generalSettings.logoUrl) window.localStorage.setItem('tadbir:brand-logo', generalSettings.logoUrl);
+      else window.localStorage.removeItem('tadbir:brand-logo');
+    } catch { /* storage unavailable */ }
+  }, [generalSettings.logoUrl, isWorkspaceLoading]);
 
   // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط
   const canManageSettings = hasPermission('settings.manage')
@@ -136,7 +188,7 @@ const MainLayout: React.FC = () => {
           </div>
         );
       case 'content':
-        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">{runtime.demoMode ? <ContentMainView /> : <WorkspaceList key="contents" module="contents" />}</div>;
+        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><WorkspaceList key="contents" module="contents" /></div>;
       case 'content-series':
         return <ContentSeriesView />;
       case 'content-detail':
@@ -209,8 +261,9 @@ const MainLayout: React.FC = () => {
 
         {/* Scrollable View Canvas */}
         <main tabIndex={-1} className={`flex-1 overflow-y-auto overflow-x-hidden focus:outline-hidden ${activeView === 'messages' ? 'p-0' : 'p-2 sm:p-3'}`}>
-          {/* مرز خطای هر نما: کرش یک بخش، کل سامانه را از کار نمی‌اندازد. */}
-          <ErrorBoundary resetKey={activeView}><React.Suspense fallback={<WorkspaceLoader label="در حال بارگذاری صفحه…" />}>
+          {/* مرز خطای هر نما: کرش یک بخش، کل سامانه را از کار نمی‌اندازد.
+              کلید ریست شامل مسیر هم هست تا رفتن به پروندهٔ دیگر، دوباره تلاش کند. */}
+          <ErrorBoundary resetKey={`${activeView}:${location.pathname}`}><React.Suspense fallback={<WorkspaceLoader label="در حال بارگذاری صفحه…" />}>
             <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? <LoadingState /> : renderActiveView()}</RouteEntity>
             <PageTransitionReady view={activeView} onReady={finishPageTransition} />
           </React.Suspense></ErrorBoundary>
@@ -232,6 +285,8 @@ const MainLayout: React.FC = () => {
         {(isCreateUserOpen || isEditUserOpen) && <UserModal />}
         {(isCreateRoleOpen || isEditRoleOpen) && <RoleModal />}
         {isCreateContentOpen && <CreateContentModal />}
+        {isCreateIdeaOpen && <CreateIdeaModal isOpen onClose={() => setIsCreateIdeaOpen(false)} />}
+        {isCreateMeetingOpen && <CreateMeetingModal isOpen onClose={() => setIsCreateMeetingOpen(false)} />}
       </React.Suspense>
 
       {/* توست‌های بازخورد عملیات (موفق/خطا) */}
@@ -244,16 +299,45 @@ const MainLayout: React.FC = () => {
 };
 
 function LoginPage() {
-  const { isLoggedIn, isSessionLoading, sessionError, restoreSession } = useAuth();
+  const { isLoggedIn, isSessionLoading, sessionError, restoreSession, maintenance, refreshMaintenance } = useAuth();
   const location = useLocation();
+  // در حالت تعمیر فرم ورود پنهان است، اما مدیر کل سیستم می‌تواند آن را باز کند؛
+  // بدون این راه، روشن‌کردن حالت تعمیر یعنی قفل‌شدن همیشگیِ سامانه.
+  const [showAdminLogin, setShowAdminLogin] = React.useState(false);
+  const { generalSettings } = useApp();
   if (isSessionLoading) return <LoadingState label="در حال بررسی نشست…" />;
   const from = location.state?.from;
   const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/dashboard';
   if (isLoggedIn) return <Navigate replace to={destination} />;
-  return <div dir="rtl"><AuthModal /><ToastViewport />{sessionError && <aside className="fixed top-3 left-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-right text-xs leading-5 text-slate-700 shadow-sm" role="alert" aria-label="وضعیت اتصال">
+  if (maintenance?.enabled && !showAdminLogin) {
+    return (
+      <MaintenanceScreen
+        message={maintenance.message}
+        startedAt={maintenance.startedAt}
+        orgName={generalSettings.orgName}
+        onRetry={refreshMaintenance}
+        onAdminLogin={() => setShowAdminLogin(true)}
+      />
+    );
+  }
+  return <div dir="rtl"><AuthModal /><ToastViewport />{maintenance?.enabled && <aside className="fixed top-3 right-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-right text-xs leading-5 text-amber-900 shadow-sm" role="status">
+    <p className="font-bold">حالت تعمیر فعال است</p>
+    <p className="mt-0.5">در این مدت فقط کاربران با نقش «مدیریت کل سیستم» می‌توانند وارد شوند.</p>
+  </aside>}{sessionError && <aside className="fixed top-3 left-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-right text-xs leading-5 text-slate-700 shadow-sm" role="alert" aria-label="وضعیت اتصال">
     <p>{sessionError}</p>
     <button type="button" onClick={() => void restoreSession()} className="mt-1 rounded px-1 py-0.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">بررسی دوبارهٔ اتصال</button>
   </aside>}</div>;
+}
+/**
+ * ریشهٔ سامانه را به داشبورد می‌برد، اما **پارامترهای نشانی را نگه می‌دارد**.
+ *
+ * مینی‌اپ بله فرم امن را با `?dam_entry=file` (یا `?task=<id>&asset=file`)
+ * باز می‌کند؛ پیش‌تر `Navigate` بدون `search` می‌رفت و پارامتر حذف می‌شد، پس
+ * کاربر فقط صفحهٔ اصلی را می‌دید و هیچ فرمی باز نمی‌شد.
+ */
+function RootRedirect() {
+  const location = useLocation();
+  return <Navigate replace to={{ pathname: '/dashboard', search: location.search, hash: location.hash }} />;
 }
 function LegacyLinks() {
   const location = useLocation(); const navigate = useNavigate();
@@ -263,16 +347,46 @@ function LegacyLinks() {
     if (task && location.pathname !== `/tasks/${task}`) {
       const params = new URLSearchParams(location.search); // Keep legacy task/asset hints understood by TaskAssetsSection.
       navigate(`/tasks/${task}${params.size ? `?${params}` : ''}`, { replace: true });
+      return;
+    }
+    // پیوندِ «باز کردن همین محتوا در سامانه» از بات بله: کاربر مستقیماً به
+    // همان پروندهٔ محتوا می‌رود (و نه به برگهٔ وظیفه).
+    const content = readContentLink(location.search);
+    if (content && location.pathname !== `/contents/${content}`) {
+      const params = new URLSearchParams(location.search);
+      params.delete('content');
+      navigate(`/contents/${content}${params.size ? `?${params}` : ''}`, { replace: true });
+      return;
+    }
+    // پیوندهای «ایده» از بات بله (باز کردن ایده یا نظر دادن) در اتاق فکر باز
+    // می‌شوند و همان ایده را نشان می‌دهند؛ پارامتر `comment` کادر دیدگاه را
+    // فعال می‌کند. اگر روی خود صفحهٔ اتاق فکر باشیم، پارامترها دست‌نخورده
+    // می‌مانند تا همان صفحه آن‌ها را مصرف کند.
+    const idea = readIdeaLink(location.search);
+    if (idea && location.pathname !== '/thought-room') {
+      const params = new URLSearchParams(location.search);
+      params.delete('idea');
+      params.delete('comment');
+      const query = new URLSearchParams({ idea: idea.id, ...(idea.comment ? { comment: '1' } : {}) });
+      for (const [key, value] of params) query.set(key, value);
+      // خودِ اتاق فکر پارامتر را مصرف و سپس پاک می‌کند تا پس از بستن مودال،
+      // دوباره باز نشود.
+      navigate(`/thought-room?${query}`, { replace: true });
     }
   }, [location.pathname, location.search, navigate]);
   return null;
 }
 export default function App() {
   return <QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><UIProvider><AppProvider>
+    {/* انتخابگر سفارشی همهٔ کنترل‌های انتخابی سامانه (جای فهرست پیش‌فرض مرورگر). */}
+    <CustomSelectLayer />
+    {/* نمایش زیبای خطای اتصال اینترنت در همهٔ صفحه‌ها. */}
+    <ConnectionBanner />
     <LegacyLinks />
+    <PageTitle />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={<ProtectedRoute><Navigate replace to="/dashboard" /></ProtectedRoute>} />
+      <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
       <Route path="*" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
     </Routes>
   </AppProvider></UIProvider></AuthProvider></BrowserRouter></QueryClientProvider>;

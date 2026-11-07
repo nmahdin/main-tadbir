@@ -4,6 +4,25 @@ export function readTaskLink(search: string): string | null {
   return values.length === 1 && /^[1-9][0-9]{0,17}$/.test(values[0]) ? values[0] : null;
 }
 
+/** Deep link to a content record from the panel/Bale entry: `?content=<id>`. */
+export function readContentLink(search: string): string | null {
+  const values = new URLSearchParams(search).getAll('content');
+  return values.length === 1 && /^[1-9][0-9]{0,17}$/.test(values[0]) ? values[0] : null;
+}
+
+/**
+ * پیوند عمیق به یک ایده از بات بله یا مرکز اعلان‌ها: `?idea=<id>`.
+ *
+ * با `comment=1` (دکمهٔ «نظر دادن» در بات) همان ایده باز می‌شود و کادر ثبت
+ * دیدگاه فعال و فوکوس می‌شود؛ بدون آن فقط جزئیات ایده نمایش داده می‌شود.
+ */
+export function readIdeaLink(search: string): { id: string; comment: boolean } | null {
+  const params = new URLSearchParams(search);
+  const values = params.getAll('idea');
+  if (values.length !== 1 || !/^[1-9][0-9]{0,17}$/.test(values[0])) return null;
+  return { id: values[0], comment: params.get('comment') === '1' };
+}
+
 export function taskLink(base: string, id: string): string | null {
   if (!/^[1-9][0-9]{0,17}$/.test(id)) return null;
   const url = new URL(base);
