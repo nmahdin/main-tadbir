@@ -37,6 +37,13 @@ Schedule::command('bale:tick')
     ->everyMinute()
     ->withoutOverlapping(2);
 
+// C5-M2-S3: sweep expired quotes and release promo reservations
+// every minute. Lazy expiry also runs at read-time, so a missed
+// cron never leaves a stale OPEN quote visible.
+Schedule::command('billing:expire-quotes')
+    ->everyMinute()
+    ->withoutOverlapping(2);
+
 // Overdue reminders are idempotent, so they may run as often or as rarely as the
 // host allows. Nothing below assumes a permanent cron: the command is safe to
 // call from the Bale tick above, from an external scheduler, or by hand.
