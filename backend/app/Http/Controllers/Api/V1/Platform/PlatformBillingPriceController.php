@@ -14,22 +14,33 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * C5-M2-S1 platform price-publishing administration.
+ * C5-M2 platform price-publishing administration.
  *
  * Thin HTTP layer over PlanPricePublisher. Requires
  * `platform.billing.manage`, which is distinct from
  * `platform.subscriptions.manage` (M2-D2=A). The existing
  * platform.subscriptions.manage grant never substitutes.
  *
+ * Periods (monthly, quarterly, annual) are accepted independently;
+ * a plan publishes any non-empty subset of periods the operator
+ * supplies, but once published_at is set the version's pointer
+ * set is immutable (per CorePlanVersion::updating()).
+ *
  * No prices are auto-published; no commercial prices are
- * fabricated. Draft and published prices are surfaced read-only
- * for administrative review.
+ * fabricated; a missing or unpublished period is returned as null
+ * rather than derived from another period (M2-D5=A).
  */
 final class PlatformBillingPriceController extends Controller
 {
     use AuthorizesPlatformRequests;
 
     public const PERMISSION = 'platform.billing.manage';
+
+    private const PERIOD_FIELDS = [
+        'monthly' => 'monthly_amount_toman',
+        'quarterly' => 'quarterly_amount_toman',
+        'annual' => 'annual_amount_toman',
+    ];
 
     public function showPlanPrices(Request $request, string $planKey, PlanPricePublisher $publisher): JsonResponse
     {
@@ -39,7 +50,7 @@ final class PlatformBillingPriceController extends Controller
             $plan = CorePlan::query()->where('key', $planKey)->firstOrFail();
             $snapshots = [];
             foreach ($plan->versions()->orderBy('version')->get() as $version) {
-                $version->load(['publishedMonthlyPrice', 'publishedAnnualPrice']);
+                $version->load(['publishedMonthlyPrice', 'publishedQuarterlyPrice', 'publishedAnnualPrice']);
                 $draftPrices = $version->published_at === null
                     ? $publisher->draftPrices($version)
                     : collect();
@@ -48,10 +59,12 @@ final class PlatformBillingPriceController extends Controller
                     'version' => (int) $version->version,
                     'published_at' => $version->published_at?->toIso8601String(),
                     'published_monthly_price_id' => $version->published_monthly_price_id,
+                    'published_quarterly_price_id' => $version->published_quarterly_price_id,
                     'published_annual_price_id' => $version->published_annual_price_id,
                     'grace_days' => (int) $version->grace_days,
                     'prices' => [
                         'monthly' => $this->serializePrice($version->publishedMonthlyPrice),
+                        'quarterly' => $this->serializePrice($version->publishedQuarterlyPrice),
                         'annual' => $this->serializePrice($version->publishedAnnualPrice),
                     ],
                     'draft_prices' => $draftPrices->map(fn ($p) => $this->serializePrice($p))->values()->all(),
@@ -67,24 +80,24 @@ final class PlatformBillingPriceController extends Controller
         return $this->platformRespond(function () use ($request, $version, $publisher): JsonResponse {
             $actor = $this->platformActor($request, self::PERMISSION);
 
-            $data = $request->validate([
-                'monthly_amount_toman' => ['sometimes', 'required', 'integer', 'min:0'],
-                'annual_amount_toman' => ['sometimes', 'required', 'integer', 'min:0'],
-            ]);
+            $rules = [];
+            foreach (self::PERIOD_FIELDS as $field) {
+                $rules[$field] = ['sometimes', 'required', 'integer', 'min:0'];
+            }
+            $data = $request->validate($rules);
 
-            if (! isset($data['monthly_amount_toman']) && ! isset($data['annual_amount_toman'])) {
+            $byPeriod = [];
+            foreach (self::PERIOD_FIELDS as $period => $field) {
+                if (isset($data[$field])) {
+                    $byPeriod[$period] = (int) $data[$field];
+                }
+            }
+
+            if ($byPeriod === []) {
                 return response()->json([
                     'message' => 'At least one period price is required to publish.',
                     'code' => 'price_period_required',
                 ], 422);
-            }
-
-            $byPeriod = [];
-            if (isset($data['monthly_amount_toman'])) {
-                $byPeriod['monthly'] = (int) $data['monthly_amount_toman'];
-            }
-            if (isset($data['annual_amount_toman'])) {
-                $byPeriod['annual'] = (int) $data['annual_amount_toman'];
             }
 
             try {

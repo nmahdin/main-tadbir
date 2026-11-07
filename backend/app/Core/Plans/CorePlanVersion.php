@@ -38,6 +38,7 @@ class CorePlanVersion extends Model
                     || $version->isDirty('version')
                     || $version->isDirty('plan_id')
                     || $version->isDirty('published_monthly_price_id')
+                    || $version->isDirty('published_quarterly_price_id')
                     || $version->isDirty('published_annual_price_id'))) {
                 throw new PlanProvisioningException(
                     'plan_version_immutable',
@@ -79,6 +80,11 @@ class CorePlanVersion extends Model
     public function publishedMonthlyPrice(): BelongsTo
     {
         return $this->belongsTo(CorePlanPrice::class, 'published_monthly_price_id');
+    }
+
+    public function publishedQuarterlyPrice(): BelongsTo
+    {
+        return $this->belongsTo(CorePlanPrice::class, 'published_quarterly_price_id');
     }
 
     public function publishedAnnualPrice(): BelongsTo

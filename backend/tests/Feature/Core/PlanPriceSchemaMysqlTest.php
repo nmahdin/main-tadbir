@@ -73,6 +73,16 @@ class PlanPriceSchemaMysqlTest extends TestCase
             'updated_at' => now(),
         ]));
 
+        // Quarterly is accepted (M2-S2 quarterly support).
+        DB::table('core_plan_prices')->insert([
+            'plan_version_id' => $version->id,
+            'period' => 'quarterly',
+            'amount_toman' => 4_500_000,
+            'is_published' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         // Bad period is rejected by CHECK.
         $this->assertQueryFails(fn () => DB::table('core_plan_prices')->insert([
             'plan_version_id' => $version->id,

@@ -10,20 +10,30 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * C5-M2-S1 price-revision publication service.
+ * C5-M2-S1+S2 price-revision publication service.
  *
  * Enforces the published-price concurrency invariant (SPEC-C5-M2
  * §3.2) using three cooperating mechanisms:
  *  1. Canonical nullable FK pointers (published_monthly_price_id,
- *     published_annual_price_id) on core_plan_versions — the
- *     published price for a period IS the pointed row.
+ *     published_quarterly_price_id, published_annual_price_id) on
+ *     core_plan_versions — the published price for a period IS the
+ *     pointed row.
  *  2. A serialized publication transaction that locks the
- *     plan-version row FOR UPDATE first, supersedes the
- *     previously pointed revision (is_published=false,
- *     superseded_at), inserts the new revision, and updates the
- *     canonical pointer in one commit.
+ *     plan-version row FOR UPDATE first, supersedes the previously
+ *     pointed revision(s) for the periods being published (is_published=false,
+ *     superseded_at), inserts/reuses the new revision(s), and updates
+ *     the canonical pointer(s) in one commit.
  *  3. Defensive unique index on (plan_version_id, period,
  *     amount_toman).
+ *
+ * Quarterly was added in M2-S2 (Stage A); the pointer map is built
+ * from CorePlanPrice::PERIODS so future periods extend automatically.
+ *
+ * Period enablement is expressed exclusively by the presence (non-NULL)
+ * or absence (NULL) of a canonical pointer for that period. Republishing
+ * a subset of periods never clears the other periods' pointers; callers
+ * must create a new plan version to change an already-published period
+ * or to retire a previously offered period.
  *
  * Draft price revisions are mutable until published; once published
  * the CorePlanPrice model guard rejects further mutation, and
@@ -87,11 +97,16 @@ final class PlanPricePublisher
     }
 
     /**
-     * Atomically publish a set of prices on a plan version and
-     * mark the version published. If the version is already
-     * published, returns the existing pointers idempotently (the
-     * originally-published set wins; republication does not
-     * change amounts or history).
+     * Atomically publish a set of prices on a plan version and mark
+     * the version published. The first successful call flips
+     * published_at and sets canonical pointers for the supplied
+     * periods; subsequent calls on an already-published version
+     * return the existing pointers idempotently (the originally-
+     * published set wins — republication never changes amounts,
+     * never clears or adds period pointers, and never emits new
+     * rows). To retire or add a period after publication the
+     * administrator creates a new plan version (M2-S1 immutable-
+     * version invariant).
      *
      * @param  array<string, int>  $pricesByPeriod  period => amount_toman
      * @return array{version: CorePlanVersion, prices: array<string, CorePlanPrice>}
@@ -113,11 +128,14 @@ final class PlanPricePublisher
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            // Idempotent: if already published with the identical
-            // pointer set, return it without emitting new rows.
+            // Idempotent: if already published, return the current
+            // pointer set without emitting new rows or altering
+            // pointers for periods not in $pricesByPeriod.
             if ($locked->isPublished()) {
+                $locked->load($this->pointerRelations());
+
                 return [
-                    'version' => $locked->load(['publishedMonthlyPrice', 'publishedAnnualPrice']),
+                    'version' => $locked,
                     'prices' => $this->currentPrices($locked),
                 ];
             }
@@ -125,18 +143,20 @@ final class PlanPricePublisher
             $now = now();
             $publishedPrices = [];
             $pointerUpdates = [];
+            $hadAnyPointer = false;
 
             foreach ($pricesByPeriod as $period => $amountToman) {
                 $amountToman = (int) $amountToman;
                 $period = (string) $period;
+                $pointerColumn = self::pointerColumnFor($period);
 
                 // If an unpublished, unsuperseded draft already exists
                 // for this (version, period, amount), publish that row
                 // in place instead of inserting a duplicate — the
                 // unique index (plan_version_id, period, amount_toman)
                 // guards against an accidental history duplicate when
-                // a caller prepared a draft through createDraftPrice and
-                // then publishes the exact same set.
+                // a caller prepared a draft through createDraftPrice
+                // and then publishes the exact same set.
                 $existing = CorePlanPrice::query()
                     ->where('plan_version_id', $locked->id)
                     ->where('period', $period)
@@ -168,15 +188,21 @@ final class PlanPricePublisher
                 }
 
                 $publishedPrices[$period] = $newPrice;
-                $pointerColumn = $period === CorePlanPrice::PERIOD_MONTHLY
-                    ? 'published_monthly_price_id'
-                    : 'published_annual_price_id';
                 $pointerUpdates[$pointerColumn] = (int) $newPrice->id;
+                $hadAnyPointer = true;
+            }
+
+            if (! $hadAnyPointer) {
+                throw new BillingDomainException(
+                    'price_period_required',
+                    'At least one period price is required to publish.',
+                );
             }
 
             // 2. Supersede previously pointed rows of matching
             // periods on the same plan version (defensive — a draft
-            // version normally has none).
+            // version normally has none; subsequent publishPrices
+            // calls on the same draft may supersede earlier revisions).
             foreach ($pointerUpdates as $column => $priceId) {
                 $previousId = (int) $locked->{$column};
                 if ($previousId > 0 && $previousId !== $priceId) {
@@ -187,9 +213,12 @@ final class PlanPricePublisher
                 }
             }
 
-            // 3. Flip the canonical pointer (and the version's
-            // published_at) in the same commit.
-            $pointerUpdates['published_at'] = $now;
+            // 3. Flip the canonical pointers in the same commit. The
+            // version's published_at is set on first publication and
+            // left untouched on republication of additional periods.
+            if ($locked->published_at === null) {
+                $pointerUpdates['published_at'] = $now;
+            }
             $locked->forceFill($pointerUpdates)->save();
 
             $this->audit->record(
@@ -213,9 +242,11 @@ final class PlanPricePublisher
                 (int) $locked->id,
             );
 
+            $locked->load($this->pointerRelations());
+
             return [
-                'version' => $locked->load(['publishedMonthlyPrice', 'publishedAnnualPrice']),
-                'prices' => $publishedPrices,
+                'version' => $locked,
+                'prices' => $publishedPrices + $this->currentPrices($locked),
             ];
         });
     }
@@ -239,18 +270,15 @@ final class PlanPricePublisher
     /**
      * Read-only resolution of the published price for a plan
      * version and period. Returns null when no price is published
-     * for that period (e.g. annual not offered) — callers must
-     * treat null as "period unavailable", never derive from the
-     * other period (M2-D5=A).
+     * for that period (e.g. quarterly not offered) — callers must
+     * treat null as "period unavailable", never derive from another
+     * period (M2-D5=A).
      */
     public function publishedPrice(CorePlanVersion $version, string $period): ?CorePlanPrice
     {
         $this->assertValidPeriod($period);
 
-        $column = $period === CorePlanPrice::PERIOD_MONTHLY
-            ? 'published_monthly_price_id'
-            : 'published_annual_price_id';
-
+        $column = self::pointerColumnFor($period);
         $priceId = $version->{$column};
 
         return $priceId === null ? null : CorePlanPrice::find((int) $priceId);
@@ -260,6 +288,8 @@ final class PlanPricePublisher
      * Resolve the currently published version of a plan and its
      * published prices. The plan must be active; returns null when
      * the plan has no published version.
+     *
+     * @return array{plan: CorePlan, version: CorePlanVersion, monthly: ?CorePlanPrice, quarterly: ?CorePlanPrice, annual: ?CorePlanPrice}|null
      */
     public function currentCatalogEntry(CorePlan $plan): ?array
     {
@@ -276,28 +306,64 @@ final class PlanPricePublisher
             return null;
         }
 
-        $version->load(['publishedMonthlyPrice', 'publishedAnnualPrice']);
+        $version->load($this->pointerRelations());
 
         return [
             'plan' => $plan,
             'version' => $version,
             'monthly' => $version->publishedMonthlyPrice,
+            'quarterly' => $version->publishedQuarterlyPrice,
             'annual' => $version->publishedAnnualPrice,
         ];
+    }
+
+    /**
+     * Canonical pointer column name for a supported period.
+     */
+    public static function pointerColumnFor(string $period): string
+    {
+        return match ($period) {
+            CorePlanPrice::PERIOD_MONTHLY => 'published_monthly_price_id',
+            CorePlanPrice::PERIOD_QUARTERLY => 'published_quarterly_price_id',
+            CorePlanPrice::PERIOD_ANNUAL => 'published_annual_price_id',
+            default => throw new BillingDomainException(
+                'price_period_invalid',
+                "Billing period [{$period}] is not supported.",
+            ),
+        };
     }
 
     /** @return array<string, CorePlanPrice> */
     private function currentPrices(CorePlanVersion $version): array
     {
         $prices = [];
-        if ($version->publishedMonthlyPrice !== null) {
-            $prices[CorePlanPrice::PERIOD_MONTHLY] = $version->publishedMonthlyPrice;
-        }
-        if ($version->publishedAnnualPrice !== null) {
-            $prices[CorePlanPrice::PERIOD_ANNUAL] = $version->publishedAnnualPrice;
+        foreach (CorePlanPrice::PERIODS as $period) {
+            $relation = self::relationNameFor($period);
+            if ($version->{$relation} !== null) {
+                $prices[$period] = $version->{$relation};
+            }
         }
 
         return $prices;
+    }
+
+    /** @return list<string> */
+    private function pointerRelations(): array
+    {
+        return array_map(self::relationNameFor(...), CorePlanPrice::PERIODS);
+    }
+
+    private static function relationNameFor(string $period): string
+    {
+        return match ($period) {
+            CorePlanPrice::PERIOD_MONTHLY => 'publishedMonthlyPrice',
+            CorePlanPrice::PERIOD_QUARTERLY => 'publishedQuarterlyPrice',
+            CorePlanPrice::PERIOD_ANNUAL => 'publishedAnnualPrice',
+            default => throw new BillingDomainException(
+                'price_period_invalid',
+                "Billing period [{$period}] is not supported.",
+            ),
+        };
     }
 
     private function assertValidPeriod(string $period): void

@@ -249,4 +249,88 @@ class PlanPricePublisherTest extends TestCase
         $this->assertNotNull($entry['monthly']);
         $this->assertNull($entry['annual'], 'Missing annual price must stay null — never derived from monthly.');
     }
+
+    public function test_quarterly_draft_created_and_published_independently_of_monthly_annual(): void
+    {
+        $this->provisioner->createPlan('q', 'Q', CorePlan::AUDIENCE_PERSONAL);
+        $this->provisioner->createDraftVersion('q', 1);
+        $version = CorePlanVersion::whereHas('plan', fn ($q) => $q->where('key', 'q'))->firstOrFail();
+        $actor = User::factory()->create(['status' => 'active']);
+
+        $draft = $this->publisher->createDraftPrice($version, 'quarterly', 4_500_000, $actor);
+        $this->assertFalse($draft->isPublished());
+        $this->assertNull($version->fresh()->published_quarterly_price_id);
+
+        $result = $this->publisher->publishPrices(
+            $version,
+            ['monthly' => 1_700_000, 'quarterly' => 4_500_000, 'annual' => 16_000_000],
+            $actor,
+        );
+        $v = $result['version']->fresh();
+        $this->assertNotNull($v->published_monthly_price_id);
+        $this->assertNotNull($v->published_quarterly_price_id);
+        $this->assertNotNull($v->published_annual_price_id);
+        $this->assertSame(1_700_000, (int) $v->publishedMonthlyPrice->amount_toman);
+        $this->assertSame(4_500_000, (int) $v->publishedQuarterlyPrice->amount_toman);
+        $this->assertSame(16_000_000, (int) $v->publishedAnnualPrice->amount_toman);
+        // Quarterly ≠ 3× monthly (independent, never derived).
+        $this->assertNotSame(3 * 1_700_000, (int) $v->publishedQuarterlyPrice->amount_toman);
+        $this->assertTrue($result['prices']['quarterly']->isPublished());
+    }
+
+    public function test_missing_quarterly_returns_null_and_unpublished_period_rejected(): void
+    {
+        $this->provisioner->createPlan('qm', 'QM', CorePlan::AUDIENCE_PERSONAL);
+        $this->provisioner->createDraftVersion('qm', 1);
+        $this->provisioner->setPlanStatus('qm', CorePlan::STATUS_ACTIVE);
+        $version = CorePlanVersion::whereHas('plan', fn ($q) => $q->where('key', 'qm'))->firstOrFail();
+        $actor = User::factory()->create(['status' => 'active']);
+        $this->publisher->publishPrices($version, ['monthly' => 500_000, 'annual' => 5_000_000], $actor);
+
+        $entry = $this->publisher->currentCatalogEntry($version->plan);
+        $this->assertNotNull($entry['monthly']);
+        $this->assertNull($entry['quarterly'], 'Missing quarterly price must stay null — never derived.');
+        $this->assertNotNull($entry['annual']);
+
+        // Invalid period still fails closed.
+        $this->expectException(BillingDomainException::class);
+        $this->publisher->createDraftPrice($version->fresh(), 'weekly', 1_000, $actor);
+    }
+
+    public function test_quarterly_period_backward_compat_monthly_annual_still_work(): void
+    {
+        // Publishing only monthly+annual (pre-quarterly client code)
+        // continues to produce valid pointers and a null quarterly.
+        $this->provisioner->createPlan('bac', 'BAC', CorePlan::AUDIENCE_ORGANIZATION);
+        $this->provisioner->createDraftVersion('bac', 1);
+        $this->provisioner->setPlanStatus('bac', CorePlan::STATUS_ACTIVE);
+        $version = CorePlanVersion::whereHas('plan', fn ($q) => $q->where('key', 'bac'))->firstOrFail();
+        $actor = User::factory()->create(['status' => 'active']);
+        $result = $this->publisher->publishPrices($version, ['monthly' => 2_000_000, 'annual' => 20_000_000], $actor);
+        $v = $result['version']->fresh();
+        $this->assertNotNull($v->published_monthly_price_id);
+        $this->assertNull($v->published_quarterly_price_id);
+        $this->assertNotNull($v->published_annual_price_id);
+    }
+
+    public function test_api_accepts_quarterly_amount_and_surfaces_it_in_show(): void
+    {
+        $this->provisioner->createPlan('qa', 'QA', CorePlan::AUDIENCE_PERSONAL);
+        $this->provisioner->createDraftVersion('qa', 1);
+        $this->provisioner->setPlanStatus('qa', CorePlan::STATUS_ACTIVE);
+        $version = CorePlanVersion::whereHas('plan', fn ($q) => $q->where('key', 'qa'))->firstOrFail();
+
+        $billActor = $this->platformActorWith('platform.billing.manage');
+        $response = $this->actingAs($billActor)
+            ->postJson("/api/v1/platform/billing/plan-versions/{$version->id}/publish-prices", [
+                'monthly_amount_toman' => 1_500_000,
+                'quarterly_amount_toman' => 4_000_000,
+                'annual_amount_toman' => 14_000_000,
+            ]);
+        $response->assertCreated();
+        $this->assertSame(4_000_000, collect($response->json('data.prices'))->firstWhere('period', 'quarterly')['amount_toman']);
+
+        $show = $this->actingAs($billActor)->getJson('/api/v1/platform/billing/plans/qa/prices')->assertOk();
+        $this->assertSame(4_000_000, $show->json('data.versions.0.prices.quarterly.amount_toman'));
+    }
 }

@@ -48,6 +48,7 @@ class PlanPricePublicationConcurrencyMysqlTest extends TestCase
             $versionIds = DB::table('core_plan_versions')->whereIn('plan_id', $this->planIds)->pluck('id')->all();
             DB::table('core_plan_versions')->whereIn('id', $versionIds)->update([
                 'published_monthly_price_id' => null,
+                'published_quarterly_price_id' => null,
                 'published_annual_price_id' => null,
             ]);
             DB::table('core_plan_prices')->whereIn('plan_version_id', $versionIds)->delete();
