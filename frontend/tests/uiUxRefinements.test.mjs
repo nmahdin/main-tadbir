@@ -58,10 +58,7 @@ test('content detail returns to its actual origin and live content list exposes 
   ]);
   assert.match(detail, /const goBack = \(\) =>/);
   assert.match(detail, /safeReturnTo\(explicitReturn, '\/contents'\)/);
-  // دور ۹۶: بازگشت با همان گذار مورف انجام می‌شود، پس مسیر تاریخ از `back` می‌گذرد.
-  assert.match(detail, /const back = \(to: number \| string\) => runViewTransition/);
-  assert.match(detail, /back\(-1\)/);
-  assert.match(detail, /if \(typeof to === 'number'\) navigate\(to\); else navigate\(to\);/);
+  assert.match(detail, /navigate\(-1\)/);
   assert.match(detail, /detailTabs\.map/);
   assert.match(list, /value=\{filters\.type \|\| ''\}/);
   assert.match(list, /row\.seriesName \|\| 'عمومی'/);

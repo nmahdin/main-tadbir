@@ -85,25 +85,3 @@ test('اعداد و نوارهای پیشرفت داشبورد زنده‌اند
   // دیگر عدد خام در کارت‌های آماری نیست.
   assert.doesNotMatch(dashboard, /<span className="text-2xl font-black text-slate-900">\{/);
 });
-
-test('گذار مورف پس از رفع مشکل روتر واقعاً دیده می‌شود', async () => {
-  const [app, helper, preload] = await Promise.all([
-    source('../src/App.tsx'),
-    source('../src/utils/viewTransition.ts'),
-    source('../src/routing/preloadViews.ts'),
-  ]);
-
-  // ریشهٔ مشکل: React Router v7 ناوبری را داخل startTransition می‌برد و flushSync
-  // نمی‌توانست commit را همان لحظه انجام دهد؛ در نتیجه عکس دوم همان صفحهٔ قبلی بود.
-  assert.match(app, /<BrowserRouter useTransitions=\{false\}>/);
-
-  // آماده‌سازی مقصد قبل از گرفتن عکس اول.
-  assert.match(helper, /export type ViewTransitionOptions = \{/);
-  assert.match(helper, /void prepare\(\)\s*\n\s*\.catch\(\(\) => undefined\)\s*\n\s*\.then\(\(\) => \{\s*\n\s*inFlight = false;\s*\n\s*startTransitionNow\(update\);/);
-
-  // مسیرهای preload عیناً همان مسیرهای lazy در App هستند.
-  assert.match(preload, /import\('\.\.\/components\/content\/ContentDetailView'\)/);
-  assert.match(preload, /import\('\.\.\/components\/projects\/ProjectDetailView'\)/);
-  assert.match(app, /const ContentDetailView = React\.lazy\(\(\) => import\('\.\/components\/content\/ContentDetailView'\)/);
-  assert.match(app, /const ProjectDetailView = React\.lazy\(\(\) => import\('\.\/components\/projects\/ProjectDetailView'\)/);
-});

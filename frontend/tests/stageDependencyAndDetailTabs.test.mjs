@@ -45,8 +45,7 @@ test('both detail pages place the back control and the page title on one line', 
     source('../src/components/content/ContentSeriesView.tsx'),
   ]);
 
-  // دور ۹۶: عنوان برای مورف شدن به ردیف فهرست، نام گذار هم گرفته است.
-  assert.match(detail, /<div className="flex items-center gap-3">\s*<button type="button" onClick=\{goBack\}[\s\S]{0,500}<h1 style=\{\{ viewTransitionName: morphName\('content', content\.id\) \}\} className="min-w-0 flex-1 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">\{content\.title\}<\/h1>/);
+  assert.match(detail, /<div className="flex items-center gap-3">\s*<button type="button" onClick=\{goBack\}[\s\S]{0,400}<h1 className="min-w-0 flex-1 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">\{content\.title\}<\/h1>/);
   assert.match(series, /<div className="flex items-center gap-3">\s*<IconButton label="بازگشت به مجموعه‌ها"[\s\S]{0,400}<h1 className="min-w-0 flex-1 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">\{selected\.name\}<\/h1>/);
   // عنوان نباید در ردیف جداگانه با فاصلهٔ بالا بیاید؛ منبع بازگشت هم همان دکمهٔ آیکنی است.
   assert.doesNotMatch(detail, /<h1 className="mt-3 break-words/);
