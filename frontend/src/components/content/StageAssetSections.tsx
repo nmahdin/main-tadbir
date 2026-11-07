@@ -696,6 +696,35 @@ export function StageAssetPreviewModal({
   /** عنوان فعلی: برای دارایی مخزن از خود دارایی، برای خروجی جریان از «عنوان خروجی». */
   const suggestedTitle = (asset.data?.title || view?.title || '').trim();
   const displayTitle = savedTitle || suggestedTitle;
+  /**
+   * نام اصلی فایل برای نشانِ کنار آیکون سنجاق.
+   *
+   * پیش‌تر همین نشان، `view.fileName` را چاپ می‌کرد؛ اما هنگام ثبت خروجی از
+   * فرم، همان «نام نمایشی/عنوان» در `fileName` ذخیره می‌شد، پس نشان عملاً عنوان
+   * را تکرار می‌کرد (و برای تصویر/دارایی مخزنی خالی می‌ماند). ترتیب درست:
+   * ۱) نام اصلی فایلِ خود دارایی مخزن، ۲) `fileName` رکورد جریان اگر شکل نام
+   * فایل داشته باشد (نه عنوان)، ۳) نام فایل از انتهای آدرس (وقتی فقط پیوند است).
+   */
+  const originalFileName = ((): string => {
+    /** نام فایل ممکن است از آدرس یا فرم آمده باشد و کدگذاری‌شده باشد (`%20`، فارسی). */
+    const readable = (raw: string): string => {
+      try {
+        return decodeURIComponent(raw).trim() || raw.trim();
+      } catch {
+        return raw.trim();
+      }
+    };
+    const fromAsset = readable(asset.data?.latest_file?.original_filename || '');
+    if (fromAsset) return fromAsset;
+    const stored = readable(view?.fileName || '');
+    // فقط چیزی که شکل نام فایل دارد (پسوند) پذیرفته می‌شود؛ رکوردهای قدیمی
+    // عنوانِ قابل‌ویرایش را در همین فیلد ذخیره کرده‌اند و همان را به‌عنوان
+    // «نام فایل» دوباره نشان نمی‌دهیم.
+    if (/\.[a-z0-9]{1,8}$/i.test(stored)) return stored;
+    const path = String(view?.url || '').split(/[?#]/)[0];
+    const tail = readable(path.split('/').filter(Boolean).pop() || '');
+    return /\.[a-z0-9]{1,8}$/i.test(tail) ? tail : '';
+  })();
   const flowTextEditable = Boolean(onEditText && view && view.kind === 'output' && !assetId);
   const textEditable = assetTextEditable || flowTextEditable;
   const displayTextHtml = savedTextHtml !== null ? savedTextHtml : (payload.mode === 'text' ? payload.html : '');
@@ -798,7 +827,16 @@ export function StageAssetPreviewModal({
       <div className="flex flex-wrap gap-2 border-b border-slate-100 bg-slate-50/70 px-5 py-3 text-[10px] font-bold text-slate-600">
         <span className={`rounded-lg px-2 py-1 ${view.statusTone === 'ready' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{view.statusLabel}</span>
         <span className="rounded-lg bg-white px-2 py-1" title="نوع خروجی">{stageAssetTypeLabel(view)}</span>
-        {view.fileName && <span className="rounded-lg bg-white px-2 py-1"><Paperclip className="ml-1 inline h-3 w-3" />{view.fileName}</span>}
+        {originalFileName && <span
+          className="flex min-w-0 max-w-full items-center gap-1 rounded-lg bg-white px-2 py-1"
+          title={`نام اصلی فایل: ${originalFileName}`}
+          aria-label={`نام اصلی فایل: ${originalFileName}`}
+        >
+          <Paperclip className="h-3 w-3 shrink-0" aria-hidden />
+          {/* نام فایل لاتین است؛ در چیدمان راست‌به‌چپ باید جدا و چپ‌به‌راست
+              خوانده شود، وگرنه پسوند و ابتدای نام جابه‌جا دیده می‌شوند. */}
+          <bdi dir="ltr" className="inline-block max-w-full truncate font-mono text-[10px] leading-5">{originalFileName}</bdi>
+        </span>}
         {view.fileSize && <span className="rounded-lg bg-white px-2 py-1">{view.fileSize}</span>}
         {view.deliveredAt && <span className="rounded-lg bg-white px-2 py-1">تحویل: {view.deliveredAt}</span>}
         {view.forwardedToStageTitle && <span className="rounded-lg bg-indigo-50 px-2 py-1 text-indigo-700"><Send className="ml-1 inline h-3 w-3" />ارجاع به {view.forwardedToStageTitle}{view.forwardedAt ? ` · ${view.forwardedAt}` : ''}</span>}

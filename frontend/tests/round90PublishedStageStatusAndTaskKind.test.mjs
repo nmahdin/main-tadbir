@@ -71,6 +71,39 @@ test('مدال پیش‌نمایش خروجی امکان تغییر نام نم�
   assert.match(context, /renameStageOutput,/);
 });
 
+// ── ۳ب. نام اصلی فایل در مدال پیش‌نمایش ──
+test('مدال پیش‌نمایش نام اصلی فایل را (نه نام نمایشی) کنار آیکون سنجاق نشان می‌دهد', async () => {
+  const sections = await source('../src/components/content/StageAssetSections.tsx');
+  // منبع اول: نام اصلی فایل خود دارایی مخزن؛ منبع دوم: رکورد جریان؛ منبع سوم: آدرس.
+  assert.match(sections, /const originalFileName = \(\(\): string => \{/);
+  assert.match(sections, /const readable = \(raw: string\): string => \{/);
+  assert.match(sections, /const fromAsset = readable\(asset\.data\?\.latest_file\?\.original_filename \|\| ''\);/);
+  assert.match(sections, /decodeURIComponent\(raw\)/);
+  // رکورد قدیمی که عنوان را در `fileName` نگه داشته، به‌عنوان نام فایل پذیرفته نمی‌شود.
+  assert.ok(sections.includes('return stored;'), 'مسیر بازگشت نام ذخیره‌شده باید باشد');
+  assert.doesNotMatch(sections, /looksLikeFile/);
+  assert.match(sections, /const path = String\(view\?\.url \|\| ''\)\.split\(\/\[\?#\]\/\)\[0\];/);
+  // نشان: آیکون سنجاق + نام در جهت چپ‌به‌راست تا در چیدمان راست‌به‌چپ جابه‌جا نشود.
+  assert.match(sections, /\{originalFileName && <span/);
+  assert.match(sections, /title=\{`نام اصلی فایل: \$\{originalFileName\}`\}/);
+  assert.match(sections, /<Paperclip className="h-3 w-3 shrink-0" aria-hidden \/>/);
+  assert.match(sections, /<bdi dir="ltr" className="inline-block max-w-full truncate font-mono text-\[10px\] leading-5">\{originalFileName\}<\/bdi>/);
+  // نشان نباید دوباره همان `view.fileName` خام را چاپ کند.
+  assert.doesNotMatch(sections, /<Paperclip className="ml-1 inline h-3 w-3" \/>\{view\.fileName\}/);
+
+  // هنگام ثبت خروجی هم نام اصلی فایل جدا از نام نمایشی ذخیره می‌شود.
+  const composer = await source('../src/components/common/AttachmentComposer.tsx');
+  assert.match(composer, /fileName\?: string;/);
+  assert.match(composer, /fileName: response\.data\.latest_file\?\.original_filename \|\| file\.name/);
+  assert.match(composer, /fileName: asset\.latest_file\?\.original_filename/);
+
+  const detail = await source('../src/components/content/ContentDetailView.tsx');
+  assert.match(detail, /fileName: asset\.type === 'file' \? \(asset\.fileName \|\| asset\.name\) : undefined,/);
+
+  const stageOutputModal = await source('../src/components/workspace/ContentStageOutputModal.tsx');
+  assert.match(stageOutputModal, /fileName: asset\.type === 'file' \? \(asset\.fileName \|\| asset\.name\) : undefined,/);
+});
+
 // ── ۴. وضعیت مرحله با کلیک روی نشان تغییر می‌کند ──
 test('نشان وضعیت مرحله کلیک‌پذیر است و وضعیت‌های تأییدشده/در انتظار بررسی قفل نیستند', async () => {
   const detail = await source('../src/components/content/ContentDetailView.tsx');

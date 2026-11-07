@@ -73,7 +73,16 @@ export type AttachmentDraft = {
 };
 export type PersistedAttachment = {
   assetId: number;
+  /** نام نمایشی دارایی (عنوانی که کاربر می‌بیند و می‌تواند تغییر دهد). */
   name: string;
+  /**
+   * نام اصلی فایل، همان‌طور که کاربر بارگذاری کرده است.
+   *
+   * `name` عنوانِ قابل‌ویرایش است و اغلب با نام فایل یکی نیست؛ برای همین جدا
+   * نگه داشته می‌شود تا پنجرهٔ پیش‌نمایش بتواند «نام اصلی فایل» را درست نشان
+   * دهد، حتی وقتی عنوان عوض شده است.
+   */
+  fileName?: string;
   size: number | null;
   type: 'file' | 'content' | 'data_table';
   previewUrl: string;
@@ -246,7 +255,7 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
     }, options.signal);
     reportUploadProgress({ key, loaded: file.size, total: file.size, complete: true });
     const version = persistedVersion(response.data);
-    const item: PersistedAttachment = { assetId: response.data.id, name: response.data.title || displayName, size: response.data.latest_file?.file_size ?? file.size, type: 'file', previewUrl: previewUrl(response.data.id), assetVersionId: version?.id, assetVersionNumber: version?.version_number };
+    const item: PersistedAttachment = { assetId: response.data.id, name: response.data.title || displayName, fileName: response.data.latest_file?.original_filename || file.name, size: response.data.latest_file?.file_size ?? file.size, type: 'file', previewUrl: previewUrl(response.data.id), assetVersionId: version?.id, assetVersionNumber: version?.version_number };
     saved.push(item);
     options.onPersisted?.(item, { kind: 'file', key });
   }
@@ -294,7 +303,7 @@ export async function persistAttachmentDraft(value: AttachmentDraft, relations: 
         folderMove.errors.push(error instanceof Error ? error.message : 'انتقال دارایی به پوشهٔ این بخش ناموفق بود.');
       }
     }
-    const item: PersistedAttachment = { assetId: asset.id, name: asset.latest_file?.original_filename || asset.title, size: asset.latest_file?.file_size ?? null, type: asset.type || (asset.latest_file ? 'file' : 'content'), previewUrl: previewUrl(asset.id), assetVersionId: asset.latest_version?.id, assetVersionNumber: asset.latest_version?.version_number };
+    const item: PersistedAttachment = { assetId: asset.id, name: asset.latest_file?.original_filename || asset.title, fileName: asset.latest_file?.original_filename, size: asset.latest_file?.file_size ?? null, type: asset.type || (asset.latest_file ? 'file' : 'content'), previewUrl: previewUrl(asset.id), assetVersionId: asset.latest_version?.id, assetVersionNumber: asset.latest_version?.version_number };
     saved.push(item);
     options.onPersisted?.(item, { kind: 'asset', key: String(asset.id) });
   }

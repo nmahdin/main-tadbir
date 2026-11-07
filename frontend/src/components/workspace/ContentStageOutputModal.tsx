@@ -77,7 +77,8 @@ export const ContentStageOutputModal: React.FC<{
             assetId: asset.type === 'data_table' ? undefined : String(asset.assetId),
             assetVersionId: asset.assetVersionId ? String(asset.assetVersionId) : undefined,
             assetVersionNumber: asset.assetVersionNumber,
-            fileName: asset.type === 'file' ? asset.name : undefined,
+            // نام نمایشی و نام اصلی فایل دو چیزند؛ پنجرهٔ پیش‌نمایش دومی را نشان می‌دهد.
+            fileName: asset.type === 'file' ? (asset.fileName || asset.name) : undefined,
             fileSize: asset.size ? `${(asset.size / 1024 / 1024).toFixed(2)} MB` : undefined,
             url: externalUrl || asset.previewUrl || undefined,
             value: description || undefined,
