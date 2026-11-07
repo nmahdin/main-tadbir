@@ -91,25 +91,18 @@ return new class extends Migration
             $table->index(['owner_key', 'promo_id', 'state'], 'billing_reservations_owner_promo_idx');
         });
 
-        // CHECK constraints (MySQL/MariaDB; portable via raw statement).
-        // Owner XOR is enforced at the application layer (mirrors
-        // CoreSubscription::booted()) — MySQL refuses CHECK on columns
-        // referenced by SET NULL / CASCADE foreign keys (error 3823), so
-        // we do not express it as a CHECK here.
-        DB::statement('ALTER TABLE core_billing_quotes ADD CONSTRAINT billing_quotes_period_valid CHECK (
-            period IN (\'monthly\', \'quarterly\', \'annual\')
-        )');
-        DB::statement('ALTER TABLE core_billing_quotes ADD CONSTRAINT billing_quotes_status_valid CHECK (
-            status IN (\'open\', \'expired\', \'superseded\', \'converted\')
-        )');
-        DB::statement('ALTER TABLE core_billing_quotes ADD CONSTRAINT billing_quotes_amounts_nonneg CHECK (
-            subtotal_toman >= 0 AND discount_toman >= 0 AND tax_toman >= 0 AND total_toman >= 0
-            AND discount_toman <= subtotal_toman
-            AND total_toman >= (subtotal_toman - discount_toman)
-        )');
-        DB::statement('ALTER TABLE core_billing_promo_reservations ADD CONSTRAINT billing_reservations_state_valid CHECK (
-            state IN (\'reserved\', \'released\', \'expired\', \'redeemed\')
-        )');
+        // CHECK constraints: MySQL/MariaDB only (SQLite does not support
+        // ALTER TABLE ADD CONSTRAINT in older SQLite shipped with
+        // GitHub Actions; application layer enforces all domains).
+        // Owner XOR is enforced in CoreBillingQuote::booted() — MySQL
+        // refuses CHECK on columns referenced by SET NULL foreign keys
+        // (error 3823).
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE core_billing_quotes ADD CONSTRAINT billing_quotes_period_valid CHECK (period IN ('monthly','quarterly','annual'))");
+            DB::statement("ALTER TABLE core_billing_quotes ADD CONSTRAINT billing_quotes_status_valid CHECK (status IN ('open','expired','superseded','converted'))");
+            DB::statement("ALTER TABLE core_billing_quotes ADD CONSTRAINT billing_quotes_amounts_nonneg CHECK (subtotal_toman >= 0 AND discount_toman >= 0 AND tax_toman >= 0 AND total_toman >= 0 AND discount_toman <= subtotal_toman AND total_toman >= (subtotal_toman - discount_toman))");
+            DB::statement("ALTER TABLE core_billing_promo_reservations ADD CONSTRAINT billing_reservations_state_valid CHECK (state IN ('reserved','released','expired','redeemed'))");
+        }
     }
 
     public function down(): void
