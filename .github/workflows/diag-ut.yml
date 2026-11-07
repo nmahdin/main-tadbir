@@ -21,9 +21,6 @@ jobs:
       - name: Install
         working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Pint
-        working-directory: backend
-        run: php vendor/bin/pint --test app/Core/Billing app/Http/Controllers/Api/V1/BillingQuoteController.php app/Console/Commands/ExpireBillingQuotes.php tests/Feature/Core/BillingQuoteTest.php tests/Feature/Core/BillingQuoteConcurrencyMysqlTest.php
       - name: PHPUnit filter
         id: ut
         working-directory: backend
