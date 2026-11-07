@@ -93,6 +93,9 @@ test('چرخندهٔ لودینگ بزرگ صفحه و لودینگ کوچک ص�
   assert.match(feedback, /<InlineSpinner size=\{size\} className="text-indigo-600" \/>/);
 
   const css = await source('../src/index.css');
-  assert.match(css, /@keyframes ui-spin-fast \{\s*to \{ transform: rotate\(360deg\) \}\s*\}/);
-  assert.match(css, /\.ui-spin-fast \{ animation: ui-spin-fast \.6s linear infinite !important; \}/);
+  // دور ۹۲: همان چرخش تالبویند با مدت کوتاه‌تر (کی‌فریم تازه لازم نیست).
+  assert.match(css, /\.ui-spin-fast \{ animation-duration: \.45s !important; \}/);
+  // نشانگر بارگذاری بخش‌ها/فهرست‌ها هم با همین سرعت می‌چرخد.
+  const primitives = await source('../src/components/common/Primitives.tsx');
+  assert.match(primitives, /<LoaderCircle className="ui-spin-fast h-4 w-4 shrink-0 animate-spin text-indigo-600" aria-hidden \/>/);
 });
