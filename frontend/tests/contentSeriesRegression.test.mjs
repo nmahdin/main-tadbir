@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const view = readFileSync(new URL('../src/components/content/ContentSeriesView.tsx', import.meta.url), 'utf8');
-const form = readFileSync(new URL('../src/components/content/series/SeriesForm.tsx', import.meta.url), 'utf8');
-const api = readFileSync(new URL('../src/api/series.ts', import.meta.url), 'utf8');
-const types = readFileSync(new URL('../src/types.ts', import.meta.url), 'utf8');
-const contentDetail = readFileSync(new URL('../src/components/content/ContentDetailView.tsx', import.meta.url), 'utf8');
-const contentList = readFileSync(new URL('../src/components/content/ContentMainView.tsx', import.meta.url), 'utf8');
-const publishedList = readFileSync(new URL('../src/components/content/ContentPublishedView.tsx', import.meta.url), 'utf8');
+const view = readFileSync(new URL('../src/features/contents/ContentSeriesView.tsx', import.meta.url), 'utf8');
+const form = readFileSync(new URL('../src/features/contents/series/SeriesForm.tsx', import.meta.url), 'utf8');
+const api = readFileSync(new URL('../src/shared/api/series.ts', import.meta.url), 'utf8');
+const types = readFileSync(new URL('../src/shared/types.ts', import.meta.url), 'utf8');
+const contentDetail = readFileSync(new URL('../src/features/contents/ContentDetailView.tsx', import.meta.url), 'utf8');
+const contentList = readFileSync(new URL('../src/features/contents/ContentMainView.tsx', import.meta.url), 'utf8');
+const publishedList = readFileSync(new URL('../src/features/contents/ContentPublishedView.tsx', import.meta.url), 'utf8');
 
 test('series workspace exposes cleaner views and only the four supported detail tabs', () => {
   for (const label of ['پرونده‌های محتوا', 'تقویم آینده', 'پیش‌فرض‌ها', 'نسخه‌ها']) assert.match(view, new RegExp(label));

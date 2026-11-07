@@ -6,16 +6,16 @@ const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('dynamic platform icons use an explicit tree-shakeable map', async () => {
   const [platforms, modal, publishing] = await Promise.all([
-    source('../src/utils/platformIcons.ts'),
-    source('../src/components/settings/PlatformModal.tsx'),
-    source('../src/components/content/ContentPublishingView.tsx'),
+    source('../src/shared/lib/platformIcons.ts'),
+    source('../src/features/settings/legacy/PlatformModal.tsx'),
+    source('../src/features/contents/ContentPublishingView.tsx'),
   ]);
   assert.doesNotMatch(modal + publishing, /import\s+\*\s+as\s+\w+\s+from\s+['"]lucide-react['"]/);
   assert.match(platforms, /const PLATFORM_ICONS: Record<string, LucideIcon>/);
 });
 
 test('global search is server-side, cancellable and never scans context collections', async () => {
-  const search = await source('../src/components/layout/GlobalSearchModal.tsx');
+  const search = await source('../src/app/shell/GlobalSearchModal.tsx');
   assert.match(search, /request\(`\/search\?/);
   assert.match(search, /queryFn: \(\{ signal \}\)/);
   assert.match(search, /debouncedQuery\.length >= 2/);
@@ -24,8 +24,8 @@ test('global search is server-side, cancellable and never scans context collecti
 
 test('unopened overlays and workspace pages stay outside the initial route bundle', async () => {
   const [app, context] = await Promise.all([
-    source('../src/App.tsx'),
-    source('../src/context/AppContext.tsx'),
+    source('../src/app/App.tsx'),
+    source('../src/app/providers/AppContext.tsx'),
   ]);
   for (const component of ['WorkspaceList', 'TaskDetailDrawer', 'CreateTaskModal', 'CreateProjectModal', 'CreateContentModal', 'GlobalSearchModal']) {
     assert.match(app, new RegExp(`const ${component} = React\\.lazy`));
@@ -41,13 +41,13 @@ test('unopened overlays and workspace pages stay outside the initial route bundl
 
 test('demo fixtures, celebration renderer and stable vendors stay off the application entry chunk', async () => {
   const [appContext, authContext, vite] = await Promise.all([
-    source('../src/context/AppContext.tsx'),
-    source('../src/context/AuthContext.tsx'),
+    source('../src/app/providers/AppContext.tsx'),
+    source('../src/app/providers/AuthContext.tsx'),
     source('../vite.config.ts'),
   ]);
   assert.doesNotMatch(appContext + authContext, /import\s+\{\s*demo\s*\}\s+from/);
-  assert.match(appContext, /import\('\.\.\/demo'\)/);
-  assert.match(authContext, /import\('\.\.\/demo'\)/);
+  assert.match(appContext, /import\('\.\.\/\.\.\/shared\/demo'\)/);
+  assert.match(authContext, /import\('\.\.\/\.\.\/shared\/demo'\)/);
   assert.match(appContext, /import\('canvas-confetti'\)/);
   assert.match(vite, /return 'react-vendor'/);
   assert.match(vite, /return 'query-vendor'/);
@@ -55,10 +55,10 @@ test('demo fixtures, celebration renderer and stable vendors stay off the applic
 
 test('mutations use one dependency-aware invalidation pass and settings autosave quickly with dirty checking', async () => {
   const [client, queryClient, resources, context] = await Promise.all([
-    source('../src/api/client.ts'),
-    source('../src/queries/queryClient.ts'),
-    source('../src/queries/resources.ts'),
-    source('../src/context/AppContext.tsx'),
+    source('../src/shared/api/client.ts'),
+    source('../src/shared/queries/queryClient.ts'),
+    source('../src/shared/queries/resources.ts'),
+    source('../src/app/providers/AppContext.tsx'),
   ]);
   assert.match(client, /invalidateWorkspaceModules\(responseScope\.userId, affected\)/);
   assert.match(queryClient, /predicate: query =>/);

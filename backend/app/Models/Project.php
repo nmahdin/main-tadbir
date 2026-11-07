@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Core\Authorization\ScopesToWorkspace;
 use App\Models\Concerns\TracksArchiveStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,9 +13,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Project extends Model
 {
     use HasFactory;
+    use ScopesToWorkspace;
     use TracksArchiveStatus;
 
     protected $fillable = [
+        'workspace_id',
         'name',
         'description',
         'project_manager_id',

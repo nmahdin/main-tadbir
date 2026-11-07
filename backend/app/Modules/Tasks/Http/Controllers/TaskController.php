@@ -1,0 +1,237 @@
+<?php
+
+namespace App\Modules\Tasks\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\TaskRequest;
+use App\Http\Requests\WorkspaceListRequest;
+use App\Http\Resources\TaskResource;
+use App\Models\ActivityLog;
+use App\Models\Content;
+use App\Models\Task;
+use App\Modules\Collaboration\Services\CommentNotifications;
+use App\Modules\Contents\Services\ContentAccess;
+use App\Modules\Contents\Services\ContentPublication;
+use App\Modules\Contents\Services\PlannedOccurrenceActivator;
+use App\Modules\Projects\Services\ActiveProjectGuard;
+use App\Modules\Tasks\Services\TaskAssignmentNotifications;
+use App\Modules\Tasks\Services\TaskOperations;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+
+class TaskController extends Controller
+{
+    public function index(WorkspaceListRequest $request): AnonymousResourceCollection
+    {
+        app(PlannedOccurrenceActivator::class)->activateDue(now(), 25);
+        // List rows intentionally exclude comments, files and history. Those
+        // relations are loaded only by show(); eager-loading them for every row
+        // made task navigation grow with the complete audit history.
+        $tasks = Task::query()
+            // The personal task page is a server-enforced scope: request filters
+            // may narrow these rows, but can never expose another assignee's task.
+            ->where('assignee_id', $request->user()->id)
+            ->when($request->filled('due'), function ($query) use ($request): void {
+                $due = $request->string('due')->toString();
+                $query->whereNotIn('status', ['completed', 'archived']);
+                if ($due === 'near') {
+                    $query->whereDate('deadline', '>=', today()->toDateString())
+                        ->whereDate('deadline', '<=', today()->addDays(5)->toDateString());
+                } else {
+                    $query->whereDate('deadline', $due === 'today' ? '=' : '<', today()->toDateString());
+                }
+            })
+            ->when($request->filled('priority'), fn ($query) => $query->where('priority', $request->input('priority')))
+            ->when($request->integer('content_id'), fn ($query, int $id) => $query->where('content_id', $id))
+            ->when($request->integer('project_id'), fn ($query, int $id) => $query->where('project_id', $id))
+            ->when($request->filled('status'), fn ($query) => $request->input('status') === 'open'
+                ? $query->whereNotIn('status', ['completed', 'cancelled', 'archived']) : $query->where('status', $request->input('status')))
+            ->when($request->string('search')->toString(), function ($query, string $search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query->where('title', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            })
+            ->when($request->sortSpec(), function ($query, array $spec): void {
+                // UX-02-3 multi-sort (validated allowlist) + stable id tiebreaker.
+                foreach ($spec as $sort) {
+                    $query->orderBy($sort['field'], $sort['direction']);
+                }
+                $query->orderBy('id');
+            })
+            ->paginate($request->integer('per_page', 20))->withQueryString();
+
+        return TaskResource::collection($tasks);
+    }
+
+    public function store(TaskRequest $request): JsonResponse
+    {
+        abort_unless($request->user()->fresh()?->isActive(), 403);
+        abort_if(in_array($request->input('kind'), [ContentPublication::KIND, 'content_review', 'content_correction', 'content_work'], true), 422, 'تسک وابسته به گردش کار را از صفحهٔ محتوای مربوط بسازید.');
+        $task = DB::transaction(function () use ($request) {
+            if ($request->filled('contentId')) {
+                $source = Content::findOrFail($request->integer('contentId'));
+                app(ActiveProjectGuard::class)->project($source->project_id);
+                abort_unless(app(ContentAccess::class)->canView($request->user(), $source), 403);
+            }
+            if ($request->filled('projectId')) {
+                abort_unless($request->user()->hasPermission('projects.view'), 403);
+                app(ActiveProjectGuard::class)->project($request->integer('projectId'));
+            }
+            $task = Task::create($this->attributes($request->validated()));
+            $this->updateProjectProgress($task->project_id);
+            app(TaskAssignmentNotifications::class)->created($task);
+
+            return $task;
+        });
+
+        return (new TaskResource($task->load(['comments.user', 'attachments', 'activityLogs'])))
+            ->response()
+            ->setStatusCode(201);
+    }
+
+    public function show(Request $request, Task $task): TaskResource
+    {
+        // A deep link is navigation, never a grant. Reuse the panel's current visibility gate.
+        abort_unless(app(TaskOperations::class)->visibleTo($request->user())->whereKey($task->id)->exists(), 403);
+
+        return new TaskResource($task->load(['comments.user', 'attachments', 'activityLogs']));
+    }
+
+    public function update(TaskRequest $request, Task $task): TaskResource
+    {
+        $task = app(TaskOperations::class)->updateFields(
+            $request->user(), $task, $this->attributes($request->validated()),
+        );
+
+        return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
+    }
+
+    /**
+     * UX-02-3-FINAL bulk status change (tasks list): the ONLY bulk
+     * action on the migrated lists, because it is exactly the
+     * domain-supported single-record operation. Every record goes
+     * through TaskOperations::changeStatus individually — per-record
+     * authorization, conflict handling, and audit are identical to
+     * the single-task path; outcomes are reported per record.
+     */
+    public function bulkStatus(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'task_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'task_ids.*' => ['integer', 'min:1'],
+            'status' => ['required', Rule::in(TaskOperations::STATUSES)],
+        ]);
+
+        $operations = app(TaskOperations::class);
+        $updated = [];
+        $failed = [];
+        foreach (array_values(array_unique($data['task_ids'])) as $id) {
+            $task = Task::query()->find($id);
+            if (! $task) {
+                $failed[] = ['id' => $id, 'code' => 404, 'reason' => 'وظیفه یافت نشد.'];
+
+                continue;
+            }
+            try {
+                $operations->changeStatus($request->user(), $task, $data['status']);
+                $updated[] = $id;
+            } catch (ValidationException) {
+                $failed[] = ['id' => $id, 'code' => 422, 'reason' => 'این تغییر وضعیت برای این وظیفه مجاز نیست.'];
+            } catch (HttpException $exception) {
+                $failed[] = ['id' => $id, 'code' => $exception->getStatusCode(), 'reason' => $exception->getMessage() ?: 'تغییر وضعیت انجام نشد.'];
+            }
+        }
+
+        return response()->json(['data' => ['updated' => $updated, 'failed' => $failed]]);
+    }
+
+    public function updateStatus(Request $request, Task $task): TaskResource
+    {
+        $data = $request->validate([
+            'status' => ['required', Rule::in(TaskOperations::STATUSES)],
+            'expected_status' => ['sometimes', 'string'],
+        ]);
+        $task = app(TaskOperations::class)->changeStatus(
+            $request->user(), $task, $data['status'], $data['expected_status'] ?? null,
+        );
+
+        return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
+    }
+
+    public function comment(Request $request, Task $task): TaskResource
+    {
+        $data = $request->validate(['text' => ['required', 'string', 'max:3000']]);
+        $comment = app(TaskOperations::class)->report($request->user(), $task, $data['text']);
+        app(CommentNotifications::class)->created($comment, $request->user());
+
+        return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
+    }
+
+    public function removeAttachment(Request $request, Task $task, string $attachment): TaskResource
+    {
+        DB::transaction(function () use ($request, $task, $attachment): void {
+            $actor = $request->user()->fresh();
+            $task = app(TaskOperations::class)->visibleTo($actor)->whereKey($task->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $task->assignee_id === (int) $actor->id || $actor->hasPermission('tasks.edit'), 403);
+            $record = $task->attachments()->whereKey($attachment)->firstOrFail();
+            $record->delete(); // Unlink only; never delete a shared DAM file by its URL.
+            ActivityLog::create(['user_id' => $actor->id, 'task_id' => $task->id, 'project_id' => $task->project_id,
+                'type' => 'attachment', 'action' => 'حذف پیوست وظیفه', 'details' => 'attachment_id:'.$record->id]);
+        });
+
+        return new TaskResource($task->refresh()->load(['comments.user', 'attachments', 'activityLogs']));
+    }
+
+    public function destroy(Task $task): Response
+    {
+        abort_if($task->kind === 'content_review', 422, 'ارجاع بررسی را نمی‌توان مستقل از محتوا حذف کرد.');
+        $projectId = $task->project_id;
+        $task->delete();
+        $this->updateProjectProgress($projectId);
+
+        return response()->noContent();
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function attributes(array $data): array
+    {
+        $map = [
+            'projectId' => 'project_id',
+            'contentId' => 'content_id',
+            'contentStageId' => 'content_stage_id',
+            'assigneeId' => 'assignee_id',
+            'startDate' => 'start_date',
+            'estimatedHours' => 'estimated_hours',
+            'loggedHours' => 'logged_hours',
+            'isBlocked' => 'is_blocked',
+            'blockedReason' => 'blocked_reason',
+        ];
+
+        $attributes = Arr::except($data, ['comments', 'attachments', 'activityHistory']);
+
+        foreach ($map as $frontend => $database) {
+            if (array_key_exists($frontend, $attributes)) {
+                $attributes[$database] = $attributes[$frontend];
+                unset($attributes[$frontend]);
+            }
+        }
+
+        return $attributes;
+    }
+
+    private function updateProjectProgress(?int $projectId): void
+    {
+        app(TaskOperations::class)->updateProjectProgress($projectId);
+    }
+}

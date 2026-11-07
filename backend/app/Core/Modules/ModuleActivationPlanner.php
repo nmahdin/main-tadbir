@@ -1,0 +1,163 @@
+<?php
+
+namespace App\Core\Modules;
+
+use App\Core\Modules\Contracts\ModuleEntitlementGate;
+use App\Core\Workspaces\Workspace;
+
+/**
+ * Read-only activation planner (Stage C4-2).
+ *
+ * Computes a deterministic preview for enabling one module in one
+ * Workspace: the full direct+transitive prerequisite closure, the
+ * already/newly enabled partition, technical availability,
+ * organization policy (tri-state), entitlement outcomes, and
+ * blocking reasons. The planner NEVER mutates state and fails
+ * closed: unknown modules throw, and any unavailable, policy-denied,
+ * or unentitled newly-enabled module blocks confirmation.
+ */
+final class ModuleActivationPlanner
+{
+    public function __construct(
+        private readonly ModuleDependencyResolver $resolver,
+        private readonly ModuleEntitlementGate $entitlements,
+    ) {}
+
+    /**
+     * @throws ModuleActivationException when the target is unknown
+     */
+    public function preview(Workspace $workspace, string $moduleKey): ModuleActivationPreview
+    {
+        if (ModuleCatalog::get($moduleKey) === null) {
+            throw new ModuleActivationException(
+                'module_unknown',
+                "Module [{$moduleKey}] is not a known module.",
+            );
+        }
+
+        $prerequisites = $this->resolver->prerequisitesFor($moduleKey); // dependency-first
+        $relevant = [...$prerequisites, $moduleKey];
+
+        $enabledKeys = $this->enabledModuleKeys($workspace);
+        $policies = $this->policyMap($workspace, $relevant);
+
+        $availability = [];
+        $entitlements = [];
+        $blocking = [];
+        $alreadyEnabled = [];
+        $toEnable = [];
+
+        foreach ($relevant as $key) {
+            $definition = ModuleCatalog::get($key);
+            $availability[$key] = $definition !== null && $definition->isAvailable();
+
+            if (in_array($key, $enabledKeys, true)) {
+                $alreadyEnabled[] = $key;
+
+                continue;
+            }
+
+            $toEnable[] = $key;
+            $entitlements[$key] = $this->entitlements->isEntitled($workspace, $key);
+
+            if (! $availability[$key]) {
+                $blocking[] = ['module' => $key, 'code' => 'module_unavailable', 'message' => "Module [{$key}] is not technically available."];
+            }
+
+            if (($policies[$key] ?? 'none') === 'denied') {
+                $blocking[] = ['module' => $key, 'code' => 'organization_policy_denied', 'message' => "Organization policy denies module [{$key}]."];
+            }
+
+            if (! $entitlements[$key]) {
+                $blocking[] = ['module' => $key, 'code' => 'entitlement_missing', 'message' => "No valid entitlement for module [{$key}]."];
+            }
+        }
+
+        $token = $this->confirmationToken($workspace, $moduleKey, $relevant, $enabledKeys, $policies, $entitlements);
+
+        return new ModuleActivationPreview(
+            $workspace->id,
+            $moduleKey,
+            $prerequisites,
+            $alreadyEnabled,
+            $toEnable,
+            $availability,
+            $policies,
+            $entitlements,
+            $blocking,
+            $token,
+        );
+    }
+
+    /**
+     * Deterministic confirmation token over the exact previewed
+     * state: relevant activation state + relevant organization
+     * policies + entitlement outcomes for newly enabled modules +
+     * the canonical catalog fingerprint. A subscription assignment,
+     * renewal, expiry, or entitlement change between preview and
+     * confirmation therefore invalidates the token exactly when it
+     * changes the confirmed eligibility (C5-3). Unrelated Workspace
+     * state does not affect the token.
+     *
+     * @param  list<string>  $relevant
+     * @param  list<string>  $enabledKeys
+     * @param  array<string, string>  $policies
+     * @param  array<string, bool>  $entitlements
+     */
+    public function confirmationToken(Workspace $workspace, string $moduleKey, array $relevant, array $enabledKeys, array $policies, array $entitlements = []): string
+    {
+        $relevantEnabled = array_values(array_intersect($relevant, $enabledKeys));
+        sort($relevantEnabled);
+
+        $relevantPolicies = array_intersect_key($policies, array_flip($relevant));
+        ksort($relevantPolicies);
+        ksort($entitlements);
+
+        return hash('sha256', (string) json_encode([
+            'workspace_id' => $workspace->id,
+            'module' => $moduleKey,
+            'enabled' => $relevantEnabled,
+            'policies' => $relevantPolicies,
+            'entitlements' => $entitlements,
+            'catalog' => ModuleCatalog::fingerprint(),
+        ]));
+    }
+
+    /** @return list<string> */
+    public function enabledModuleKeys(Workspace $workspace): array
+    {
+        return WorkspaceModule::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('status', WorkspaceModule::STATUS_ENABLED)
+            ->join('core_modules', 'core_modules.id', '=', 'workspace_modules.module_id')
+            ->pluck('core_modules.key')
+            ->map(static fn ($key): string => (string) $key)
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<string>  $moduleKeys
+     * @return array<string, string> key => allowed|denied|none
+     */
+    public function policyMap(Workspace $workspace, array $moduleKeys): array
+    {
+        $map = array_fill_keys($moduleKeys, 'none');
+
+        if ($workspace->organization_id === null) {
+            return $map;
+        }
+
+        OrganizationModulePolicy::query()
+            ->where('organization_id', $workspace->organization_id)
+            ->join('core_modules', 'core_modules.id', '=', 'organization_module_policies.module_id')
+            ->whereIn('core_modules.key', $moduleKeys)
+            ->get(['core_modules.key as module_key', 'organization_module_policies.policy'])
+            ->each(function (OrganizationModulePolicy $policy) use (&$map): void {
+                $map[$policy->getAttribute('module_key')] = (string) $policy->getAttribute('policy');
+            });
+
+        return $map;
+    }
+}

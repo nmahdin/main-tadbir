@@ -2,7 +2,7 @@
 
 use App\Models\DamAsset;
 use App\Models\DamFolder;
-use App\Services\DamFolderStorage;
+use App\Modules\Dam\Services\DamFolderStorage;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\Storage;
 

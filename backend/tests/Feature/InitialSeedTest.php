@@ -59,8 +59,9 @@ class InitialSeedTest extends TestCase
             $this->assertTrue(Hash::check(config('seed_users.'.$config.'.password'), $user->password));
             $this->assertFalse(Hash::check('password', $user->password));
             $this->assertNull($user->last_login_at);
-            $this->assertArrayNotHasKey('email', $user->getAttributes());
-            $this->assertArrayNotHasKey('email_verified_at', $user->getAttributes());
+            // Stage C6-2: seeds never set or verify an email.
+            $this->assertNull($user->email);
+            $this->assertNull($user->email_verified_at);
             $this->assertNull($user->department_id);
             $this->assertNull($user->phone);
             $this->assertNull($user->avatar);
@@ -135,7 +136,7 @@ class InitialSeedTest extends TestCase
         $this->seed(DatabaseSeeder::class);
         $this->assertDatabaseCount('users', 4);
         $this->assertSame($before, $existing->fresh()->getAttributes());
-        $this->assertArrayNotHasKey('email', User::where('username', 'emad.hendi')->firstOrFail()->getAttributes());
+        $this->assertNull(User::where('username', 'emad.hendi')->firstOrFail()->email);
     }
 
     public function test_seed_will_not_reactivate_an_existing_disabled_admin_role(): void
@@ -171,7 +172,7 @@ class InitialSeedTest extends TestCase
         }
         $this->seed(DatabaseSeeder::class);
         foreach (User::all() as $user) {
-            $this->assertArrayNotHasKey('email', $user->getAttributes());
+            $this->assertNull($user->email);
             $this->assertTrue(Hash::check('Seed1234', $user->password));
         }
     }

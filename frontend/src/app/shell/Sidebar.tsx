@@ -1,0 +1,680 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { useApp } from '../providers/AppContext';
+import { useEnvironment } from '../providers/EnvironmentContext';
+import { ProfileDock } from './ProfileDock';
+import { departmentsApi } from '../../shared/api/departments';
+import { ActiveView } from '../../shared/types';
+import { ORGANIZATION_NAV, PLATFORM_NAV, isShellNavActive } from './navigation';
+import {
+  LayoutDashboard,
+  CheckSquare,
+  FolderKanban,
+  Users2,
+  BarChart3,
+  Settings,
+  Plus,
+  ChevronLeft,
+  ShieldCheck,
+  Briefcase,
+  UserCheck,
+  Layers,
+  Users,
+  Shield,
+  Building2,
+  FolderOpen,
+  MessageSquare,
+  User as UserIcon,
+  Lightbulb,
+  PenTool,
+  Share2,
+  Network,
+  ChevronDown,
+  CalendarPlus,
+  Zap,
+  Archive,
+  Mail,
+  MailPlus,
+  Globe,
+  LayoutGrid,
+  PanelRightClose,
+  PanelRightOpen,
+  SlidersHorizontal
+} from 'lucide-react';
+
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  onNavigateStart?: (view: ActiveView) => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({
+  isOpen = false,
+  onClose = () => {},
+  onNavigateStart = (_view: ActiveView) => {},
+}) => {
+  const {
+    activeView,
+    setActiveView,
+    currentUser,
+    tasks,
+    projects,
+    departments,
+    notifications,
+    templates,
+    conversations,
+    ideas,
+    contents,
+    setSelectedProjectId,
+    setIsCreateTaskOpen,
+    setIsCreateProjectOpen,
+    setIsCreateContentOpen,
+    setIsTemplatesModalOpen,
+    requestMeetingModal,
+    roles,
+    generalSettings,
+    hasPermission
+  } = useApp();
+
+  // UX-02-1: the shell renders one of three environment sidebars.
+  // The workspace environment keeps the full operational navigation
+  // below; organization/platform environments get their management
+  // navigation instead. Environment is a navigation context only —
+  // every destination keeps authorizing on the server (K2).
+  const navigate = useNavigate();
+  const { current: currentEnvironment } = useEnvironment();
+  const environmentKind = currentEnvironment?.kind ?? 'workspace';
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return window.localStorage.getItem('tadbir:sidebar-collapsed') === '1'; } catch { return false; }
+  });
+  const toggleCollapsed = () => {
+    setCollapsed(value => {
+      const next = !value;
+      try { window.localStorage.setItem('tadbir:sidebar-collapsed', next ? '1' : '0'); } catch { /* storage may be unavailable */ }
+      return next;
+    });
+  };
+
+  const myTasksCount = tasks.filter(
+    t => t.assigneeId === currentUser.id && t.status !== 'completed' && t.status !== 'archived'
+  ).length;
+
+  const unreadMessagesCount = (conversations || []).reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+  // فقط ایده‌های پایان‌نیافته شمرده می‌شوند (پایان‌یافته/پیاده‌سازی‌شده/ردشده حساب نمی‌شوند)
+  const activeIdeasCount = (ideas || []).filter(i => !['implemented', 'completed', 'rejected', 'archived'].includes(i.status)).length;
+  // فقط پروژه‌های خاتمه‌نیافته شمرده می‌شوند
+  const activeProjectsCount = (projects || []).filter(p => !['completed', 'cancelled', 'archived'].includes(p.status)).length;
+
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [isContentMenuOpen, setIsContentMenuOpen] = useState(['content', 'content-series', 'content-publishing'].includes(activeView));
+  const quickAddRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (quickAddRef.current && !quickAddRef.current.contains(e.target as Node)) {
+        setIsQuickAddOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (['content', 'content-series', 'content-publishing'].includes(activeView)) {
+      setIsContentMenuOpen(true);
+    }
+  }, [activeView]);
+
+  // Mobile drawer: Escape closes it like a standard dismissible overlay.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
+  // Manager capability is independent from list permission and from whichever
+  // route-scoped department collection happens to be loaded at the moment.
+  const managedDepartmentsQuery = useQuery({
+    queryKey: ['managed-departments', currentUser.id],
+    queryFn: departmentsApi.managed,
+    enabled: Boolean(currentUser.id),
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
+  });
+  const isDepartmentManager = Boolean(currentUser.managedDepartmentIds?.length)
+    || departments.some(department => department.managedByMe || department.managerId === currentUser.id)
+    || Boolean(managedDepartmentsQuery.data?.data.length);
+  const canManageUsers = hasPermission('users.view');
+  const canManageRoles = hasPermission('roles.view');
+  // Must agree with the route guard in App.tsx ('settings' requires
+  // settings.manage); offering the entry to content.edit-only users
+  // presented a page that immediately denied them.
+  const canViewSettings = hasPermission('settings.manage');
+
+  const rawNavItems = [
+    {
+      id: 'dashboard' as ActiveView,
+      label: 'کارتابل من',
+      icon: <LayoutDashboard className="w-4 h-4" />,
+      permission: 'projects.view'
+    },
+    ...(isDepartmentManager ? [{
+      id: 'department-dashboard' as ActiveView,
+      label: 'داشبورد دپارتمان',
+      icon: <Building2 className="w-4 h-4" />,
+    }] : []),
+    {
+      id: 'thought-room' as ActiveView,
+      label: 'ایده‌ها و جلسات',
+      icon: <Lightbulb className="w-4 h-4" />,
+      badge: activeIdeasCount > 0 ? activeIdeasCount : null,
+      badgeColor: 'bg-amber-100 text-amber-800',
+      permission: 'thinktank.view'
+    },
+    ...(generalSettings.secretariatEnabled !== false ? [{
+      id: 'secretariat' as ActiveView,
+      label: 'دبیرخانه و نامه‌ها',
+      icon: <Mail className="w-4 h-4" />,
+      permission: 'secretariat.view',
+    }] : []),
+    {
+      id: 'my-tasks' as ActiveView,
+      label: 'تسک‌ها',
+      icon: <CheckSquare className="w-4 h-4" />,
+      badge: myTasksCount > 0 ? myTasksCount : null,
+      badgeColor: 'bg-[var(--color-surface-muted)] text-[var(--color-primary)]',
+      permission: 'tasks.view'
+    },
+    {
+      id: 'messages' as ActiveView,
+      label: 'پیام‌ها و گفتگوها',
+      icon: <MessageSquare className="w-4 h-4" />,
+      badge: unreadMessagesCount > 0 ? unreadMessagesCount : null,
+      badgeColor: 'bg-emerald-100 text-emerald-800',
+    },
+    {
+      id: 'projects' as ActiveView,
+      label: 'پروژه‌ها',
+      icon: <FolderKanban className="w-4 h-4" />,
+      badge: null,
+      badgeColor: 'bg-slate-100 text-slate-700',
+      permission: 'projects.view'
+    },
+    {
+      id: 'assets' as ActiveView,
+      label: 'دارایی‌های دیجیتال (DAM)',
+      icon: <FolderOpen className="w-4 h-4" />,
+      permission: 'assets.view'
+    },
+    {
+      id: 'content' as ActiveView,
+      label: 'مدیریت و تولید محتوا',
+      icon: <PenTool className="w-4 h-4" />,
+      badge: null,
+      badgeColor: 'bg-emerald-100 text-emerald-700',
+      permission: 'content.view'
+    },
+    {
+      id: 'content-series' as ActiveView,
+      label: 'مجموعه‌های محتوا',
+      icon: <Layers className="w-4 h-4" />,
+      permission: 'content.view'
+    },
+    {
+      id: 'content-publishing' as ActiveView,
+      label: 'میز انتشار',
+      icon: <Share2 className="w-4 h-4" />,
+      permission: 'content.view'
+    },
+    {
+      id: 'archive' as ActiveView,
+      label: 'بایگانی',
+      icon: <Archive className="w-4 h-4" />,
+      permission: 'projects.view'
+    },
+    {
+      id: 'departments' as ActiveView,
+      label: 'دپارتمان‌ها',
+      icon: <Users2 className="w-4 h-4" />,
+      permission: 'departments.view'
+    },
+    ...(hasPermission('integrity.view') ? [{
+      id: 'integrity' as ActiveView,
+      label: 'پایش یکپارچگی',
+      icon: <ShieldCheck className="w-4 h-4" />,
+      permission: 'integrity.view'
+    }] : []),
+    {
+      id: 'analytics' as ActiveView,
+      label: 'گزارش و تحلیل‌ها',
+      icon: <BarChart3 className="w-4 h-4" />,
+      permission: 'reports.view'
+    }
+  ];
+
+  const mainNavItems = rawNavItems.filter(item => {
+    if (item.id === 'thought-room') return hasPermission('thinktank.view') || hasPermission('meetings.view');
+    if (item.id === 'archive') return ['projects.view', 'tasks.view', 'content.view', 'assets.view', 'thinktank.view', 'meetings.view'].some(hasPermission);
+    if (!item.permission) return true;
+    return hasPermission(item.permission as any);
+  });
+  const contentSubmenuItems = mainNavItems.filter(item => ['content-series', 'content-publishing'].includes(item.id));
+  const navSections = [
+    {
+      title: 'کار روزانه',
+      ids: ['dashboard', 'department-dashboard', 'my-tasks', 'messages'] as ActiveView[],
+    },
+    {
+      title: 'برنامه‌ریزی و اجرا',
+      ids: ['projects', 'thought-room', 'content', 'assets'] as ActiveView[],
+    },
+    {
+      title: 'سازمان و پایش',
+      ids: ['departments', 'secretariat', 'archive', 'analytics', 'integrity'] as ActiveView[],
+    },
+  ].map(section => ({
+    ...section,
+    items: section.ids.flatMap(id => {
+      const item = mainNavItems.find(candidate => candidate.id === id);
+      return item ? [item] : [];
+    }),
+  })).filter(section => section.items.length > 0);
+
+  // UX-02-1 organization/platform navigation item styling (shared by
+  // the two management variants; the workspace variant keeps its own
+  // richer rendering below).
+  const envItemClassName = (isActive: boolean) => `group flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all ${isActive ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] shadow-2xs ring-1 ring-[var(--color-border)]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${collapsed ? 'lg:justify-center' : ''}`;
+  const envItemContent = (icon: React.ReactNode, label: string, isActive: boolean) => (
+    <span className="flex min-w-0 items-center gap-2.5">
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-white text-[var(--color-primary)] shadow-2xs' : 'text-slate-400 group-hover:bg-white group-hover:text-slate-600'}`}>{icon}</span>
+      <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{label}</span>
+    </span>
+  );
+
+  const handleNavClick = (viewId: ActiveView) => {
+    if (viewId === 'templates') {
+      setIsTemplatesModalOpen(true);
+      return;
+    }
+    if (viewId !== activeView) onNavigateStart(viewId);
+    setActiveView(viewId);
+    if (viewId !== 'project-detail') {
+      setSelectedProjectId(null);
+    }
+    onClose();
+  };
+
+  const handleProjectClick = (projectId: string) => {
+    if (activeView !== 'project-detail') onNavigateStart('project-detail');
+    setSelectedProjectId(projectId);
+    setActiveView('project-detail');
+    onClose();
+  };
+
+  return (
+    <>
+      {/* Mobile backdrop */}
+      {isOpen && (
+        <div
+          id="sidebar-backdrop"
+          className="fixed inset-0 bg-slate-900/40 z-40 lg:hidden backdrop-blur-xs transition-opacity"
+          onClick={onClose}
+        />
+      )}
+
+      <aside
+        id="app-sidebar"
+        data-collapsed={collapsed || undefined}
+        className={`fixed top-0 bottom-0 right-0 z-40 w-64 bg-white border-l border-slate-200 flex flex-col transition-all duration-300 ease-in-out lg:translate-x-0 lg:static ${
+          collapsed ? 'lg:w-[4.5rem]' : 'lg:w-64'
+        } ${
+          isOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Workspace Brand Header */}
+        <div className={`h-16 border-b border-slate-100 flex items-center justify-between ${collapsed ? 'px-5 lg:justify-center lg:px-2' : 'px-5'}`}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 shrink-0 rounded-2xl bg-gradient-to-tr from-[#39677c] to-[#2b5266] flex items-center justify-center text-white shadow-md shadow-sm">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div className={`min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
+              <span className="block truncate text-base font-extrabold tracking-tight text-slate-900">سامانه تدبیر</span>
+              <span className="mt-0.5 block truncate text-[10px] font-medium text-slate-400">مدیریت یکپارچه کار و دانش سازمان</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? 'بازکردن نوار کناری' : 'جمع‌کردن نوار کناری'}
+            aria-expanded={!collapsed}
+            title={collapsed ? 'بازکردن نوار کناری' : 'جمع‌کردن نوار کناری'}
+            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 lg:flex"
+          >
+            {collapsed ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
+          </button>
+        </div>
+
+        {/* UX-02-1 current-environment chip: opens the full-page selector. */}
+        <div className={`border-b border-slate-100 px-3 py-2.5 ${collapsed ? 'lg:px-2' : ''}`}>
+          <button
+            type="button"
+            id="sidebar-environment-chip"
+            onClick={() => { navigate('/select-environment'); onClose(); }}
+            title={currentEnvironment ? `محیط فعلی: ${currentEnvironment.name} — تغییر محیط` : 'انتخاب محیط'}
+            aria-label={currentEnvironment ? `محیط فعلی: ${currentEnvironment.name}. تغییر محیط` : 'انتخاب محیط'}
+            className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-right transition-colors hover:bg-slate-50 ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ background: 'var(--color-surface-muted)', color: 'var(--color-primary)' }}>
+              {environmentKind === 'platform' ? <Globe className="h-4 w-4" /> : environmentKind === 'organization' ? <Building2 className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+            </span>
+            <span className={`min-w-0 flex-1 ${collapsed ? 'lg:hidden' : ''}`}>
+              <span className="block truncate text-[11px] font-extrabold text-slate-700">{currentEnvironment?.name ?? 'محیط کاری'}</span>
+              <span className="block truncate text-[9px] text-slate-400">{currentEnvironment?.standing ?? 'انتخاب محیط'}</span>
+            </span>
+            <ChevronLeft className={`h-3.5 w-3.5 shrink-0 text-slate-300 ${collapsed ? 'lg:hidden' : ''}`} aria-hidden />
+          </button>
+        </div>
+
+        {/* Quick Add Dropdown — workspace environment only (UX-02-1). */}
+        <div className={`px-4 py-3 space-y-2 ${environmentKind !== 'workspace' ? 'hidden' : ''} ${collapsed ? 'lg:hidden' : ''}`}>
+          <div className="relative" ref={quickAddRef}>
+            <button
+              id="sidebar-quick-add-btn"
+              onClick={() => setIsQuickAddOpen(value => !value)}
+              className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:bg-[var(--color-primary-hover)] text-white font-bold text-xs transition-all shadow-md shadow-sm cursor-pointer group"
+            >
+              <Plus className="w-4 h-4 transition-transform group-hover:rotate-90 duration-200" />
+              <span>ایجاد جدید</span>
+              <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+            </button>
+            {isQuickAddOpen && (
+              <div className="absolute top-full right-0 left-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 text-right">
+                <button
+                  onClick={() => { setIsCreateTaskOpen(true); setIsQuickAddOpen(false); }}
+                  className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-primary)] flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <CheckSquare classNameCheckSquare className="w-4 h-4 text-[var(--color-primary)]" />
+                  <span>تسک جدید</span>
+                </button>
+                {hasPermission('projects.create') && (
+                  <button
+                    onClick={() => { setIsTemplatesModalOpen(true); setIsQuickAddOpen(false); }}
+                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-primary)] flex items-center gap-2.5 transition-colors cursor-pointer"
+                  >
+                    <Layers className="w-4 h-4 text-[var(--color-primary)]" />
+                    <span>استفاده از الگوی پروژه</span>
+                  </button>
+                )}
+                {hasPermission('projects.create') && (
+                  <button
+                    onClick={() => { setIsCreateProjectOpen(true); setIsQuickAddOpen(false); }}
+                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-primary)] flex items-center gap-2.5 transition-colors cursor-pointer"
+                  >
+                    <FolderKanban className="w-4 h-4 text-[var(--color-primary)]" />
+                    <span>پروژه جدید</span>
+                  </button>
+                )}
+                {hasPermission('content.create') && (
+                  <button
+                    onClick={() => { setIsCreateContentOpen(true); setIsQuickAddOpen(false); }}
+                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                  >
+                    <PenTool className="w-4 h-4 text-rose-600" />
+                    <span>محتوای جدید</span>
+                  </button>
+                )}
+                {hasPermission('thinktank.create_idea') && (
+                  <button
+                    onClick={() => { handleNavClick('thought-room'); setIsQuickAddOpen(false); }}
+                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                  >
+                    <Lightbulb className="w-4 h-4 text-amber-500" />
+                    <span>ایده جدید</span>
+                  </button>
+                )}
+                {hasPermission('meetings.create') && (
+                  <button
+                    onClick={() => { handleNavClick('thought-room'); requestMeetingModal(); setIsQuickAddOpen(false); }}
+                    className="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                  >
+                    <CalendarPlus className="w-4 h-4 text-emerald-600" />
+                    <span>جلسه جدید</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Navigation Links */}
+        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-5">
+          {environmentKind === 'organization' ? (
+            <nav className="space-y-4" aria-label="منوی مدیریت سازمان">
+              <section aria-label="مدیریت سازمان">
+                <div className={`mb-1.5 px-3 ${collapsed ? 'lg:hidden' : ''}`}>
+                  <h2 className="text-[10px] font-black tracking-wide text-slate-500">مدیریت سازمان</h2>
+                  <p className="mt-0.5 truncate text-[9px] leading-4 text-slate-400">{currentEnvironment?.name}</p>
+                </div>
+                <div className="space-y-0.5">
+                  {ORGANIZATION_NAV.map(item => {
+                    const ItemIcon = item.icon;
+                    const active = isShellNavActive(item, activeView, location.pathname);
+                    return (
+                      <button key={item.key} type="button" id={item.id} title={item.title} aria-label={item.title} onClick={() => { if (item.kind === 'route' && item.path) { navigate(item.path); onClose(); } else if (item.view) handleNavClick(item.view); }} aria-current={active ? 'page' : undefined} className={envItemClassName(active)}>
+                        {envItemContent(<ItemIcon className="w-4 h-4" />, item.title, active)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className={`mt-3 px-3 text-[10px] leading-5 text-slate-400 ${collapsed ? 'lg:hidden' : ''}`}>
+                  تنظیمات سازمان فقط برای اعضایی نمایش داده می‌شود که مجوز مدیریت سازمان دارند؛ سرور هر درخواست را جداگانه بررسی می‌کند.
+                </p>
+              </section>
+            </nav>
+          ) : environmentKind === 'platform' ? (
+            <nav className="space-y-4" aria-label="منوی مدیریت پلتفرم">
+              <section aria-label="مدیریت پلتفرم">
+                <div className={`mb-1.5 px-3 ${collapsed ? 'lg:hidden' : ''}`}>
+                  <h2 className="text-[10px] font-black tracking-wide text-slate-500">مدیریت پلتفرم</h2>
+                  <p className="mt-0.5 truncate text-[9px] leading-4 text-slate-400">{currentEnvironment?.standing}</p>
+                </div>
+                <div className="space-y-0.5">
+                  {PLATFORM_NAV.map(item => {
+                    const ItemIcon = item.icon;
+                    const active = isShellNavActive(item, activeView, location.pathname);
+                    return (
+                      <button key={item.key} type="button" id={item.id} title={item.title} aria-label={item.title} onClick={() => { if (item.view) handleNavClick(item.view); }} aria-current={active ? 'page' : undefined} className={envItemClassName(active)}>
+                        {envItemContent(<ItemIcon className="w-4 h-4" />, item.title, active)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className={`mt-3 px-3 text-[10px] leading-5 text-slate-400 ${collapsed ? 'lg:hidden' : ''}`}>
+                  دسترسی پلتفرم جدا از عضویت سازمان و فضای کاری است و فقط از نقش پلتفرمی شما می‌آید.
+                </p>
+              </section>
+            </nav>
+          ) : (
+          <>
+          {/* Main workspaces grouped by intent, so long menus remain scannable. */}
+          <nav className="space-y-4" aria-label="منوی اصلی سامانه">
+            {navSections.map(section => (
+              <section key={section.title} aria-label={section.title}>
+                <div className={`mb-1.5 px-3 ${collapsed ? 'lg:hidden' : ''}`}>
+                  <h2 className="text-[10px] font-black tracking-wide text-slate-500">{section.title}</h2>
+                </div>
+                <div className="space-y-0.5">
+                  {section.items.map(item => {
+                    const isActive = activeView === item.id;
+                    const isContentParent = item.id === 'content' && contentSubmenuItems.length > 0;
+                    const buttonContent = <>
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-white text-[var(--color-primary)] shadow-2xs' : 'text-slate-400 group-hover:bg-white group-hover:text-slate-600'}`}>{item.icon}</span>
+                        <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{item.label}</span>
+                      </span>
+                      {item.badge !== null && item.badge !== undefined && <span className={`min-w-6 rounded-full px-1.5 py-0.5 text-[10px] font-black ${item.badgeColor} ${collapsed ? 'lg:hidden' : ''}`}>{item.badge}</span>}
+                    </>;
+                    const itemClassName = `group flex items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all ${isActive ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] shadow-2xs ring-1 ring-[var(--color-border)]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'} ${collapsed ? 'lg:justify-center' : ''}`;
+                    if (!isContentParent) {
+                      return <button key={item.id} id={`nav-item-${item.id}`} title={item.label} aria-label={item.label} onClick={() => handleNavClick(item.id)} aria-current={isActive ? 'page' : undefined} className={`w-full ${itemClassName}`}>{buttonContent}</button>;
+                    }
+                    return <div key={item.id}>
+                      <div className="flex items-center gap-1">
+                        <button id={`nav-item-${item.id}`} title={item.label} aria-label={item.label} onClick={() => { handleNavClick(item.id); setIsContentMenuOpen(true); }} aria-current={isActive ? 'page' : undefined} className={`min-w-0 flex-1 ${itemClassName}`}>{buttonContent}</button>
+                        <button type="button" aria-label="نمایش زیرمنوی محتوا" aria-expanded={isContentMenuOpen} onClick={() => setIsContentMenuOpen(value => !value)} className={`flex h-9 w-8 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 ${collapsed ? 'lg:hidden' : ''}`}><ChevronDown className={`h-3.5 w-3.5 transition-transform ${isContentMenuOpen ? 'rotate-180' : ''}`} /></button>
+                      </div>
+                      {isContentMenuOpen && <div className={`mr-6 mt-1 space-y-0.5 border-r border-slate-200 pr-2 ${collapsed ? 'lg:hidden' : ''}`}>
+                        {contentSubmenuItems.map(child => {
+                          const childActive = activeView === child.id;
+                          return <button key={child.id} id={`nav-item-${child.id}`} onClick={() => handleNavClick(child.id)} aria-current={childActive ? 'page' : undefined} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-colors ${childActive ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'} ${collapsed ? 'lg:justify-center' : ''}`}><span className={childActive ? 'text-[var(--color-primary)]' : 'text-slate-400'}>{child.icon}</span><span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{child.label}</span></button>;
+                        })}
+                      </div>}
+                    </div>;
+                  })}
+                </div>
+              </section>
+            ))}
+          </nav>
+
+          {/* Settings, moderation and access management */}
+          <div>
+            <div className={`mb-1.5 px-3 ${collapsed ? 'lg:hidden' : ''}`}>
+              <h2 className="text-[10px] font-black tracking-wide text-slate-500">مدیریت سامانه</h2>
+              <p className="mt-0.5 text-[9px] leading-4 text-slate-400">دیدگاه‌ها، کاربران، نقش‌ها و تنظیمات</p>
+            </div>
+            <div className="space-y-1">
+              <button
+                id="nav-item-comments" title="دیدگاه‌ها" aria-label="دیدگاه‌ها"
+                onClick={() => handleNavClick('comments')}
+                className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeView === 'comments'
+                    ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] font-extrabold shadow-2xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                } ${collapsed ? 'lg:justify-center' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  <MessageSquare className={`w-4 h-4 ${activeView === 'comments' ? 'text-[var(--color-primary)]' : 'text-slate-500'}`} />
+                  <span className={collapsed ? 'lg:hidden' : ''}>دیدگاه‌ها</span>
+                </div>
+              </button>
+
+              {canManageUsers && (
+                <button
+                  id="nav-item-user-management" title="مدیریت کاربران" aria-label="مدیریت کاربران"
+                  onClick={() => handleNavClick('user-management')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeView === 'user-management'
+                      ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] font-extrabold shadow-2xs'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  } ${collapsed ? 'lg:justify-center' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Users className={`w-4 h-4 ${activeView === 'user-management' ? 'text-[var(--color-primary)]' : 'text-slate-500'}`} />
+                    <span className={collapsed ? 'lg:hidden' : ''}>مدیریت کاربران</span>
+                  </div>
+                </button>
+              )}
+
+              {canManageRoles && (
+                <button
+                  id="nav-item-roles-management" title="نقش‌ها و دسترسی‌ها" aria-label="نقش‌ها و دسترسی‌ها"
+                  onClick={() => handleNavClick('roles-management')}
+                  className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeView === 'roles-management'
+                      ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] font-extrabold shadow-2xs'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  } ${collapsed ? 'lg:justify-center' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className={`w-4 h-4 ${activeView === 'roles-management' ? 'text-[var(--color-primary)]' : 'text-slate-500'}`} />
+                    <span className={collapsed ? 'lg:hidden' : ''}>نقش‌ها و دسترسی‌ها</span>
+                  </div>
+                </button>
+              )}
+
+              {canViewSettings && <button
+                id="nav-item-settings" title="تنظیمات سامانه" aria-label="تنظیمات سامانه"
+                onClick={() => handleNavClick('settings')}
+                className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeView === 'settings'
+                    ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] font-extrabold shadow-2xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                } ${collapsed ? 'lg:justify-center' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  <Settings className={`w-4 h-4 ${activeView === 'settings' ? 'text-[var(--color-primary)]' : 'text-slate-500'}`} />
+                  <span className={collapsed ? 'lg:hidden' : ''}>تنظیمات سامانه</span>
+                </div>
+              </button>}
+
+              <button
+                id="nav-item-scoped-settings" title="تنظیمات دامنه‌ای" aria-label="تنظیمات دامنه‌ای"
+                onClick={() => handleNavClick('scoped-settings')}
+                className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeView === 'scoped-settings'
+                    ? 'bg-[var(--color-surface-muted)] text-[var(--color-primary)] font-extrabold shadow-2xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                } ${collapsed ? 'lg:justify-center' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  <SlidersHorizontal className={`w-4 h-4 ${activeView === 'scoped-settings' ? 'text-[var(--color-primary)]' : 'text-slate-500'}`} />
+                  <span className={collapsed ? 'lg:hidden' : ''}>تنظیمات دامنه‌ای</span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Projects List removed from sidebar */}
+          {false && <div>
+            <div className="flex items-center justify-between px-3 mb-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                پروژه‌های فعال
+              </span>
+              <button
+                id="sidebar-quick-add-project"
+                onClick={() => setIsCreateProjectOpen(true)}
+                title="ایجاد پروژه"
+                className="p-1 text-slate-400 hover:text-[var(--color-primary)] rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="space-y-0.5">
+              {projects.slice(0, 5).map(proj => {
+                return (
+                  <button
+                    key={proj.id}
+                    id={`sidebar-project-${proj.id}`}
+                    onClick={() => handleProjectClick(proj.id)}
+                    className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors group cursor-pointer text-right"
+                  >
+                    <div className="flex items-center gap-2.5 truncate">
+                      <span
+                        className="w-2.5 h-2.5 rounded-xs shrink-0"
+                        style={{ backgroundColor: proj.color }}
+                      />
+                      <span className="truncate">{proj.name}</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {proj.progress}٪
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>}
+          </>
+          )}
+
+        </div>
+
+        {/* UX-02-1 fixed profile dock; its menu opens upward. */}
+        <ProfileDock collapsed={collapsed} onNavigate={onClose} />
+      </aside>
+    </>
+  );
+};

@@ -3,7 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\ContentSeriesRevision;
-use App\Services\SeriesAccess;
+use App\Modules\Contents\Services\SeriesAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 

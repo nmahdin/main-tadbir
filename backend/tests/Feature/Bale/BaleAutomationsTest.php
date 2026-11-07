@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Bale;
 
-use App\Bot\Bale\Automations;
-use App\Bot\Bale\Outbox;
-use App\Bot\Bale\Settings;
-use App\Bot\Bale\UpdateProcessor;
+use App\Modules\Messaging\Bot\Bale\Automations;
+use App\Modules\Messaging\Bot\Bale\Outbox;
+use App\Modules\Messaging\Bot\Bale\Settings;
+use App\Modules\Messaging\Bot\Bale\UpdateProcessor;
 use App\Models\BaleConversation;
 use App\Models\BaleOutbox;
 use App\Models\DamAsset;

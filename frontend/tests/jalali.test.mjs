@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { jalaliToGregorian, gregorianToJalali } from '../src/utils/jalali.ts';
+import { jalaliToGregorian, gregorianToJalali } from '../src/shared/lib/jalali.ts';
 test('Jalali leap-year and Gregorian rollover boundaries', () => {
   for (const [j, g] of [
     [[1403, 12, 30], [2025, 3, 20]], [[1404, 1, 1], [2025, 3, 21]],

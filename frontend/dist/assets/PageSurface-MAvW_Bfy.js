@@ -1,0 +1,1 @@
+import{j as e}from"./react-vendor-BgFWMffZ.js";function o({children:r,className:s="",containerClassName:a="max-w-[88rem]"}){return e.jsx("div",{className:`mx-auto w-full ${a} px-3 py-4 sm:px-5 sm:py-6`,children:e.jsx("div",{className:`rounded-[1.75rem] border border-slate-200/70 bg-white p-4 shadow-surface sm:p-6 ${s}`,children:r})})}export{o as P};

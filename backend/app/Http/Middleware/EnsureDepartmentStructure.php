@@ -3,7 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Department;
-use App\Services\Organization\DepartmentConsolidation;
+use App\Modules\Departments\Services\DepartmentConsolidation;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;

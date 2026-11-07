@@ -6,9 +6,9 @@ const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('project creation and editing share one stable modal with a fixed action footer', async () => {
   const [app, modal, primitives] = await Promise.all([
-    source('../src/App.tsx'),
-    source('../src/components/projects/CreateProjectModal.tsx'),
-    source('../src/components/common/Primitives.tsx'),
+    source('../src/app/App.tsx'),
+    source('../src/features/projects/CreateProjectModal.tsx'),
+    source('../src/shared/ui/Primitives.tsx'),
   ]);
 
   assert.match(app, /\(isCreateProjectOpen \|\| isEditProjectOpen\) && <CreateProjectModal \/>/);
@@ -23,13 +23,15 @@ test('project creation and editing share one stable modal with a fixed action fo
 
 test('project list hides advanced filters and no longer ships a preview action or modal', async () => {
   const [workspace, app] = await Promise.all([
-    source('../src/components/workspace/WorkspaceList.tsx'),
-    source('../src/App.tsx'),
+    source('../src/features/workspace/WorkspaceList.tsx'),
+    source('../src/app/App.tsx'),
   ]);
 
   assert.match(workspace, /aria-expanded=\{filtersOpen\}/);
   assert.match(workspace, /فیلترها/);
-  assert.match(workspace, /\{filtersOpen && <div/);
+  // UX-02-3: advanced filters live in the RTL drawer, not an inline panel.
+  assert.match(workspace, /\{filtersOpen && filterDraft && \(/);
+  assert.match(workspace, /role="dialog" aria-modal="true" aria-label="فیلترهای پیشرفته"/);
   assert.match(workspace, /module === 'projects' && <label/);
   assert.doesNotMatch(workspace, /next\.set\('preview'/);
   assert.doesNotMatch(app, /EntityPreview|DetailContext/);
@@ -37,8 +39,8 @@ test('project list hides advanced filters and no longer ships a preview action o
 
 test('project chat navigation is permission-aware and back controls remain icon-only by page titles', async () => {
   const [detail, series] = await Promise.all([
-    source('../src/components/projects/ProjectDetailView.tsx'),
-    source('../src/components/content/ContentSeriesView.tsx'),
+    source('../src/features/projects/ProjectDetailView.tsx'),
+    source('../src/features/contents/ContentSeriesView.tsx'),
   ]);
 
   assert.match(detail, /hasPermission\('messaging\.view'\)/);
@@ -51,10 +53,10 @@ test('project chat navigation is permission-aware and back controls remain icon-
 
 test('meeting invitees use an optional profile job title and attachments emit real idea and meeting relations', async () => {
   const [meeting, idea, composer, damApi] = await Promise.all([
-    source('../src/components/thought-room/CreateMeetingModal.tsx'),
-    source('../src/components/thought-room/CreateIdeaModal.tsx'),
-    source('../src/components/common/AttachmentComposer.tsx'),
-    source('../src/api/dam.ts'),
+    source('../src/features/thought-room/CreateMeetingModal.tsx'),
+    source('../src/features/thought-room/CreateIdeaModal.tsx'),
+    source('../src/shared/ui/AttachmentComposer.tsx'),
+    source('../src/shared/api/dam.ts'),
   ]);
 
   assert.match(meeting, /u\.title\?\.trim\(\)/);
@@ -71,9 +73,9 @@ test('meeting invitees use an optional profile job title and attachments emit re
 
 test('archive exposes permission-aware idea management and irreversible deletion endpoints', async () => {
   const [archive, context, projectsApi] = await Promise.all([
-    source('../src/components/archive/ArchiveView.tsx'),
-    source('../src/context/AppContext.tsx'),
-    source('../src/api/projects.ts'),
+    source('../src/features/archive/ArchiveView.tsx'),
+    source('../src/app/providers/AppContext.tsx'),
+    source('../src/shared/api/projects.ts'),
   ]);
 
   assert.match(archive, /id: 'ideas'.*permission: 'thinktank\.view'/);
@@ -88,7 +90,7 @@ test('archive exposes permission-aware idea management and irreversible deletion
 });
 
 test('sidebar keeps the requested RTL identity and grouped operational navigation', async () => {
-  const sidebar = await source('../src/components/layout/Sidebar.tsx');
+  const sidebar = await source('../src/app/shell/Sidebar.tsx');
   for (const title of ['کار روزانه', 'برنامه‌ریزی و اجرا', 'سازمان و پایش', 'مدیریت سامانه']) {
     assert.match(sidebar, new RegExp(title));
   }

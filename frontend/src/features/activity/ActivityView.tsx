@@ -1,0 +1,299 @@
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useApp } from '../../app/providers/AppContext';
+import { activityLogsApi } from '../../shared/api';
+import { runtime } from '../../shared/config/runtime';
+import { PersianDatePicker } from '../../shared/ui/PersianDatePicker';
+import { Avatar } from '../../shared/ui/Avatar';
+import { ActivityType } from '../../shared/types';
+import {
+  Activity,
+  CheckCircle2,
+  AlertTriangle,
+  FolderKanban,
+  MessageSquare,
+  Clock,
+  Paperclip,
+  PlusCircle,
+  Layers,
+  Users
+} from 'lucide-react';
+
+const DETAIL_FIELD_LABELS: Record<string, string> = {
+  name: 'نام', description: 'توضیحات', status: 'وضعیت', managerId: 'مدیر', parentId: 'ساختار والد', members: 'اعضا',
+  title: 'عنوان', deadline: 'سررسید', priority: 'اولویت', assigneeId: 'مسئول', permissions: 'مجوزها',
+};
+
+const readableDetails = (value?: string) => {
+  const text = value?.trim();
+  if (!text) return null;
+  const fields = text.match(/fields:([A-Za-z0-9_,.-]+)/)?.[1]?.split(',').map(field => DETAIL_FIELD_LABELS[field] || '').filter(Boolean);
+  if (fields?.length) return `موارد تغییرکرده: ${fields.join('، ')}`;
+  if (/^(?:department|role|task|project|content|user)_?id\s*[:=]\s*\d+/i.test(text) || /^[a-z0-9_.-]+:\d+(?:\s|$)/i.test(text)) {
+    return 'جزئیات فنی این رویداد در گزارش امن سامانه ثبت شده است.';
+  }
+  if (/^[a-z][a-z0-9_.-]+$/i.test(text)) return null;
+  return text;
+};
+
+export const ActivityView: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+  const { 
+    activities, 
+    users, 
+    projects, 
+    setSelectedTaskId, 
+    setSelectedProjectId, 
+    setActiveView
+  } = useApp();
+
+  const [filterType, setFilterType] = useState<string>('all');
+  const [filterUserId, setFilterUserId] = useState<string>('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [page, setPage] = useState(1);
+  const activityQuery = useQuery({
+    queryKey: ['activity-feed', page, filterType, filterUserId, fromDate, toDate],
+    queryFn: () => activityLogsApi.list({
+      page,
+      perPage: 20,
+      userId: filterUserId === 'all' ? undefined : filterUserId,
+      type: filterType === 'all' ? undefined : filterType,
+      from: fromDate || undefined,
+      to: toDate || undefined,
+    }),
+    enabled: !runtime.demoMode,
+  });
+  const sourceActivities = runtime.demoMode ? activities : (activityQuery.data?.data || []);
+  const filteredActivities = runtime.demoMode ? sourceActivities.filter(act => {
+    const date = act.timestamp.slice(0, 10);
+    return (filterType === 'all' || act.type === filterType)
+      && (filterUserId === 'all' || act.userId === filterUserId)
+      && (!fromDate || date >= fromDate)
+      && (!toDate || date <= toDate);
+  }) : sourceActivities;
+  const lastPage = activityQuery.data?.meta?.last_page || 1;
+  const total = activityQuery.data?.meta?.total ?? filteredActivities.length;
+
+  const getActionBadge = (type?: ActivityType) => {
+    switch (type) {
+      case 'status_change':
+        return {
+          icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />,
+          label: 'تغییر وضعیت',
+          bg: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        };
+      case 'comment':
+        return {
+          icon: <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />,
+          label: 'دیدگاه',
+          bg: 'bg-indigo-50 text-indigo-700 border-indigo-200'
+        };
+      case 'blocker':
+        return {
+          icon: <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />,
+          label: 'مانع / بلاکر',
+          bg: 'bg-rose-50 text-rose-700 border-rose-200'
+        };
+      case 'attachment':
+        return {
+          icon: <Paperclip className="w-3.5 h-3.5 text-sky-600" />,
+          label: 'فایل پیوست',
+          bg: 'bg-sky-50 text-sky-700 border-sky-200'
+        };
+      case 'task_created':
+        return {
+          icon: <PlusCircle className="w-3.5 h-3.5 text-blue-600" />,
+          label: 'ایجاد تسک',
+          bg: 'bg-blue-50 text-blue-700 border-blue-200'
+        };
+      case 'template_created':
+      case 'template_applied':
+        return {
+          icon: <Layers className="w-3.5 h-3.5 text-purple-600" />,
+          label: 'الگوی پروژه',
+          bg: 'bg-purple-50 text-purple-700 border-purple-200'
+        };
+      case 'team_update':
+      case 'member_assigned':
+        return {
+          icon: <Users className="w-3.5 h-3.5 text-amber-600" />,
+          label: 'دپارتمان و اعضا',
+          bg: 'bg-amber-50 text-amber-700 border-amber-200'
+        };
+      default:
+        return {
+          icon: <Activity className="w-3.5 h-3.5 text-slate-600" />,
+          label: 'رویداد سیستم',
+          bg: 'bg-slate-50 text-slate-700 border-slate-200'
+        };
+    }
+  };
+
+  const formatPersianTime = (isoString: string) => {
+    try {
+      const date = new Date(isoString);
+      const diffMinutes = Math.floor((Date.now() - date.getTime()) / 60000);
+      if (diffMinutes < 1) return 'هم‌اکنون';
+      if (diffMinutes < 60) return `${diffMinutes} دقیقه پیش`;
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours < 24) return `${diffHours} ساعت پیش`;
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return 'دیروز';
+      if (diffDays < 7) return `${diffDays} روز پیش`;
+      return date.toLocaleDateString('fa-IR');
+    } catch {
+      return 'اخیراً';
+    }
+  };
+
+  return (
+    <div className={`${embedded ? 'p-4 sm:p-5 space-y-4 max-w-none' : 'p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6'} text-right`}>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+              <Activity className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className={`${embedded ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl'} font-extrabold text-slate-900 tracking-tight`}>
+                فید زنده فعالیت‌ها و رویدادهای سازمان
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
+                گزارش بلادرنگ اقدامات اعضای تیم، تغییر وضعیت وظایف، ثبت دیدگاه‌ها و نشانه‌های پیشرفت پروژه‌ها
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Filter Bar */}
+      <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <select
+            value={filterType}
+            onChange={(e) => { setFilterType(e.target.value); setPage(1); }}
+            className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
+          >
+            <option value="all">همه انواع رویدادها</option>
+            <option value="status_change">تغییر وضعیت تسک</option>
+            <option value="comment">دیدگاه‌ها</option>
+            <option value="blocker">موانع و بلاکرها</option>
+            <option value="attachment">فایل‌های پیوست</option>
+            <option value="task_created">ایجاد تسک</option>
+            <option value="template_applied">الگوهای پروژه</option>
+            <option value="team_update">سوابق قدیمی ساختار سازمانی</option>
+          </select>
+
+          <select
+            value={filterUserId}
+            onChange={(e) => { setFilterUserId(e.target.value); setPage(1); }}
+            className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
+          >
+            <option value="all">همه کاربران</option>
+            {users.map(u => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+          <div className="min-w-40"><PersianDatePicker value={fromDate} onChange={value => { setFromDate(value); if (toDate && value > toDate) setToDate(value); setPage(1); }} placeholder="از تاریخ" /></div>
+          <div className="min-w-40"><PersianDatePicker value={toDate} onChange={value => { setToDate(value); setPage(1); }} placeholder="تا تاریخ" minDate={fromDate || undefined} /></div>
+          {(fromDate || toDate) && <button type="button" onClick={() => { setFromDate(''); setToDate(''); setPage(1); }} className="ui-button ui-button-ghost text-xs">پاک‌کردن بازه</button>}
+          <span className="mr-auto text-[10px] font-bold text-slate-500">{total.toLocaleString('fa-IR')} رویداد</span>
+        </div>
+      </div>
+
+      {/* Activity Timeline Feed */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs p-6 sm:p-8">
+        {!runtime.demoMode && activityQuery.isPending ? (
+          <div className="py-16 text-center text-xs text-slate-500">در حال دریافت رویدادها…</div>
+        ) : !runtime.demoMode && activityQuery.isError ? (
+          <div className="py-16 text-center"><p className="text-xs font-bold text-rose-600">دریافت فید فعالیت‌ها ناموفق بود.</p><button type="button" onClick={() => void activityQuery.refetch()} className="ui-button ui-button-secondary mt-3 text-xs">تلاش دوباره</button></div>
+        ) : filteredActivities.length === 0 ? (
+          <div className="text-center py-16">
+            <Activity className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+            <p className="text-sm font-bold text-slate-700">هیچ رویدادی مطابق با فیلترها یافت نشد</p>
+            <p className="text-xs text-slate-600 mt-1">فعالیت‌های ثبت‌شده سامانه در این بخش نمایش داده می‌شوند.</p>
+          </div>
+        ) : (
+          <div className="relative border-r-2 border-indigo-100 mr-4 pr-6 space-y-6">
+            {filteredActivities.map((act) => {
+              const user = users.find(u => u.id === act.userId);
+              const project = act.projectId ? projects.find(p => p.id === act.projectId) : null;
+              const badge = getActionBadge(act.type);
+              const details = readableDetails(act.details);
+              const action = /^[a-z][a-z0-9_.-]+$/i.test(act.action || '') ? badge.label : act.action;
+
+              return (
+                <div key={act.id} className="relative group">
+                  {/* Timeline Marker Dot */}
+                  <div className="absolute -right-[33px] top-1.5 w-4 h-4 rounded-full bg-white border-2 border-indigo-600 flex items-center justify-center shadow-xs group-hover:scale-125 transition-transform">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                  </div>
+
+                  <div className="bg-slate-50/70 group-hover:bg-indigo-50/20 border border-slate-200/70 group-hover:border-indigo-200 rounded-2xl p-4 sm:p-5 transition-all space-y-2.5">
+                    {/* Top Row: User, Action, Type Badge, Time */}
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar user={user} size="sm" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900">{user?.name || 'کاربر سیستم'}</span>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${badge.bg}`}>
+                              {badge.icon}
+                              <span>{badge.label}</span>
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-700 font-medium mt-0.5">{action}</p>
+                        </div>
+                      </div>
+
+                      <span className="text-[11px] text-slate-600 font-medium flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200/80 shadow-2xs">
+                        <Clock className="w-3 h-3 text-slate-600" />
+                        {formatPersianTime(act.timestamp)}
+                      </span>
+                    </div>
+
+                    {/* Details Box */}
+                    {details && (
+                      <div className="sm:mr-10 text-xs text-slate-700 bg-white/80 p-3 rounded-xl border border-slate-100 leading-6 font-normal break-words">
+                        {details}
+                      </div>
+                    )}
+
+                    {/* Context Links: Project, Task */}
+                    <div className="flex items-center gap-2 pr-10 pt-1 flex-wrap">
+                      {project && (
+                        <button
+                          onClick={() => {
+                            setSelectedProjectId(project.id);
+                            setActiveView('project-detail');
+                          }}
+                          className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white hover:opacity-90 transition-opacity cursor-pointer shadow-2xs"
+                          style={{ backgroundColor: project.color }}
+                        >
+                          <FolderKanban className="w-3 h-3" />
+                          <span>{project.name}</span>
+                        </button>
+                      )}
+
+                      {act.taskId && (
+                        <button
+                          onClick={() => setSelectedTaskId(act.taskId!)}
+                          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                        >
+                          مشاهده تسک ({act.taskTitle || act.taskId})
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {!runtime.demoMode && lastPage > 1 && <div className="mt-6 flex items-center justify-center gap-3 border-t border-slate-100 pt-4"><button type="button" disabled={page <= 1 || activityQuery.isFetching} onClick={() => setPage(current => current - 1)} className="ui-button ui-button-secondary disabled:opacity-50">صفحه قبل</button><span className="text-xs font-bold text-slate-600">صفحه {page.toLocaleString('fa-IR')} از {lastPage.toLocaleString('fa-IR')}</span><button type="button" disabled={page >= lastPage || activityQuery.isFetching} onClick={() => setPage(current => current + 1)} className="ui-button ui-button-secondary disabled:opacity-50">صفحه بعد</button></div>}
+      </div>
+    </div>
+  );
+};

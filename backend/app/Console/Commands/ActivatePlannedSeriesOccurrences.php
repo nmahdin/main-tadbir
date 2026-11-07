@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\PlannedOccurrenceActivator;
+use App\Modules\Contents\Services\PlannedOccurrenceActivator;
 use Illuminate\Console\Command;
 
 class ActivatePlannedSeriesOccurrences extends Command

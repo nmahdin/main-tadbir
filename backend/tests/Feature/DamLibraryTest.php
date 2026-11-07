@@ -193,9 +193,9 @@ class DamLibraryTest extends TestCase
         $this->assertStringContainsString('dam/ایدهها/'.$idea->id.'/فایل/', \App\Models\DamAsset::findOrFail($ideaAsset)->latestFile->storage_path);
 
         $project->update(['name' => 'پروژه تغییرنام‌یافته']);
-        app(\App\Services\DamService::class)->syncProjectFolderName($project->fresh());
+        app(\App\Modules\Dam\Services\DamService::class)->syncProjectFolderName($project->fresh());
         $meeting->update(['title' => 'جلسه تغییرنام‌یافته']);
-        app(\App\Services\DamService::class)->syncWorkspaceFolderName($meeting->fresh());
+        app(\App\Modules\Dam\Services\DamService::class)->syncWorkspaceFolderName($meeting->fresh());
         $this->assertDatabaseHas('dam_folders', ['system_key' => 'project:'.$project->id, 'name' => 'پروژه تغییرنام‌یافته']);
         $this->assertDatabaseHas('dam_folders', ['system_key' => 'meeting:'.$meeting->id, 'name' => 'جلسه تغییرنام‌یافته']);
     }

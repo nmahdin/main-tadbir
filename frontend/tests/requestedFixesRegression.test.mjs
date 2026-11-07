@@ -6,8 +6,8 @@ const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('chat send keeps a render-safe optimistic message when the API response is partial', async () => {
   const [context, input] = await Promise.all([
-    source('../src/context/AppContext.tsx'),
-    source('../src/components/chat/MessageInput.tsx'),
+    source('../src/app/providers/AppContext.tsx'),
+    source('../src/features/messaging/chat/MessageInput.tsx'),
   ]);
   assert.match(context, /const normalized = normalizeChatMessage\(persisted, newMsg\)/);
   assert.match(context, /reactions: Array\.isArray\(value\?\.reactions\)/);
@@ -17,7 +17,7 @@ test('chat send keeps a render-safe optimistic message when the API response is 
 });
 
 test('department dashboard is scoped to one department with list return, edit and member badges', async () => {
-  const dashboard = await source('../src/components/departments/DepartmentDashboardView.tsx');
+  const dashboard = await source('../src/features/departments/DepartmentDashboardView.tsx');
   assert.match(dashboard, /داشبورد دپارتمان \{data\?\.department\.name/);
   assert.match(dashboard, /بازگشت به فهرست دپارتمان‌ها/);
   assert.match(dashboard, /ویرایش دپارتمان/);
@@ -27,11 +27,11 @@ test('department dashboard is scoped to one department with list return, edit an
 
 test('review-free stages cannot select review states and complete directly', async () => {
   const [workflow, detail, create, reviewService, sync] = await Promise.all([
-    source('../src/components/content/EditWorkflowModal.tsx'),
-    source('../src/components/content/ContentDetailView.tsx'),
-    source('../src/components/content/CreateContentModal.tsx'),
-    source('../../backend/app/Services/ContentReview.php'),
-    source('../../backend/app/Services/ContentStageTaskSync.php'),
+    source('../src/features/contents/EditWorkflowModal.tsx'),
+    source('../src/features/contents/ContentDetailView.tsx'),
+    source('../src/features/contents/CreateContentModal.tsx'),
+    source('../../backend/app/Modules/Contents/Services/ContentReview.php'),
+    source('../../backend/app/Modules/Contents/Services/ContentStageTaskSync.php'),
   ]);
   assert.match(workflow, /disabled=\{!stage\.reviewRequired && reviewOnlyStatuses\.includes\(status\.id\)\}/);
   assert.match(workflow, /statusWithoutReview/);
@@ -44,9 +44,9 @@ test('review-free stages cannot select review states and complete directly', asy
 
 test('approval center previews outputs and content stages expose direct decisions', async () => {
   const [center, detail, controller] = await Promise.all([
-    source('../src/components/workspace/ApprovalCenter.tsx'),
-    source('../src/components/content/ContentDetailView.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/ApprovalController.php'),
+    source('../src/features/workspace/ApprovalCenter.tsx'),
+    source('../src/features/contents/ContentDetailView.tsx'),
+    source('../../backend/app/Modules/Administration/Http/Controllers/ApprovalController.php'),
   ]);
   assert.match(center, /نمایش خروجی/);
   assert.match(center, /outputRow\.outputs\.map/);
@@ -57,12 +57,15 @@ test('approval center previews outputs and content stages expose direct decision
 
 test('sorting uses a criterion dropdown and one icon direction button', async () => {
   const [workspace, projectList, tables] = await Promise.all([
-    source('../src/components/workspace/WorkspaceList.tsx'),
-    source('../src/components/projects/ProjectListView.tsx'),
-    source('../src/components/dam/DamDataTables.tsx'),
+    source('../src/features/workspace/WorkspaceList.tsx'),
+    source('../src/features/projects/ProjectListView.tsx'),
+    source('../src/features/dam/DamDataTables.tsx'),
   ]);
-  assert.match(workspace, /aria-label="مرتب‌سازی"/);
-  assert.match(workspace, /مرتب‌سازی صعودی؛ تغییر به نزولی/);
+  // UX-02-3: single-criterion dropdown superseded by the multi-sort editor
+  // (allowlisted fields, explicit precedence, asc/desc cycling).
+  assert.match(workspace, /مرتب‌سازی چندستونه/);
+  assert.match(workspace, /cycleDraftSort/);
+  assert.match(workspace, /مرتب‌سازی بر اساس/);
   assert.doesNotMatch(workspace, /<Select aria-label="ترتیب"/);
   assert.match(projectList, /<select value=\{sortField\}/);
   assert.match(projectList, /setSortAsc\(value => !value\)/);
@@ -71,7 +74,7 @@ test('sorting uses a criterion dropdown and one icon direction button', async ()
 });
 
 test('attachment composer supports creating a data table or appending a row', async () => {
-  const composer = await source('../src/components/common/AttachmentComposer.tsx');
+  const composer = await source('../src/shared/ui/AttachmentComposer.tsx');
   assert.match(composer, /type Mode = 'file' \| 'text' \| 'library' \| 'table'/);
   assert.match(composer, /label: 'جدول اطلاعات'/);
   assert.match(composer, /request<ApiResponse<DataTableResponse>>\('\/dam\/data-tables'/);
@@ -82,13 +85,13 @@ test('attachment composer supports creating a data table or appending a row', as
 
 test('idea attachments keep empty poll defaults, managed folders, multi-row tables and rich notes', async () => {
   const [idea, composer, richText, dam, taskAssets, controller, service] = await Promise.all([
-    source('../src/components/thought-room/CreateIdeaModal.tsx'),
-    source('../src/components/common/AttachmentComposer.tsx'),
-    source('../src/components/common/RichTextEditor.tsx'),
-    source('../src/components/dam/DamLibrary.tsx'),
-    source('../src/components/tasks/TaskAssetsSection.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/DamAssetController.php'),
-    source('../../backend/app/Services/DamService.php'),
+    source('../src/features/thought-room/CreateIdeaModal.tsx'),
+    source('../src/shared/ui/AttachmentComposer.tsx'),
+    source('../src/shared/ui/RichTextEditor.tsx'),
+    source('../src/features/dam/DamLibrary.tsx'),
+    source('../src/features/tasks/TaskAssetsSection.tsx'),
+    source('../../backend/app/Modules/Dam/Http/Controllers/DamAssetController.php'),
+    source('../../backend/app/Modules/Dam/Services/DamService.php'),
   ]);
   assert.match(idea, /useState<string\[\]>\(\['', ''\]\)/);
   assert.match(idea, /ideaKey: createRequestId\.current/);
@@ -112,14 +115,14 @@ test('idea attachments keep empty poll defaults, managed folders, multi-row tabl
 
 test('requested workflow, DAM, notification and comment refinements stay connected end to end', async () => {
   const [detail, composer, operations, dam, notifications, comments, taskDetail, icons] = await Promise.all([
-    source('../src/components/content/ContentDetailView.tsx'),
-    source('../src/components/common/AttachmentComposer.tsx'),
-    source('../../backend/app/Services/TaskOperations.php'),
-    source('../src/components/dam/DamLibrary.tsx'),
-    source('../src/components/workspace/NotificationInbox.tsx'),
-    source('../src/components/comments/CommentsView.tsx'),
-    source('../src/components/tasks/TaskDetailDrawer.tsx'),
-    source('../src/utils/platformIcons.ts'),
+    source('../src/features/contents/ContentDetailView.tsx'),
+    source('../src/shared/ui/AttachmentComposer.tsx'),
+    source('../../backend/app/Modules/Tasks/Services/TaskOperations.php'),
+    source('../src/features/dam/DamLibrary.tsx'),
+    source('../src/features/workspace/NotificationInbox.tsx'),
+    source('../src/features/comments/CommentsView.tsx'),
+    source('../src/features/tasks/TaskDetailDrawer.tsx'),
+    source('../src/shared/lib/platformIcons.ts'),
   ]);
   assert.match(detail, /defaultFolderLabel=\{`پیش‌فرض خودکار:/);
   assert.match(detail, /stageActionKey === `approve:/);
@@ -138,10 +141,10 @@ test('requested workflow, DAM, notification and comment refinements stay connect
 
 test('content creation and detail UI keep department members, rich outputs, task list and icon return connected', async () => {
   const [create, detail, related, app] = await Promise.all([
-    source('../src/components/content/CreateContentModal.tsx'),
-    source('../src/components/content/ContentDetailView.tsx'),
-    source('../src/components/workspace/RelatedRecords.tsx'),
-    source('../src/App.tsx'),
+    source('../src/features/contents/CreateContentModal.tsx'),
+    source('../src/features/contents/ContentDetailView.tsx'),
+    source('../src/features/workspace/RelatedRecords.tsx'),
+    source('../src/app/App.tsx'),
   ]);
   assert.match(create, /department\?\.members \|\| \[\]/);
   assert.match(create, /department\?\.managerId/);
@@ -163,10 +166,10 @@ test('content creation and detail UI keep department members, rich outputs, task
 
 test('settings expose operational Google Meet controls and sanitize retired content statuses', async () => {
   const [settings, context, service, meeting] = await Promise.all([
-    source('../src/components/settings/SettingsView.tsx'),
-    source('../src/context/AppContext.tsx'),
-    source('../../backend/app/Services/GoogleMeetService.php'),
-    source('../src/components/thought-room/CreateMeetingModal.tsx'),
+    source('../src/features/settings/legacy/SettingsView.tsx'),
+    source('../src/app/providers/AppContext.tsx'),
+    source('../../backend/app/Modules/Integrations/Services/GoogleMeetService.php'),
+    source('../src/features/thought-room/CreateMeetingModal.tsx'),
   ]);
   assert.match(settings, /اتصال یکپارچه Google Workspace/);
   assert.match(settings, /googleMeetSettings\.calendarId/);
@@ -182,10 +185,10 @@ test('settings expose operational Google Meet controls and sanitize retired cont
 
 test('content editing saves publisher only through publication settings and retires legacy content statuses', async () => {
   const [edit, types, badges, workspace, resource] = await Promise.all([
-    source('../src/components/content/EditContentModal.tsx'),
-    source('../src/types.ts'),
-    source('../src/utils/statusBadges.tsx'),
-    source('../src/components/workspace/WorkspaceList.tsx'),
+    source('../src/features/contents/EditContentModal.tsx'),
+    source('../src/shared/types.ts'),
+    source('../src/shared/lib/statusBadges.tsx'),
+    source('../src/features/workspace/WorkspaceList.tsx'),
     source('../../backend/app/Http/Resources/ContentResource.php'),
   ]);
   assert.match(edit, /publicationSettingsChanged/);
@@ -203,10 +206,10 @@ test('content editing saves publisher only through publication settings and reti
 
 test('Google Meet exposes safe server readiness and explains unavailable creation', async () => {
   const [settings, meeting, service, controller] = await Promise.all([
-    source('../src/components/settings/SettingsView.tsx'),
-    source('../src/components/thought-room/CreateMeetingModal.tsx'),
-    source('../../backend/app/Services/GoogleMeetService.php'),
-    source('../../backend/app/Http/Controllers/Api/V1/SystemSettingController.php'),
+    source('../src/features/settings/legacy/SettingsView.tsx'),
+    source('../src/features/thought-room/CreateMeetingModal.tsx'),
+    source('../../backend/app/Modules/Integrations/Services/GoogleMeetService.php'),
+    source('../../backend/app/Modules/Administration/Http/Controllers/SystemSettingController.php'),
   ]);
   assert.match(service, /public function connectionStatus\(\): array/);
   assert.match(service, /serverConfigured/);
@@ -219,7 +222,7 @@ test('Google Meet exposes safe server readiness and explains unavailable creatio
 });
 
 test('user profile keeps responsive canonical labels, honest metadata and permission-aware controls', async () => {
-  const profile = await source('../src/components/users/UserProfileView.tsx');
+  const profile = await source('../src/features/identity/UserProfileView.tsx');
   assert.match(profile, /const roleLabel = userRole\?\.name \|\| 'نقش سازمانی'/);
   assert.match(profile, /const departmentLabel = userDepartment\?\.name/);
   assert.match(profile, /const canEditUser = isSelf \|\| hasPermission\('users\.edit'\)/);
@@ -232,11 +235,11 @@ test('user profile keeps responsive canonical labels, honest metadata and permis
 
 test('new settings autosave, idea categories and task status retirement stay enforced', async () => {
   const [context, idea, organization, types, taskOps, migration] = await Promise.all([
-    source('../src/context/AppContext.tsx'),
-    source('../src/components/thought-room/CreateIdeaModal.tsx'),
-    source('../../backend/app/Services/Organization/OrganizationSettings.php'),
-    source('../src/types.ts'),
-    source('../../backend/app/Services/TaskOperations.php'),
+    source('../src/app/providers/AppContext.tsx'),
+    source('../src/features/thought-room/CreateIdeaModal.tsx'),
+    source('../../backend/app/Modules/Administration/Services/OrganizationSettings.php'),
+    source('../src/shared/types.ts'),
+    source('../../backend/app/Modules/Tasks/Services/TaskOperations.php'),
     source('../../backend/database/migrations/2026_10_01_000007_retire_todo_task_status.php'),
   ]);
   assert.match(context, /window\.setTimeout\(\(\) => void saveSettingsNow\(\), 300\)/);
@@ -253,12 +256,12 @@ test('new settings autosave, idea categories and task status retirement stay enf
 
 test('DAM drafts categories locally, supports configurable statuses and paginates dated activity', async () => {
   const [settings, history, feed, damController, organization, activityController] = await Promise.all([
-    source('../src/components/settings/SettingsView.tsx'),
-    source('../src/components/dam/DamActivityHistory.tsx'),
-    source('../src/components/activity/ActivityView.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/DamAssetController.php'),
-    source('../../backend/app/Services/Organization/OrganizationSettings.php'),
-    source('../../backend/app/Http/Controllers/Api/V1/ActivityLogController.php'),
+    source('../src/features/settings/legacy/SettingsView.tsx'),
+    source('../src/features/dam/DamActivityHistory.tsx'),
+    source('../src/features/activity/ActivityView.tsx'),
+    source('../../backend/app/Modules/Dam/Http/Controllers/DamAssetController.php'),
+    source('../../backend/app/Modules/Administration/Services/OrganizationSettings.php'),
+    source('../../backend/app/Modules/Administration/Http/Controllers/ActivityLogController.php'),
   ]);
   assert.match(settings, /id: -Date\.now\(\)/);
   assert.match(settings, /persistPendingDamCategories/);
@@ -279,11 +282,11 @@ test('DAM drafts categories locally, supports configurable statuses and paginate
 
 test('password messages, optional phone and sticky role actions remain user-safe', async () => {
   const [userModal, context, userRequest, registerRequest, roleModal] = await Promise.all([
-    source('../src/components/users/UserModal.tsx'),
-    source('../src/context/AppContext.tsx'),
+    source('../src/features/identity/UserModal.tsx'),
+    source('../src/app/providers/AppContext.tsx'),
     source('../../backend/app/Http/Requests/UserRequest.php'),
     source('../../backend/app/Http/Requests/Auth/RegisterRequest.php'),
-    source('../src/components/roles/RoleModal.tsx'),
+    source('../src/features/identity/RoleModal.tsx'),
   ]);
   assert.doesNotMatch(userModal, /۰۹۱۲۰۰۰۰۰۰۰/);
   assert.doesNotMatch(context, /۰۹۱۲۰۰۰۰۰۰۰/);
@@ -295,11 +298,11 @@ test('password messages, optional phone and sticky role actions remain user-safe
 
 test('department managers retain a dedicated dashboard without department-list permission', async () => {
   const [sidebar, dashboard, departmentsApi, departmentController, dashboardController, userResource, routes] = await Promise.all([
-    source('../src/components/layout/Sidebar.tsx'),
-    source('../src/components/departments/DepartmentDashboardView.tsx'),
-    source('../src/api/departments.ts'),
-    source('../../backend/app/Http/Controllers/Api/V1/DepartmentController.php'),
-    source('../../backend/app/Http/Controllers/Api/V1/DepartmentDashboardController.php'),
+    source('../src/app/shell/Sidebar.tsx'),
+    source('../src/features/departments/DepartmentDashboardView.tsx'),
+    source('../src/shared/api/departments.ts'),
+    source('../../backend/app/Modules/Departments/Http/Controllers/DepartmentController.php'),
+    source('../../backend/app/Modules/Departments/Http/Controllers/DepartmentDashboardController.php'),
     source('../../backend/app/Http/Resources/UserResource.php'),
     source('../../backend/routes/api.php'),
   ]);
@@ -315,13 +318,13 @@ test('department managers retain a dedicated dashboard without department-list p
 
 test('delivered content outputs can be forwarded to the next stage only by the effective reviewer or assignee fallback', async () => {
   const [detail, context, api, review, controller, routes, types] = await Promise.all([
-    source('../src/components/content/ContentDetailView.tsx'),
-    source('../src/context/AppContext.tsx'),
-    source('../src/api/contents.ts'),
-    source('../../backend/app/Services/ContentReview.php'),
-    source('../../backend/app/Http/Controllers/Api/V1/ApprovalController.php'),
+    source('../src/features/contents/ContentDetailView.tsx'),
+    source('../src/app/providers/AppContext.tsx'),
+    source('../src/shared/api/contents.ts'),
+    source('../../backend/app/Modules/Contents/Services/ContentReview.php'),
+    source('../../backend/app/Modules/Administration/Http/Controllers/ApprovalController.php'),
     source('../../backend/routes/api.php'),
-    source('../src/types.ts'),
+    source('../src/shared/types.ts'),
   ]);
   assert.match(detail, /forwardStageOutput\(content\.id, stage\.id, output\.id\)/);
   assert.match(detail, /effectiveReviewerId/);
@@ -339,7 +342,7 @@ test('delivered content outputs can be forwarded to the next stage only by the e
 });
 
 test('route-scoped workspace loads never overwrite previously loaded collections with empty fallback data', async () => {
-  const context = await source('../src/context/AppContext.tsx');
+  const context = await source('../src/app/providers/AppContext.tsx');
   assert.match(context, /const ideasData = data\(ideaResponse, 'ideas'\); if \(ideasData !== null\) setIdeas\(ideasData\)/);
   assert.match(context, /if \(departmentData !== null\) setDepartments\(departmentData\)/);
   assert.doesNotMatch(context, /setDepartments\(departmentData \?\? \[\]\)/);
@@ -348,9 +351,9 @@ test('route-scoped workspace loads never overwrite previously loaded collections
 
 test('idea creation is retry-safe, starts with empty estimates and persists attachments in the create command', async () => {
   const [modal, context, controller, request, migration] = await Promise.all([
-    source('../src/components/thought-room/CreateIdeaModal.tsx'),
-    source('../src/context/AppContext.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/WorkspaceRecordController.php'),
+    source('../src/features/thought-room/CreateIdeaModal.tsx'),
+    source('../src/app/providers/AppContext.tsx'),
+    source('../../backend/app/Modules/Secretariat/Http/Controllers/WorkspaceRecordController.php'),
     source('../../backend/app/Http/Requests/WorkspaceRecordRequest.php'),
     source('../../backend/database/migrations/2026_10_01_000008_add_workspace_record_request_keys.php'),
   ]);
@@ -370,8 +373,8 @@ test('idea creation is retry-safe, starts with empty estimates and persists atta
 
 test('idea cards expose attachments and a permission-aware status badge menu with smart server transitions', async () => {
   const [card, controller] = await Promise.all([
-    source('../src/components/thought-room/IdeaCard.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/WorkspaceRecordController.php'),
+    source('../src/features/thought-room/IdeaCard.tsx'),
+    source('../../backend/app/Modules/Secretariat/Http/Controllers/WorkspaceRecordController.php'),
   ]);
   assert.match(card, /attachmentCount > 0/);
   assert.match(card, /ضمیمه/);
@@ -385,10 +388,10 @@ test('idea cards expose attachments and a permission-aware status badge menu wit
 
 test('meetings archive out of the live list and appear in the shared archive with restore', async () => {
   const [meetings, archive, context, types] = await Promise.all([
-    source('../src/components/thought-room/ThinkTankMeetingsTab.tsx'),
-    source('../src/components/archive/ArchiveView.tsx'),
-    source('../src/context/AppContext.tsx'),
-    source('../src/types.ts'),
+    source('../src/features/thought-room/ThinkTankMeetingsTab.tsx'),
+    source('../src/features/archive/ArchiveView.tsx'),
+    source('../src/app/providers/AppContext.tsx'),
+    source('../src/shared/types.ts'),
   ]);
   assert.match(meetings, /meeting\.status === 'archived'\) return false/);
   assert.match(meetings, /status: 'archived', archivedFromStatus: meeting\.status/);
@@ -403,9 +406,9 @@ test('meetings archive out of the live list and appear in the shared archive wit
 
 test('login and sidebar never leak the real admin username or bypass explicit menu permissions', async () => {
   const [auth, sidebar, settings] = await Promise.all([
-    source('../src/components/auth/AuthModal.tsx'),
-    source('../src/components/layout/Sidebar.tsx'),
-    source('../src/components/settings/SettingsView.tsx'),
+    source('../src/features/identity/AuthModal.tsx'),
+    source('../src/app/shell/Sidebar.tsx'),
+    source('../src/features/settings/legacy/SettingsView.tsx'),
   ]);
   assert.match(auth, /placeholder="نام کاربری"/);
   assert.doesNotMatch(auth, /mahdi\.nabavi/);

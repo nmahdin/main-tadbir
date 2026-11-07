@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Bot\Bale\Automations;
+use App\Modules\Messaging\Bot\Bale\Automations;
 use App\Models\BaleConversation;
 use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
@@ -15,8 +15,8 @@ use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
-use App\Services\DamTableAccess;
-use App\Services\Organization\DepartmentConsolidation;
+use App\Modules\Dam\Services\DamTableAccess;
+use App\Modules\Departments\Services\DepartmentConsolidation;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
@@ -343,7 +343,7 @@ class DepartmentConsolidationTest extends TestCase
         config(['auth.registration.auto_login' => false]);
         Department::create(['name' => 'واحد خصوصی']);
         $this->postJson('/api/v1/auth/register', ['name' => 'متقاضی', 'username' => 'applicant',
-            'password' => 'Example1234', 'password_confirmation' => 'Example1234', 'department' => 'واحد خصوصی'])->assertCreated();
+            'password' => 'Example1234', 'password_confirmation' => 'Example1234', 'department' => 'واحد خصوصی', 'terms_accepted' => true, 'terms_version' => (string) config('auth.terms.current_version')])->assertCreated();
         $this->assertNull(User::where('username', 'applicant')->firstOrFail()->department_id);
         $this->assertDatabaseCount('department_user', 0);
     }

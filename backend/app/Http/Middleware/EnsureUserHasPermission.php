@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Services\Access\UserPermissionGate;
+use App\Modules\Identity\Services\UserPermissionGate;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;

@@ -1,0 +1,1 @@
+let t=null,e=null,l=null;function r(n){t=n&&n.trim()?n.trim():null}function a(){return t}function u(){t=null}function o(n,i){e=n&&n.trim()?n.trim():null,l=i&&i.trim()?i.trim():null}function c(){return{token:e,email:l}}function f(){e=null,l=null}export{u as a,o as b,a as c,c as d,f as e,r};

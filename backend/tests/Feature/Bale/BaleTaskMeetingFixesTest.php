@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Bale;
 
-use App\Bot\Bale\Support\PersianDate;
+use App\Modules\Messaging\Bot\Bale\Support\PersianDate;
 use App\Models\BaleConversation;
 use App\Models\DomainRecord;
 use App\Models\Permission;
@@ -10,9 +10,9 @@ use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkspaceRecord;
-use App\Services\MeetingActionTasks;
-use App\Services\MeetingNotifications;
-use App\Services\TaskAssignmentNotifications;
+use App\Modules\Meetings\Services\MeetingActionTasks;
+use App\Modules\Meetings\Services\MeetingNotifications;
+use App\Modules\Tasks\Services\TaskAssignmentNotifications;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Event;

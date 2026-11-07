@@ -1,0 +1,342 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '../shared/queries/queryClient';
+import { AuthProvider, useAuth } from './providers/AuthContext';
+import { EnvironmentProvider, useEnvironment } from './providers/EnvironmentContext';
+import { UIProvider } from './providers/UIContext';
+import { ProtectedRoute } from './router/ProtectedRoute';
+import { RouteEntity } from './router/RouteEntity';
+import { readTaskLink } from '../shared/lib/taskDeepLink';
+import { runtime } from '../shared/config/runtime';
+import { LoadingState } from '../shared/ui/Primitives';
+import { ForbiddenState, InvalidContextState } from '../shared/ui/IllustratedState';
+import { AppProvider, useApp } from './providers/AppContext';
+import { Sidebar } from './shell/Sidebar';
+import { TopNavbar } from './shell/TopNavbar';
+const GlobalSearchModal = React.lazy(() => import('./shell/GlobalSearchModal').then(m => ({default:m.GlobalSearchModal})));
+import { AuthModal } from '../features/identity/AuthModal';
+import type { ActiveView } from '../shared/types';
+
+// Views. Keep every page outside the initial route bundle; the active page is
+// downloaded in parallel with its data and all other pages stay off the hot path.
+const ContextDashboard = React.lazy(() => import('../features/dashboard/ContextDashboard').then(m => ({default:m.ContextDashboard})));
+const WorkspaceList = React.lazy(() => import('../features/workspace/WorkspaceList').then(m => ({default:m.WorkspaceList})));
+const ApprovalCenter = React.lazy(() => import('../features/workspace/ApprovalCenter').then(m => ({default:m.ApprovalCenter})));
+const NotificationInbox = React.lazy(() => import('../features/workspace/NotificationInbox').then(m => ({default:m.NotificationInbox})));
+const ProjectsView = React.lazy(() => import('../features/projects/ProjectsView').then(m => ({default:m.ProjectsView})));
+const ProjectDetailView = React.lazy(() => import('../features/projects/ProjectDetailView').then(m => ({default:m.ProjectDetailView})));
+const MyTasksView = React.lazy(() => import('../features/tasks/MyTasksView').then(m => ({default:m.MyTasksView})));
+const DepartmentsView = React.lazy(() => import('../features/departments/DepartmentsView').then(m => ({default:m.DepartmentsView})));
+const DepartmentDashboardView = React.lazy(() => import('../features/departments/DepartmentDashboardView').then(m => ({default:m.DepartmentDashboardView})));
+const AnalyticsView = React.lazy(() => import('../features/analytics/AnalyticsView').then(m => ({default:m.AnalyticsView})));
+const ActivityView = React.lazy(() => import('../features/activity/ActivityView').then(m => ({default:m.ActivityView})));
+const CommentsView = React.lazy(() => import('../features/comments/CommentsView').then(m => ({default:m.CommentsView})));
+const SettingsView = React.lazy(() => import('../features/settings/legacy/SettingsView').then(m => ({default:m.SettingsView})));
+const ScopedSettingsPage = React.lazy(() => import('../features/settings/components/ScopedSettingsPage').then(m => ({default:m.ScopedSettingsPage})));
+const ProjectCalendarView = React.lazy(() => import('../features/projects/ProjectCalendarView').then(m => ({default:m.ProjectCalendarView})));
+const UserManagementView = React.lazy(() => import('../features/identity/UserManagementView').then(m => ({default:m.UserManagementView})));
+const RoleManagementView = React.lazy(() => import('../features/identity/RoleManagementView').then(m => ({default:m.RoleManagementView})));
+const UserProfileView = React.lazy(() => import('../features/identity/UserProfileView').then(m => ({default:m.UserProfileView})));
+const DamMainView = React.lazy(() => import('../features/dam/DamMainView').then(m => ({default:m.DamMainView})));
+const ChatView = React.lazy(() => import('../features/messaging/chat/ChatView').then(m => ({default:m.ChatView})));
+const ThoughtRoomMainView = React.lazy(() => import('../features/thought-room/ThoughtRoomMainView').then(m => ({default:m.ThoughtRoomMainView})));
+const SecretariatMainView = React.lazy(() => import('../features/secretariat/SecretariatMainView').then(m => ({default:m.SecretariatMainView})));
+const ContentMainView = React.lazy(() => import('../features/contents/ContentMainView').then(m => ({default:m.ContentMainView})));
+const ContentSeriesView = React.lazy(() => import('../features/contents/ContentSeriesView').then(m => ({default:m.ContentSeriesView})));
+const IntegrityView = React.lazy(() => import('../features/settings/legacy/IntegrityView').then(m => ({default:m.IntegrityView})));
+const ContentDetailView = React.lazy(() => import('../features/contents/ContentDetailView').then(m => ({default:m.ContentDetailView})));
+const ContentPublishingView = React.lazy(() => import('../features/contents/ContentPublishingView').then(m => ({default:m.ContentPublishingView})));
+const ContentPublishedView = React.lazy(() => import('../features/contents/ContentPublishedView').then(m => ({default:m.ContentPublishedView})));
+const ArchiveView = React.lazy(() => import('../features/archive/ArchiveView').then(m => ({default:m.ArchiveView})));
+// Stage C6-4 — invitation acceptance, email verification, and the
+// minimal invitation-management page (public token flows live
+// outside the authenticated workspace shell by design).
+// DS-2: the development UI showcase exists only in DEV builds.
+// import.meta.env.DEV is statically false in production, so the
+// dynamic import (and its chunk) is eliminated from prod bundles.
+const UiShowcaseThemeComparison = React.lazy(() => import('../features/showcase/UiShowcaseThemeComparison').then(m => ({ default: m.UiShowcaseThemeComparison })));
+const InvitationAcceptPage = React.lazy(() => import('../features/invitations/components/InvitationAcceptPage').then(m => ({default:m.InvitationAcceptPage})));
+// AUTH-EXT-01 public + account pages (public auth never uses authenticated sidebars).
+const SecurityPage = React.lazy(() => import('../features/auth/SecurityPage'));
+const AuthForgotPage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.ForgotPasswordPage })));
+const AuthResetPage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.ResetPasswordPage })));
+const AuthEmailConfirmPage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.EmailConfirmPage })));
+const AuthMobileOtpPage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.MobileOtpPage })));
+const AuthStepUpPage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.StepUpPage })));
+const AuthRegisterPage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.RegisterPage })));
+const AuthWelcomePage = React.lazy(() => import('../features/auth/AuthPages').then(m => ({ default: m.WelcomePage })));
+const EmailVerifyPage = React.lazy(() => import('../features/invitations/components/EmailVerifyPage').then(m => ({default:m.EmailVerifyPage})));
+const InvitationManagerPage = React.lazy(() => import('../features/invitations/components/InvitationManagerPage').then(m => ({default:m.InvitationManagerPage})));
+const SelectEnvironmentPage = React.lazy(() => import('../features/environments/SelectEnvironmentPage').then(m => ({default:m.SelectEnvironmentPage})));
+
+// Modals & drawers are mounted only while open. Rendering a lazy component while
+// hidden would still download it, so MainLayout guards each one explicitly.
+const TaskDetailDrawer = React.lazy(() => import('../features/tasks/TaskDetailDrawer').then(m => ({default:m.TaskDetailDrawer})));
+const CreateTaskModal = React.lazy(() => import('../features/tasks/CreateTaskModal').then(m => ({default:m.CreateTaskModal})));
+const CreateProjectModal = React.lazy(() => import('../features/projects/CreateProjectModal').then(m => ({default:m.CreateProjectModal})));
+const MemberDetailModal = React.lazy(() => import('../features/identity/MemberDetailModal').then(m => ({default:m.MemberDetailModal})));
+const TemplatesModal = React.lazy(() => import('../features/templates/TemplatesModal').then(m => ({default:m.TemplatesModal})));
+const TemplateEditorModal = React.lazy(() => import('../features/templates/TemplateEditorModal').then(m => ({default:m.TemplateEditorModal})));
+const UserModal = React.lazy(() => import('../features/identity/UserModal').then(m => ({default:m.UserModal})));
+const RoleModal = React.lazy(() => import('../features/identity/RoleModal').then(m => ({default:m.RoleModal})));
+const CreateContentModal = React.lazy(() => import('../features/contents/CreateContentModal').then(m => ({default:m.CreateContentModal})));
+import { ErrorBoundary, WorkspaceLoader } from '../shared/ui/Feedback';
+import { ToastProvider } from '../shared/ui/Notifications';
+
+const PageTransitionReady: React.FC<{ view: ActiveView; onReady: (view: ActiveView) => void }> = ({ view, onReady }) => {
+  React.useEffect(() => {
+    const frame = window.requestAnimationFrame(() => onReady(view));
+    return () => window.cancelAnimationFrame(frame);
+  }, [view, onReady]);
+  return null;
+};
+
+const MainLayout: React.FC = () => {
+  const {
+    activeView, isWorkspaceLoading, hasPermission, generalSettings,
+    isSearchOpen, setIsSearchOpen, selectedTaskId, selectedMemberId,
+    isCreateTaskOpen, isCreateProjectOpen, isEditProjectOpen, isCreateContentOpen,
+    isTemplatesModalOpen, isTemplateEditorOpen,
+    isCreateUserOpen, isEditUserOpen, isCreateRoleOpen, isEditRoleOpen,
+  } = useApp();
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const navigate = useNavigate();
+  const { currentInvalid, isSwitching, isOnline, resetToDefault } = useEnvironment();
+  const [pendingSidebarView, setPendingSidebarView] = React.useState<ActiveView | null>(null);
+  React.useEffect(() => {
+    const handleGlobalSearchKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setIsSearchOpen(open => !open);
+      } else if (event.key === 'Escape') {
+        setIsSearchOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalSearchKey);
+    return () => window.removeEventListener('keydown', handleGlobalSearchKey);
+  }, [setIsSearchOpen]);
+  const finishPageTransition = React.useCallback((view: ActiveView) => {
+    setPendingSidebarView(pending => pending === view ? null : pending);
+  }, []);
+
+  React.useEffect(() => {
+    if (!pendingSidebarView) return;
+    const timeout = window.setTimeout(() => setPendingSidebarView(null), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [pendingSidebarView]);
+
+  React.useEffect(() => {
+    // Keep the cached color applied during workspace hydration; replacing it
+    // with the default here would cause a visible flash before settings load.
+    if (isWorkspaceLoading) return;
+    const color = /^#[0-9a-f]{6}$/i.test(generalSettings.themeColor || '') ? generalSettings.themeColor! : '#39677c';
+    const style = document.documentElement.style;
+    style.setProperty('--color-primary', color);
+    style.setProperty('--color-primary-hover', `color-mix(in srgb, ${color} 85%, black)`);
+    try { window.localStorage.setItem('tadbir:theme-color', color); } catch { /* storage may be unavailable */ }
+  }, [generalSettings.themeColor, isWorkspaceLoading]);
+
+  // دسترسی مدیریت تنظیمات: مدیر سیستم یا دارندگان مجوزهای مرتبط
+  const canManageSettings = hasPermission('settings.manage')
+    || hasPermission('content.edit');
+
+  const renderActiveView = () => {
+    switch (activeView) {
+      case 'dashboard':
+        return <ContextDashboard />;
+      case 'projects':
+        return runtime.demoMode ? <ProjectsView /> : <WorkspaceList key="projects" module="projects" />;
+      case 'project-detail':
+        return <ProjectDetailView />;
+      case 'thought-room':
+        return (
+          <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+            <ThoughtRoomMainView />
+          </div>
+        );
+      case 'content':
+        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">{runtime.demoMode ? <ContentMainView /> : <WorkspaceList key="contents" module="contents" />}</div>;
+      case 'content-series':
+        return <ContentSeriesView />;
+      case 'content-detail':
+        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ContentDetailView /></div>;
+      case 'content-publishing':
+        return <ContentPublishingView />;
+      case 'content-published':
+        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ContentPublishedView /></div>;
+      case 'archive':
+        return <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><ArchiveView /></div>;
+      case 'departments':
+        return <DepartmentsView/>;
+      case 'department-dashboard':
+        return <DepartmentDashboardView />;
+      case 'secretariat':
+        return generalSettings.secretariatEnabled === false
+          ? <div className="mx-auto max-w-xl p-8 text-center"><div className="rounded-3xl border border-slate-200 bg-white p-10"><h1 className="text-base font-black text-slate-800">ماژول دبیرخانه غیرفعال است</h1><p className="mt-2 text-xs text-slate-500">مدیر سامانه می‌تواند آن را از تنظیمات عمومی فعال کند.</p></div></div>
+          : <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto"><SecretariatMainView /></div>;
+      case 'assets':
+        return (
+          <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+            <DamMainView />
+          </div>
+        );
+      case 'my-tasks':
+        return runtime.demoMode ? <MyTasksView /> : <WorkspaceList key="tasks" module="tasks" />;
+      case 'messages':
+        return <ChatView />;
+
+      case 'calendar':
+        return <ProjectCalendarView />;
+      case 'analytics':
+      case 'reports':
+        return <AnalyticsView />;
+      case 'activity':
+        return <ActivityView />;
+      case 'approvals': return <ApprovalCenter />;
+      case 'notifications':
+        return <NotificationInbox />;
+      case 'comments':
+        return <CommentsView />;
+      case 'settings':
+        return canManageSettings ? <SettingsView /> : <ForbiddenState title="شما مجوز مشاهدهٔ این صفحه را ندارید." />;
+      case 'scoped-settings':
+        // Stage C7-4 Core scoped settings; authorization is enforced
+        // per-scope by the server (the page shows no-permission and
+        // empty states instead of assuming any grant).
+        return <ScopedSettingsPage />;
+      case 'integrity':
+        return <IntegrityView />;
+      case 'user-management':
+        return <UserManagementView />;
+      case 'roles-management':
+        return <RoleManagementView />;
+      case 'user-profile':
+        return <UserProfileView />;
+      default:
+        return <ContextDashboard />;
+    }
+  };
+
+  return (
+    <div className="flex h-screen w-screen overflow-hidden text-slate-900 font-sans antialiased text-right" style={{ background: 'var(--color-background)' }} dir="rtl">
+      {/* Navigation Sidebar */}
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        onNavigateStart={setPendingSidebarView}
+      />
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        {/* Top Navbar */}
+        {!isOnline && (
+          <div role="alert" className="sticky top-16 z-40 flex items-center justify-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-bold text-amber-800">
+            اتصال اینترنت برقرار نیست؛ آخرین داده‌های نمایش‌داده‌شده ممکن است قدیمی باشند.
+          </div>
+        )}
+        <TopNavbar onOpenSidebar={() => setIsSidebarOpen(true)} />
+
+        {/* Scrollable View Canvas */}
+        <main tabIndex={-1} className={`flex-1 overflow-y-auto overflow-x-hidden focus:outline-hidden ${activeView === 'messages' ? 'p-0' : 'p-2 sm:p-3'}`}>
+          {/* مرز خطای هر نما: کرش یک بخش، کل سامانه را از کار نمی‌اندازد. */}
+          <ErrorBoundary resetKey={activeView}><React.Suspense fallback={<WorkspaceLoader label="در حال بارگذاری صفحه…" />}>
+            {currentInvalid ? (
+              <InvalidContextState
+                onSelectEnvironment={() => navigate('/select-environment')}
+                onHome={resetToDefault}
+              />
+            ) : (
+              <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? <LoadingState /> : renderActiveView()}</RouteEntity>
+            )}
+            <PageTransitionReady view={activeView} onReady={finishPageTransition} />
+          </React.Suspense></ErrorBoundary>
+          {!isOnline && (
+            <div role="alert" className="fixed bottom-3 left-1/2 z-[90] w-80 max-w-[calc(100vw-1.5rem)] -translate-x-1/2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-xs font-bold text-amber-800 shadow-lg">
+              اتصال اینترنت قطع است؛ داده‌های نمایشی ممکن است تازه نباشند.
+            </div>
+          )}
+          {isSwitching && <WorkspaceLoader label="در حال جابه‌جایی محیط…" />}
+        </main>
+      </div>
+
+      {/* بازخورد فوری و تمام‌صفحه برای جابه‌جایی‌های آغازشده از سایدبار */}
+      {pendingSidebarView && <WorkspaceLoader label="در حال بارگذاری صفحه…" />}
+
+      {/* Modals & Overlays — unopened features do not download or render. */}
+      <React.Suspense fallback={null}>
+        {selectedTaskId && <TaskDetailDrawer />}
+        {isSearchOpen && <GlobalSearchModal />}
+        {isCreateTaskOpen && <CreateTaskModal />}
+        {(isCreateProjectOpen || isEditProjectOpen) && <CreateProjectModal />}
+        {selectedMemberId && <MemberDetailModal />}
+        {isTemplatesModalOpen && <TemplatesModal />}
+        {isTemplateEditorOpen && <TemplateEditorModal />}
+        {(isCreateUserOpen || isEditUserOpen) && <UserModal />}
+        {(isCreateRoleOpen || isEditRoleOpen) && <RoleModal />}
+        {isCreateContentOpen && <CreateContentModal />}
+      </React.Suspense>
+
+      {/* لودر تمام‌صفحه هنگام بارگذاری اولیه فضای کاری */}
+      {runtime.demoMode && <div role="status" className="fixed bottom-0 inset-x-0 bg-amber-100 text-amber-900 text-center p-2 text-xs">محیط نمایشی — داده‌های نمونه، بدون ذخیره در سرور</div>}
+    </div>
+  );
+};
+
+function LoginPage() {
+  const { isLoggedIn, isSessionLoading, sessionError, restoreSession } = useAuth();
+  const location = useLocation();
+  if (isSessionLoading) return <LoadingState label="در حال بررسی نشست…" />;
+  const from = location.state?.from;
+  const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/dashboard';
+  if (isLoggedIn) return <Navigate replace to={destination} />;
+  return <div dir="rtl"><AuthModal /><nav aria-label="راه‌های ورود" className="fixed bottom-3 inset-x-0 z-[100] flex flex-wrap justify-center gap-2 text-xs font-bold text-[#39677C]">
+    <a className="rounded-full border border-[#dbe7ec] bg-white px-3 py-1.5" href="/register">ساخت حساب</a>
+    <a className="rounded-full border border-[#dbe7ec] bg-white px-3 py-1.5" href="/login/mobile">ورود با موبایل</a>
+    <a className="rounded-full border border-[#dbe7ec] bg-white px-3 py-1.5" href="/api/v1/auth/google/redirect">ادامه با گوگل</a>
+    <a className="rounded-full border border-[#dbe7ec] bg-white px-3 py-1.5" href="/forgot-password">فراموشی رمز عبور</a>
+  </nav>{sessionError && <aside className="fixed top-3 left-3 z-[100] w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-right text-xs leading-5 text-slate-700 shadow-sm" role="alert" aria-label="وضعیت اتصال">
+    <p>{sessionError}</p>
+    <button type="button" onClick={() => void restoreSession()} className="mt-1 rounded px-1 py-0.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">بررسی دوبارهٔ اتصال</button>
+  </aside>}</div>;
+}
+function LegacyLinks() {
+  const location = useLocation(); const navigate = useNavigate();
+  React.useEffect(() => {
+    if (location.pathname === '/login') return;
+    const task = readTaskLink(location.search);
+    if (task && location.pathname !== `/tasks/${task}`) {
+      const params = new URLSearchParams(location.search); // Keep legacy task/asset hints understood by TaskAssetsSection.
+      navigate(`/tasks/${task}${params.size ? `?${params}` : ''}`, { replace: true });
+    }
+  }, [location.pathname, location.search, navigate]);
+  return null;
+}
+export default function App() {
+  return <QueryClientProvider client={queryClient}><BrowserRouter><ToastProvider><AuthProvider><UIProvider><AppProvider><EnvironmentProvider>
+    <LegacyLinks />
+    <Routes>
+      <Route path="/theme-previews" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><UiShowcaseThemeComparison /></React.Suspense>} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthRegisterPage /></React.Suspense>} />
+      <Route path="/forgot-password" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthForgotPage /></React.Suspense>} />
+      <Route path="/reset-password" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthResetPage /></React.Suspense>} />
+      <Route path="/verify-email/confirm" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthEmailConfirmPage /></React.Suspense>} />
+      <Route path="/login/mobile" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthMobileOtpPage /></React.Suspense>} />
+      <Route path="/auth/step-up" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthStepUpPage /></React.Suspense>} />
+      <Route path="/welcome" element={<ProtectedRoute><React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthWelcomePage /></React.Suspense></ProtectedRoute>} />
+      <Route path="/account/security" element={<ProtectedRoute><React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><SecurityPage /></React.Suspense></ProtectedRoute>} />
+      <Route path="/invitations/accept" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><InvitationAcceptPage /></React.Suspense>} />
+      <Route path="/verify-email" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><EmailVerifyPage /></React.Suspense>} />
+      <Route path="/invitations/manage" element={<ProtectedRoute><React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><InvitationManagerPage /></React.Suspense></ProtectedRoute>} />
+      <Route path="/select-environment" element={<ProtectedRoute><React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><SelectEnvironmentPage /></React.Suspense></ProtectedRoute>} />
+      <Route path="/" element={<ProtectedRoute><Navigate replace to="/dashboard" /></ProtectedRoute>} />
+      <Route path="*" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
+    </Routes>
+  </EnvironmentProvider></AppProvider></UIProvider></AuthProvider></ToastProvider></BrowserRouter></QueryClientProvider>;
+}

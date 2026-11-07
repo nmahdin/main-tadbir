@@ -2,9 +2,9 @@
 
 namespace App\Http\Resources;
 
-use App\Services\ContentAccess;
-use App\Services\ContentPublication;
-use App\Services\ContentReview;
+use App\Modules\Contents\Services\ContentAccess;
+use App\Modules\Contents\Services\ContentPublication;
+use App\Modules\Contents\Services\ContentReview;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Arr;

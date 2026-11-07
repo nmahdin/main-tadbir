@@ -1,6 +1,6 @@
 <?php
 
-use App\Support\Content\ContentCodeAllocator;
+use App\Modules\Contents\Support\ContentCodeAllocator;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\Schema;
 

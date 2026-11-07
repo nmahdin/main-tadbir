@@ -4,7 +4,7 @@ namespace Tests\Feature\Bale;
 
 use App\Models\BaleUserLink;
 use App\Models\User;
-use App\Services\BaleAuthChallenge;
+use App\Modules\Messaging\Services\BaleAuthChallenge;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;

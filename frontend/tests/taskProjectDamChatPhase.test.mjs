@@ -6,9 +6,9 @@ const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('task history, review preset, near due and calendar semantics remain wired', async () => {
   const [detail, list, backend] = await Promise.all([
-    source('../src/components/tasks/TaskDetailDrawer.tsx'),
-    source('../src/components/workspace/WorkspaceList.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/TaskController.php'),
+    source('../src/features/tasks/TaskDetailDrawer.tsx'),
+    source('../src/features/workspace/WorkspaceList.tsx'),
+    source('../../backend/app/Modules/Tasks/Http/Controllers/TaskController.php'),
   ]);
   assert.match(detail, /historyOpen/);
   assert.match(detail, /aria-expanded=\{historyOpen\}/);
@@ -21,7 +21,7 @@ test('task history, review preset, near due and calendar semantics remain wired'
 });
 
 test('task editing keeps relations and editable checklist below task description', async () => {
-  const edit = await source('../src/components/tasks/EditTaskModal.tsx');
+  const edit = await source('../src/features/tasks/EditTaskModal.tsx');
   assert.match(edit, /contentId/);
   assert.match(edit, /subtasks: checklist/);
   assert.match(edit, /چک‌لیست وظیفه/);
@@ -31,8 +31,8 @@ test('task editing keeps relations and editable checklist below task description
 
 test('project detail exposes one operations menu, project members and unified domain views', async () => {
   const [detail, form] = await Promise.all([
-    source('../src/components/projects/ProjectDetailView.tsx'),
-    source('../src/components/projects/CreateProjectModal.tsx'),
+    source('../src/features/projects/ProjectDetailView.tsx'),
+    source('../src/features/projects/CreateProjectModal.tsx'),
   ]);
   assert.match(detail, />عملیات</);
   assert.match(detail, /اعضای پروژه/);
@@ -46,9 +46,9 @@ test('project detail exposes one operations menu, project members and unified do
 
 test('DAM keeps explorer, reusable folder browser, one-pass progress download and temporary links', async () => {
   const [library, browser, controller] = await Promise.all([
-    source('../src/components/dam/DamLibrary.tsx'),
-    source('../src/components/dam/FolderBrowserModal.tsx'),
-    source('../../backend/app/Http/Controllers/Api/V1/DamAssetController.php'),
+    source('../src/features/dam/DamLibrary.tsx'),
+    source('../src/shared/ui/FolderBrowserModal.tsx'),
+    source('../../backend/app/Modules/Dam/Http/Controllers/DamAssetController.php'),
   ]);
   assert.match(library, /'explorer'/);
   assert.match(library, /downloadAssetOnce/);
@@ -64,8 +64,8 @@ test('DAM keeps explorer, reusable folder browser, one-pass progress download an
 
 test('table cell audits include before and after values', async () => {
   const [controller, tables] = await Promise.all([
-    source('../../backend/app/Http/Controllers/Api/V1/DamDataTableController.php'),
-    source('../src/components/dam/DamDataTables.tsx'),
+    source('../../backend/app/Modules/Dam/Http/Controllers/DamDataTableController.php'),
+    source('../src/features/dam/DamDataTables.tsx'),
   ]);
   assert.match(controller, /'column_id'.*'from'.*'to'/s);
   assert.match(tables, /metadata\?\.changes/);
@@ -75,9 +75,9 @@ test('table cell audits include before and after values', async () => {
 
 test('chat search, pinned navigation and WebSocket-compatible presence use authorized fallback', async () => {
   const [chat, realtime, backend] = await Promise.all([
-    source('../src/components/chat/ChatView.tsx'),
-    source('../src/api/chatRealtime.ts'),
-    source('../../backend/app/Http/Controllers/Api/V1/ChatRealtimeController.php'),
+    source('../src/features/messaging/chat/ChatView.tsx'),
+    source('../src/shared/api/chatRealtime.ts'),
+    source('../../backend/app/Modules/Messaging/Http/Controllers/ChatRealtimeController.php'),
   ]);
   assert.match(chat, /searchResults/);
   assert.match(chat, /movePinned/);

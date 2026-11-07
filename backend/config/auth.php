@@ -106,4 +106,20 @@ return [
         'auto_login' => env('AUTH_REGISTRATION_AUTO_LOGIN', false),
     ],
 
+    // AUTH-EXT-01: versioned terms evidence (spec §6.5).
+    'terms' => [
+        'current_version' => env('AUTH_TERMS_VERSION', '1.0'),
+    ],
+
+    // AMB-03=A: pluggable SMS OTP. No driver configured => OTP fails
+    // safely as delivery_unavailable (nothing pretends to be sent).
+    'otp' => [
+        'driver' => env('AUTH_OTP_DRIVER'),
+    ],
+
+    // AMB-02=A: Personal Free entitlement is owned by C5 policy; the
+    // plan key is referenced, never hardcoded in auth code.
+    'personal_free_plan_key' => env('AUTH_PERSONAL_FREE_PLAN_KEY'),
+    'personal_free_plan_version' => (int) env('AUTH_PERSONAL_FREE_PLAN_VERSION', 1),
+
 ];

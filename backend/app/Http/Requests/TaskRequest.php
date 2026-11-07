@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Services\TaskOperations;
+use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
