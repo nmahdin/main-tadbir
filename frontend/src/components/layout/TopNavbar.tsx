@@ -1,7 +1,8 @@
 import { runtime } from '../../config/runtime';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { notificationDestination } from '../../routing/listQuery';
-import { ErrorState, LoadingState, Modal } from '../common/Primitives';
+import { ErrorState, Modal } from '../common/Primitives';
+import { ListRowsSkeleton } from '../common/Shimmer';
 import { useWorkspacePage, useNotificationRead } from '../../queries/workspacePages';
 import { preloadGlobalSearch } from '../../routing/lazyOverlays';
 import React, { useState, useRef, useEffect } from 'react';
@@ -278,7 +279,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
           {notifMenu.visible && (
             <div data-state={notifMenu.state} className="ui-pop absolute left-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-[320px] sm:max-w-none bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
-              {inbox.isPending && !runtime.demoMode && <LoadingState />}
+              {inbox.isPending && !runtime.demoMode && <ListRowsSkeleton rows={3} label="در حال دریافت اعلان‌ها…" />}
               {inbox.isError && <ErrorState error={inbox.error} onRetry={() => void inbox.refetch()} />}
               {readMutation.isError && <ErrorState error={readMutation.error} />}
               <div className="mx-2 mb-2 flex items-center justify-between rounded-xl border-b border-slate-100 px-3 py-2.5">

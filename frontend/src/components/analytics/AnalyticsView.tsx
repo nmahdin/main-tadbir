@@ -5,7 +5,8 @@ import { request } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { formatPersianIsoDateTime, formatPersianNumber } from '../../utils/date';
-import { ErrorState, LoadingState } from '../common/Primitives';
+import { ErrorState } from '../common/Primitives';
+import { ReportSkeleton } from '../common/Shimmer';
 import {
   ResponsiveContainer,
   Tooltip,
@@ -51,7 +52,7 @@ export const AnalyticsView: React.FC = () => {
     staleTime: 60_000,
   });
 
-  if (summary.isPending) return <LoadingState label="در حال محاسبه گزارش…" />;
+  if (summary.isPending) return <ReportSkeleton label="در حال محاسبه گزارش…" />;
   if (summary.isError) return <ErrorState error={summary.error} onRetry={() => void summary.refetch()} />;
 
   const report = summary.data.data;

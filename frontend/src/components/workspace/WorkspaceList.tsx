@@ -55,6 +55,8 @@ import { calendarDueInfo, calendarTimeLabel, sortCalendarEventsByTime } from '..
 import { EditTaskModal } from '../tasks/EditTaskModal';
 import { useSlidingTabs } from '../common/SlidingTabs';
 import { BoardSkeleton, CardGridSkeleton, TableSkeleton } from '../common/Shimmer';
+import { FreshDot } from '../common/FreshDot';
+import { useFreshRecords } from '../../utils/freshness';
 
 const filterNames: Record<string, string> = {
   status: 'وضعیت', search: 'جستجو', due: 'سررسید', assignee: 'مسئول', owner: 'مالک',
@@ -184,6 +186,12 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const query = useWorkspacePage(module, { ...filters, ...(module === 'contents' ? { active_only: 1 } : {}), sort: filters.sort || defaultSort, direction: filters.direction || defaultDirection, ...(module === 'tasks' ? { assignee: 'me' } : {}), per_page: perPage });
   usePageCorrection(query);
   const rows = query.data?.data ?? [];
+  /**
+   * نشانگر «تازه» (دور ۹۹): ردیفی که از آخرین بازدید این فهرست تغییر کرده، نقطهٔ
+   * آبی می‌گیرد و با باز شدنش نقطه برداشته می‌شود.
+   */
+  const fresh = useFreshRecords(`workspace:${module}`, rows);
+  const freshMark = (row: any) => fresh.isFresh(row) ? <FreshDot className="mt-0.5" /> : null;
   const labels = {
     ...listStatuses[module],
     ...(module === 'contents' ? Object.fromEntries(app.contentStatuses.map(status => [status.id, status.label])) : {}),
@@ -281,8 +289,8 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     return app.users.find(user => user.id === id)?.name || (id ? `کاربر #${id}` : 'تعیین نشده');
   };
   const recordTitle = (row: any, className: string) => module === 'tasks'
-    ? <button type="button" data-press="none" className={`${className} text-right`} onClick={() => app.setSelectedTaskId(row.id)}>{titleOf(row)}</button>
-    : <Link className={className} to={detail(row.id)}>{titleOf(row)}</Link>;
+    ? <button type="button" data-press="none" className={`${className} text-right`} onClick={() => { fresh.markOpened(row.id); app.setSelectedTaskId(row.id); }}>{titleOf(row)}</button>
+    : <Link className={className} to={detail(row.id)} onClick={() => fresh.markOpened(row.id)}>{titleOf(row)}</Link>;
   const handleTaskDrop = (status: string) => {
     if (!draggedTaskId) return;
     const task = rows.find((row: any) => row.id === draggedTaskId);
@@ -506,7 +514,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((row: any) => (
                       <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-4 max-w-sm">{recordTitle(row, 'font-extrabold text-slate-900 hover:text-indigo-700 break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></td>
+                        <td className="p-4 max-w-sm"><span className="flex min-w-0 items-start gap-1.5">{recordTitle(row, 'font-extrabold text-slate-900 hover:text-indigo-700 break-words')}{freshMark(row)}</span><p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></td>
                         <td className="p-4">{module === 'tasks' ? <div className="relative inline-block">
                           <button type="button" aria-haspopup="menu" aria-expanded={statusMenuTaskId === row.id} disabled={row.kind === 'content_review' && (row.status === 'completed' || !app.hasPermission('content.approve'))} onClick={() => setStatusMenuTaskId(current => current === row.id ? null : row.id)} className="rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-200 disabled:cursor-default" title={row.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}>{statusBadge(module, row, labels)}</button>
                           {statusMenuTaskId === row.id && <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
@@ -521,9 +529,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                         {module === 'contents' && <td className="p-4"><PublicationDateChip content={row} /></td>}
                         <td className={module === 'contents' ? 'w-14 p-4' : 'p-4'}><div className="flex items-center justify-end gap-1.5">
                           {module === 'tasks' ? <>
-                            <button type="button" onClick={() => app.setSelectedTaskId(row.id)} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => { fresh.markOpened(row.id); app.setSelectedTaskId(row.id); }} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></button>
                             {(row.assigneeId === app.currentUser.id || app.hasPermission('tasks.edit')) && <button type="button" onClick={() => setEditingTask(row as Task)} aria-label={`ویرایش ${titleOf(row)}`} title="ویرایش" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Pencil className="w-4 h-4" /></button>}
-                          </> : module === 'contents' ? <Link to={detail(row.id)} aria-label={`نمایش ${titleOf(row)}`} title="نمایش" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></Link> : <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-indigo-700 hover:bg-indigo-50"><ChevronLeft className="w-4 h-4" /></Link>}
+                          </> : module === 'contents' ? <Link to={detail(row.id)} onClick={() => fresh.markOpened(row.id)} aria-label={`نمایش ${titleOf(row)}`} title="نمایش" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></Link> : <Link to={detail(row.id)} onClick={() => fresh.markOpened(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-indigo-700 hover:bg-indigo-50"><ChevronLeft className="w-4 h-4" /></Link>}
                         </div></td>
                       </tr>
                     ))}
@@ -549,11 +557,11 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                   <article key={row.id} className="bg-white rounded-3xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all p-5 flex flex-col justify-between relative overflow-hidden min-w-0">
                     <div className="absolute top-0 inset-x-0 h-1.5" style={{ backgroundColor: cardColor(row) }} />
                     <div className="space-y-4 pt-1">
-                      <div className="flex items-start justify-between gap-3"><div className="min-w-0">{recordTitle(row, 'font-black text-slate-900 hover:text-indigo-700 break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></div>{module === 'contents' ? <div className="min-w-0 shrink-0">{statusBadge(module, row, labels)}<ContentProgressBar row={row} /></div> : statusBadge(module, row, labels)}</div>
+                      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className="flex min-w-0 items-start gap-1.5">{recordTitle(row, 'font-black text-slate-900 hover:text-indigo-700 break-words')}{freshMark(row)}</span><p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></div>{module === 'contents' ? <div className="min-w-0 shrink-0">{statusBadge(module, row, labels)}<ContentProgressBar row={row} /></div> : statusBadge(module, row, labels)}</div>
                       {row.description && <p className="text-xs leading-6 text-slate-500 line-clamp-2">{row.description}</p>}
                       <div className="flex items-center gap-2 flex-wrap">{module === 'contents' ? <ContentTypeBadge color={typeOf(row)?.color} label={typeNameOf(row)} /> : row.priority && <PriorityPill priority={row.priority as Priority} size="sm" />}<span className="text-[11px] text-slate-500 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" />{module === 'contents' ? `منتشرکننده: ${personOf(row)}` : personOf(row)}</span></div>
                     </div>
-                    <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">{module === 'contents' ? <PublicationDateChip content={row} /> : <span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>}{module === 'projects' && <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} title="باز کردن پروژه" className="rounded-xl p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-700"><ChevronLeft className="h-4 w-4" /></Link>}</footer>
+                    <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">{module === 'contents' ? <PublicationDateChip content={row} /> : <span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>}{module === 'projects' && <Link to={detail(row.id)} onClick={() => fresh.markOpened(row.id)} aria-label={`باز کردن ${titleOf(row)}`} title="باز کردن پروژه" className="rounded-xl p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-700"><ChevronLeft className="h-4 w-4" /></Link>}</footer>
                   </article>
                 ))}
               </div>

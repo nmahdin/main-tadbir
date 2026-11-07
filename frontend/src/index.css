@@ -697,6 +697,26 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
   from { background-position: 100% 0 }
   to { background-position: 0 0 }
 }
+/*
+ * نقطهٔ «تازه» (دور ۹۹).
+ *
+ * یک نقطهٔ کوچک آبی با هالهٔ نرم که فقط یک بار، آرام، باز می‌شود؛ نه حلقهٔ
+ * بی‌پایان، تا چشم را اذیت نکند. کاهش حرکت آن را کاملاً خاموش می‌کند.
+ */
+@keyframes ui-fresh-in {
+  from { opacity: 0; transform: scale(.4) }
+  to { opacity: 1; transform: scale(1) }
+}
+.ui-fresh-dot {
+  display: inline-block;
+  width: .375rem;
+  height: .375rem;
+  border-radius: 9999px;
+  background-color: #0284c7;
+  box-shadow: 0 0 0 2px #e0f2fe;
+  animation: ui-fresh-in .22s cubic-bezier(.22, 1, .36, 1) both;
+}
+
 .ui-shimmer {
   background-color: #eef2f7;
   background-image: linear-gradient(90deg, #eef2f7 20%, #f8fafc 40%, #eef2f7 60%);
@@ -788,6 +808,7 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
   /* نشانگر تب، اسکلت بارگذاری و گذار صفحه (دورهای ۹۵–۹۶). */
   .ui-tab-pill, .ui-tab-pill[data-state='moving'] { transition: none !important; }
   .ui-shimmer { animation: none !important; background-image: none; }
+  .ui-fresh-dot { animation: none !important; }
   .ui-swap-in { animation: none !important; }
 }
 

@@ -18,7 +18,8 @@ import {
 } from 'lucide-react';
 import { useNotificationRead, useWorkspacePage } from '../../queries/workspacePages';
 import { notificationDestination } from '../../routing/listQuery';
-import { Button, EmptyState, ErrorState, LoadingState } from '../common/Primitives';
+import { Button, EmptyState, ErrorState } from '../common/Primitives';
+import { ListRowsSkeleton } from '../common/Shimmer';
 import { Pagination } from '../common/WorkspacePatterns';
 import { formatPersianIsoDateTime } from '../../utils/date';
 
@@ -106,7 +107,7 @@ export function NotificationInbox() {
     </section>
 
     {mutation.isError && <ErrorState error={mutation.error} />}
-    {query.isPending ? <LoadingState label="در حال دریافت اعلان‌ها…" /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? <div className="rounded-3xl border border-slate-200 bg-white"><EmptyState title="اعلانی در این دسته نیست."><Bell className="mx-auto mb-3 h-10 w-10 text-slate-300" /></EmptyState></div> : <>
+    {query.isPending ? <ListRowsSkeleton rows={5} label="در حال دریافت اعلان‌ها…" /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? <div className="rounded-3xl border border-slate-200 bg-white"><EmptyState title="اعلانی در این دسته نیست."><Bell className="mx-auto mb-3 h-10 w-10 text-slate-300" /></EmptyState></div> : <>
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">{query.data.data.map(row => {
         const target = notificationDestination(row);
         const visual = visualOf(row);

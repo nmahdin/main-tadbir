@@ -189,3 +189,168 @@ export const StatCardsSkeleton: React.FC<{ count?: number; className?: string; l
     </div>
   </div>
 );
+
+/** ردیف‌های فهرست با آیکون/آواتار کنار و دو خط متن؛ برای اعلان‌ها و فهرست‌های ساده. */
+export const ListRowsSkeleton: React.FC<{ rows?: number; label?: string; className?: string }> = ({
+  rows = 5,
+  label = 'در حال دریافت موارد…',
+  className = 'divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white',
+}) => (
+  <div role="status" aria-live="polite" aria-busy="true">
+    <span className="sr-only">{label}</span>
+    <div aria-hidden="true" className={className}>
+      {Array.from({ length: rows }).map((_, index) => (
+        <div key={index} className="flex items-start gap-3.5 p-4 sm:p-5">
+          <SkeletonBlock className="h-10 w-10 shrink-0 rounded-xl" />
+          <div className="min-w-0 flex-1 space-y-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-2">
+                <SkeletonText index={index} className="h-3.5" />
+                <SkeletonBlock className="h-2.5 w-20" />
+              </div>
+              <SkeletonBlock className="h-2.5 w-16 shrink-0" />
+            </div>
+            <SkeletonBlock className="h-2.5 w-full" />
+            <SkeletonBlock className="h-2.5 w-3/4" />
+            <div className="flex gap-2 pt-1">
+              <SkeletonChip className="h-5 w-24" />
+              <SkeletonChip className="h-5 w-20" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+/** کارت‌های «نیازمند بررسی»: نشانهٔ رنگی کنار، عنوان، مرحله و خط مهلت. */
+export const ApprovalCardsSkeleton: React.FC<{ count?: number; label?: string }> = ({
+  count = 4,
+  label = 'در حال دریافت موارد نیازمند بررسی…',
+}) => (
+  <div role="status" aria-live="polite" aria-busy="true">
+    <span className="sr-only">{label}</span>
+    <div aria-hidden="true" className="grid gap-4 md:grid-cols-2">
+      {Array.from({ length: count }).map((_, index) => (
+        <div key={index} className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="ui-shimmer absolute inset-y-0 right-0 w-1" />
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-2">
+              <SkeletonChip className="h-6 w-24" />
+              <SkeletonText index={index} className="h-3.5" />
+              <SkeletonBlock className="h-2.5 w-32" />
+            </div>
+            <SkeletonBlock className="h-5 w-5 shrink-0 rounded-md" />
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-2">
+            <SkeletonBlock className="h-2.5 w-28" />
+            <SkeletonChip className="h-7 w-20" />
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+/** صفحهٔ گزارش: کارت‌های آماری + دو نمودار + جدول. */
+export const ReportSkeleton: React.FC<{ label?: string }> = ({ label = 'در حال محاسبه گزارش…' }) => (
+  <div role="status" aria-live="polite" aria-busy="true" className="space-y-5">
+    <span className="sr-only">{label}</span>
+    <div aria-hidden="true" className="space-y-5">
+      <div className="space-y-3">
+        <SkeletonBlock className="h-5 w-56" />
+        <SkeletonBlock className="h-3 w-72" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between">
+              <SkeletonBlock className="h-9 w-9 rounded-xl" />
+              <SkeletonChip className="h-5 w-14" />
+            </div>
+            <SkeletonBlock className="h-6 w-16" />
+            <SkeletonText index={index} className="h-2.5" />
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <div key={index} className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5">
+            <SkeletonBlock className="h-3.5 w-40" />
+            <div className="flex h-48 items-end gap-2">
+              {[62, 84, 46, 96, 70, 88, 54].map((height, bar) => (
+                <SkeletonBlock key={bar} className="flex-1 rounded-t-lg" style={{ height: `${height}%` }} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-3 rounded-3xl border border-slate-200 bg-white p-5">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="flex items-center gap-3">
+            <SkeletonBlock className="h-2.5 w-32" />
+            <SkeletonBlock className="h-2 flex-1 rounded-full" />
+            <SkeletonBlock className="h-2.5 w-10" />
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+/**
+ * صفحهٔ جزئیات: سربرگ (دکمهٔ بازگشت + عنوان + نشانگرها)، نوار تب و بدنهٔ پنل.
+ * جای چرخندهٔ وسط‌چینِ «در حال بارگذاری پرونده…» می‌نشیند تا با رسیدن داده
+ * صفحه از همان قالب شروع شود و نپرد.
+ */
+export const DetailPageSkeleton: React.FC<{ label?: string; tabs?: number }> = ({
+  label = 'در حال بارگذاری…',
+  tabs = 4,
+}) => (
+  <div role="status" aria-live="polite" aria-busy="true" className="space-y-6">
+    <span className="sr-only">{label}</span>
+    <div aria-hidden="true" className="space-y-6">
+      <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-2xs sm:p-6">
+        <div className="flex items-center gap-3">
+          <SkeletonBlock className="h-9 w-9 rounded-xl" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <SkeletonBlock className="h-5 w-2/3" />
+            <SkeletonBlock className="h-2.5 w-1/3" />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <SkeletonChip className="w-24" />
+          <SkeletonChip className="w-20" />
+          <SkeletonChip className="w-28" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+              <SkeletonBlock className="h-2.5 w-16" />
+              <SkeletonBlock className="h-4 w-24" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5">
+        {Array.from({ length: tabs }).map((_, index) => (
+          <SkeletonBlock key={index} className="h-9 w-24 rounded-xl" />
+        ))}
+      </div>
+      <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-2xs sm:p-6">
+        <SkeletonBlock className="h-4 w-48" />
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div key={index} className="space-y-3 rounded-2xl border border-slate-100 p-4">
+            <div className="flex items-center gap-2">
+              <SkeletonBlock className="h-6 w-6 rounded-lg" />
+              <SkeletonBlock className="h-3 w-40" />
+              <SkeletonChip className="mr-auto h-5 w-20" />
+            </div>
+            <SkeletonText index={index} />
+            <SkeletonBlock className="h-2.5 w-2/3" />
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);

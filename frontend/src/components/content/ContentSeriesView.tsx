@@ -16,7 +16,7 @@ import { formatPersianDate, formatPersianTime, todayLocalISO } from '../../utils
 import { ContentStatusBadge, DETAIL_BADGE_CLASS } from '../../utils/statusBadges';
 import {
   Button, ConfirmDialog, EmptyState, ErrorState, FormField, IconButton, Input,
-  LoadingState, Modal, Select, Textarea,
+  Modal, Select, Textarea,
 } from '../common/Primitives';
 import { FilterBar, Pagination } from '../common/WorkspacePatterns';
 import { InlineSpinner } from '../common/Feedback';
@@ -27,6 +27,7 @@ import { SeriesCalendar } from './SeriesCalendar';
 import { seriesCalendarEntries } from '../../utils/seriesCalendar';
 import { CALENDAR_WEEKDAYS } from '../calendar/CalendarViews';
 import { useSlidingTabs } from '../common/SlidingTabs';
+import { DetailPageSkeleton, ListRowsSkeleton, ReportSkeleton } from '../common/Shimmer';
 
 const weekdayOf = (iso?: string): string => {
   if (!iso) return '';
@@ -320,7 +321,7 @@ export const ContentSeriesView: React.FC = () => {
 
   const selected = detail.data?.data;
   if (selectedId) {
-    if (detail.isLoading) return <PageShell><LoadingState label="در حال دریافت فضای کاری مجموعه…" /></PageShell>;
+    if (detail.isLoading) return <PageShell><DetailPageSkeleton label="در حال دریافت فضای کاری مجموعه…" tabs={4} /></PageShell>;
     if (detail.isError || !selected) return <PageShell><ErrorState error={detail.error} onRetry={() => detail.refetch()} title="جزئیات مجموعه دریافت نشد." /></PageShell>;
     const nextPreview = preview.data?.data;
     const selectedProject = projects.find(project => project.id === selected.projectId);
@@ -499,7 +500,7 @@ export const ContentSeriesView: React.FC = () => {
               <Select value={occurrenceStatus} onChange={event => { setOccurrenceStatus(event.target.value); setOccurrencePage(1); }}><option value="">همه وضعیت‌ها</option>{contentStatuses.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}{!contentStatuses.some(item => item.id === 'delayed') && <option value="delayed">در تأخیر</option>}</Select>
               <Select value={activationFilter} onChange={event => { setActivationFilter(event.target.value); setOccurrencePage(1); }}><option value="">همه چرخه‌ها</option><option value="active">تسک‌ها فعال</option><option value="waiting">منتظر فعال‌سازی</option></Select>
             </FilterBar></Collapsible>
-            {occurrences.isLoading && <LoadingState label="در حال دریافت پرونده‌های محتوا…" />}
+            {occurrences.isLoading && <ListRowsSkeleton rows={4} label="در حال دریافت پرونده‌های محتوا…" />}
             {occurrences.isError && <ErrorState error={occurrences.error} onRetry={() => occurrences.refetch()} />}
             {!occurrences.isLoading && !occurrences.isError && <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <div className="hidden grid-cols-[minmax(15rem,2fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_3rem] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-bold text-slate-500 lg:grid"><span>عنوان محتوا</span><span>وضعیت و پیشرفت</span><span>انتشار / فعال‌سازی</span><span aria-hidden /></div>
@@ -528,7 +529,7 @@ export const ContentSeriesView: React.FC = () => {
 
         {tab === 'schedule' && (
           <Panel icon={CalendarClock} title="تقویم آینده" subtitle="محاسبه قطعی سمت سرور و بر پایه تقویم سازمان است.">
-            {schedule.isLoading && <LoadingState label="در حال محاسبه تقویم…" />}
+            {schedule.isLoading && <ReportSkeleton label="در حال محاسبه تقویم…" />}
             {schedule.isError && <ErrorState error={schedule.error} onRetry={() => schedule.refetch()} />}
             {(plannedPeriods.length > 0 || createdInCalendar > 0) && <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
               <SeriesCalendar
@@ -557,7 +558,7 @@ export const ContentSeriesView: React.FC = () => {
 
         {tab === 'revisions' && (
           <Panel icon={FileStack} title="نسخه‌های تنظیمات" subtitle="هر نسخه از شماره پروندهٔ محتوا مشخصی مؤثر است.">
-            {revisions.isLoading && <LoadingState label="در حال دریافت نسخه‌ها…" />}
+            {revisions.isLoading && <ListRowsSkeleton rows={3} label="در حال دریافت نسخه‌ها…" />}
             {revisions.isError && <ErrorState error={revisions.error} onRetry={() => revisions.refetch()} />}
             <div className="space-y-3">{(revisions.data?.data || []).map(revision => <div key={revision.id} className={`rounded-2xl border p-4 ${revision.id === selected.currentRevisionId ? 'border-indigo-200 bg-indigo-50/50' : 'border-slate-200'}`}><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-black">نسخه {revision.version.toLocaleString('fa-IR')} {revision.id === selected.currentRevisionId && <span className="text-indigo-600">· جاری</span>}</p><span className="text-[10px] text-slate-400">{formatPersianDate(revision.createdAt)}</span></div><p className="mt-2 text-[11px] text-slate-600">از پروندهٔ محتوا {revision.effectiveFromSequence.toLocaleString('fa-IR')} · {recurrenceLabels[revision.recurrenceType]} · {revision.author?.name || 'سامانه'}</p><p className="mt-1 text-[11px] text-slate-500">{revision.changeReason || 'بدون توضیح تغییر'}</p></div>)}</div>
             <Pagination meta={revisions.data?.meta} busy={revisions.isFetching} onPage={setRevisionPage} />
@@ -628,7 +629,7 @@ export const ContentSeriesView: React.FC = () => {
           {activeFilterCount > 0 && <div className="mt-3 flex justify-end"><Button variant="ghost" className="text-[11px] text-slate-600" onClick={clearFilters}><X className="h-3.5 w-3.5" />پاک‌کردن همه</Button></div>}
         </Collapsible>
       </section>
-      {list.isLoading && <LoadingState label="در حال دریافت مجموعه‌ها…" />}
+      {list.isLoading && <ListRowsSkeleton rows={4} label="در حال دریافت مجموعه‌ها…" />}
       {list.isError && <ErrorState error={list.error} onRetry={() => list.refetch()} title="فهرست مجموعه‌ها دریافت نشد." />}
             {/* نمای لیست حذف شد - پیش‌فرض کارت است */}
       {!list.isLoading && !list.isError && viewMode === 'grid' && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

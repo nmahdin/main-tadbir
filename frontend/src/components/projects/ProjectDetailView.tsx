@@ -42,7 +42,6 @@ import {
   ErrorState,
   FormField,
   Input,
-  LoadingState,
   Select,
   Textarea,
 } from '../common/Primitives';
@@ -53,6 +52,7 @@ import { DamLibrary } from '../dam/DamLibrary';
 import { CreateIdeaModal } from '../thought-room/CreateIdeaModal';
 import { CreateMeetingModal } from '../thought-room/CreateMeetingModal';
 import { useSlidingTabs } from '../common/SlidingTabs';
+import { DetailPageSkeleton, ListRowsSkeleton } from '../common/Shimmer';
 
 type TabId = 'overview' | 'tasks' | 'contents' | 'series' | 'assets' | 'activities' | 'ideas' | 'meetings' | 'plan';
 type DomainTab = Exclude<TabId, 'overview' | 'plan' | 'assets'>;
@@ -426,7 +426,8 @@ function HeaderMeta({ label, children }: { label: string; children: React.ReactN
 
 function Overview({ summary, onTab }: { summary: ReturnType<typeof useQuery<any>>; onTab: (tab: TabId) => void }) {
   const { hasPermission } = useApp();
-  if (summary.isLoading) return <LoadingState label="در حال دریافت خلاصه پروژه…" />;
+  // قالب همان صفحه، نه چرخندهٔ وسط‌چین (دور ۹۹).
+  if (summary.isLoading) return <DetailPageSkeleton label="در حال دریافت خلاصه پروژه…" tabs={5} />;
   if (summary.isError) return <ErrorState error={summary.error} onRetry={() => summary.refetch()} title="خلاصه پروژه دریافت نشد." />;
   const data = summary.data?.data;
   const cards = [
@@ -559,7 +560,7 @@ function DomainPanel({
         )}
       </FilterBar>
 
-      {query.isLoading && <LoadingState label="در حال دریافت رکوردها…" />}
+      {query.isLoading && <ListRowsSkeleton rows={5} label="در حال دریافت رکوردها…" />}
       {query.isError && <ErrorState error={query.error} onRetry={() => query.refetch()} title="رکوردهای پروژه دریافت نشد." />}
       {!query.isLoading && !query.isError && (viewMode === 'cards' ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -658,7 +659,7 @@ function ContentPlans({
   const [newMode, setNewMode] = useState(false);
   const canEdit = hasPermission('projects.edit');
 
-  if (loading) return <LoadingState label="در حال دریافت برنامه محتوا…" />;
+  if (loading) return <ListRowsSkeleton rows={4} label="در حال دریافت برنامه محتوا…" />;
   if (error) return <ErrorState error={error} onRetry={onRetry} title="برنامه محتوای پروژه دریافت نشد." />;
 
   return (

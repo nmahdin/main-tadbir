@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import { baleApi, BaleState } from '../../api/bale';
 import { ApiResponse } from '../../api/client';
-import { Button, Input, LoadingState } from '../common/Primitives';
+import { Button, Input } from '../common/Primitives';
+import { ListRowsSkeleton } from '../common/Shimmer';
 import { baleDate, baleDeliveryLabel, baleErrorLabel } from './balePresentation';
 import { useSlidingTabs } from '../common/SlidingTabs';
 
@@ -72,7 +73,7 @@ export function BaleSettingsPanel() {
     return activated;
   };
 
-  if (!state && !error) return <LoadingState label="در حال دریافت وضعیت ربات بله…" />;
+  if (!state && !error) return <ListRowsSkeleton rows={3} label="در حال دریافت وضعیت ربات بله…" />;
   if (!state) return <section role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</section>;
 
   const connected = state.connection_status === 'connected';

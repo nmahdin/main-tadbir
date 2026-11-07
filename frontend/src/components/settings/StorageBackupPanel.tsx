@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, Database, Download, Gauge, HardDrive, RefreshCw, ShieldAlert, Trash2, Upload, Zap } from 'lucide-react';
-import { Button, Input, LoadingState } from '../common/Primitives';
+import { Button, Input } from '../common/Primitives';
+import { ListRowsSkeleton } from '../common/Shimmer';
 import { maintenanceApi, type MaintenanceOverview } from '../../api/maintenance';
 import { useApp } from '../../context/AppContext';
 import { runtime } from '../../config/runtime';
@@ -59,7 +60,7 @@ export function StorageBackupPanel() {
     );
   }
 
-  if (overview.isPending) return <LoadingState label="در حال خواندن وضعیت ذخیره‌سازی…" />;
+  if (overview.isPending) return <ListRowsSkeleton rows={3} label="در حال خواندن وضعیت ذخیره‌سازی…" />;
 
   if (overview.isError || !data) {
     return (

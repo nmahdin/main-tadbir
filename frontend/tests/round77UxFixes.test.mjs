@@ -86,6 +86,6 @@ test('کلیک روی عنوان/ردیف ناوبری انیمیشن فشردن
   assert.match(css, /transform: none !important;\s*box-shadow: none !important;/);
   // نمونه‌های گزارش‌شده: عنوان محتوا در مجموعه و عنوان ردیف‌های فهرست‌ها.
   assert.equal(seriesView.match(/data-press="none"/g)?.length, 2);
-  assert.match(workspaceList, /<button type="button" data-press="none" className=\{`\$\{className\} text-right`\} onClick=\{\(\) => app\.setSelectedTaskId/);
+  assert.match(workspaceList, /<button type="button" data-press="none" className=\{`\$\{className\} text-right`\} onClick=\{\(\) => \{ fresh\.markOpened\(row\.id\); app\.setSelectedTaskId/);
   assert.equal(damLibrary.match(/data-press="none"/g)?.length, 2);
 });

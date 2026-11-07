@@ -15,7 +15,8 @@ import {
 import { integrityApi } from '../../api/integrity';
 import { useApp } from '../../context/AppContext';
 import type { IntegrityFinding } from '../../types';
-import { Button, EmptyState, ErrorState, LoadingState, Select } from '../common/Primitives';
+import { Button, EmptyState, ErrorState, Select } from '../common/Primitives';
+import { ReportSkeleton } from '../common/Shimmer';
 import { DataTable, FilterBar, Pagination } from '../common/WorkspacePatterns';
 
 const severityLabels: Record<string, string> = {
@@ -111,7 +112,7 @@ export const IntegrityView: React.FC = () => {
         )}
       </FilterBar>
 
-      {query.isLoading && <LoadingState label="در حال بررسی یکپارچگی داده‌ها…" />}
+      {query.isLoading && <ReportSkeleton label="در حال بررسی یکپارچگی داده‌ها…" />}
       {query.isError && <ErrorState error={query.error} onRetry={() => query.refetch()} title="گزارش یکپارچگی دریافت نشد." />}
       {!query.isLoading && !query.isError && (
         <DataTable label="یافته‌های یکپارچگی داده">

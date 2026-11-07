@@ -16,7 +16,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { commentsApi, CommentSubjectType, UnifiedComment } from '../../api/comments';
 import { useApp } from '../../context/AppContext';
-import { EmptyState, ErrorState, LoadingState } from '../common/Primitives';
+import { EmptyState, ErrorState } from '../common/Primitives';
+import { ListRowsSkeleton } from '../common/Shimmer';
 
 const labels: Record<CommentSubjectType, string> = { task: 'وظیفه', content: 'محتوا', idea: 'ایده', asset: 'دارایی' };
 const tones: Record<CommentSubjectType, string> = {
@@ -129,7 +130,7 @@ export const CommentsView: React.FC = () => {
     </header>
 
     <div className="space-y-3">
-      {query.isLoading ? <div className="rounded-3xl border border-slate-200 bg-white"><LoadingState label="در حال دریافت دیدگاه‌ها…" /></div>
+      {query.isLoading ? <ListRowsSkeleton rows={5} label="در حال دریافت دیدگاه‌ها…" />
         : query.isError ? <div className="rounded-3xl border border-slate-200 bg-white"><ErrorState error={query.error} onRetry={() => void query.refetch()} /></div>
         : rows.length === 0 ? <div className="rounded-3xl border border-dashed border-slate-300 bg-white"><EmptyState title="دیدگاهی پیدا نشد"><p className="mt-2 text-xs">فیلتر را تغییر دهید و دوباره بررسی کنید.</p></EmptyState></div>
         : roots.map(comment => renderComment(comment))}

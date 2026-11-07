@@ -21,7 +21,8 @@ import type { Content, Project, Task } from '../../types';
 import { formatPersianDate } from '../../utils/date';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../common/PriorityPill';
-import { EmptyState, ErrorState, LoadingState } from '../common/Primitives';
+import { EmptyState, ErrorState } from '../common/Primitives';
+import { ListRowsSkeleton, ReportSkeleton } from '../common/Shimmer';
 import { DepartmentModal } from './DepartmentModal';
 import { useSlidingTabs } from '../common/SlidingTabs';
 
@@ -79,7 +80,7 @@ export const DepartmentDashboardView: React.FC = () => {
   const canEdit = hasPermission('departments.edit');
 
   if (!canViewDepartmentList && managedDepartmentsQuery.isPending && !manageable.length) {
-    return <section className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8" dir="rtl"><div className="rounded-3xl border border-slate-200 bg-white"><LoadingState label="در حال دریافت دپارتمان‌های تحت مدیریت…" /></div></section>;
+    return <section className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8" dir="rtl"><ListRowsSkeleton rows={4} label="در حال دریافت دپارتمان‌های تحت مدیریت…" /></section>;
   }
   if (!canViewDepartmentList && managedDepartmentsQuery.isError && !manageable.length) {
     return <section className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8" dir="rtl"><div className="rounded-3xl border border-slate-200 bg-white"><ErrorState title="دریافت داشبورد دپارتمان ناموفق بود" error={managedDepartmentsQuery.error} onRetry={() => void managedDepartmentsQuery.refetch()} /></div></section>;
@@ -113,7 +114,7 @@ export const DepartmentDashboardView: React.FC = () => {
       </div>}
     </header>
 
-    {query.isPending ? <div className="rounded-3xl border border-slate-200 bg-white"><LoadingState label="در حال دریافت داشبورد دپارتمان…" /></div>
+    {query.isPending ? <ReportSkeleton label="در حال دریافت داشبورد دپارتمان…" />
       : query.isError ? <div className="rounded-3xl border border-slate-200 bg-white"><ErrorState error={query.error} onRetry={() => void query.refetch()} /></div>
       : data && <>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

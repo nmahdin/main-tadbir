@@ -12,7 +12,8 @@ import { deadlineDaysLabel, deadlineState } from '../../utils/date';
 import { DEADLINE_CHIP_TONES, DEADLINE_ICON_TONES, deadlineToneTier } from '../../utils/deadlineTones';
 import { Avatar } from '../common/Avatar';
 import { PriorityPill } from '../common/PriorityPill';
-import { Button, ErrorState, LoadingState, Modal } from '../common/Primitives';
+import { Button, ErrorState, Modal } from '../common/Primitives';
+import { ListRowsSkeleton } from '../common/Shimmer';
 import { EditTaskModal } from './EditTaskModal';
 import { Collapsible } from '../common/Collapsible';
 
@@ -55,7 +56,7 @@ export const TaskDetailDrawer: React.FC = () => {
   if (!isLoggedIn || !selectedTaskId) return null;
   const task = (hasTaskDetails(localTask) ? localTask : undefined) || (hasTaskDetails(taskQuery.data) ? taskQuery.data : undefined);
   const close = () => setSelectedTaskId(null);
-  if (!task) return <Modal open onClose={close} title="جزئیات وظیفه">{taskQuery.isError ? <ErrorState error={taskQuery.error} onRetry={() => void taskQuery.refetch()} /> : <LoadingState label="در حال دریافت جزئیات وظیفه…" />}</Modal>;
+  if (!task) return <Modal open onClose={close} title="جزئیات وظیفه">{taskQuery.isError ? <ErrorState error={taskQuery.error} onRetry={() => void taskQuery.refetch()} /> : <ListRowsSkeleton rows={4} label="در حال دریافت جزئیات وظیفه…" />}</Modal>;
 
   const busy = pendingMutationKeys.includes(`tasks:${task.id}`);
   const reviewTask = task.kind === 'content_review';

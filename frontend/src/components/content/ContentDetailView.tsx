@@ -49,6 +49,7 @@ import { InlineSpinner } from '../common/Feedback';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { EditContentModal } from './EditContentModal';
 import { EditWorkflowModal } from './EditWorkflowModal';
+import { DetailPageSkeleton, ListRowsSkeleton } from '../common/Shimmer';
 import { useSlidingTabs } from '../common/SlidingTabs';
 import { Settings } from 'lucide-react';
 import {
@@ -496,12 +497,8 @@ export const ContentDetailView: React.FC = () => {
     // تا زمانی که خواندن مستقیم پرونده در جریان است، پیام «یافت نشد» نمایش
     // داده نمی‌شود؛ این حالت پیش‌تر باعث می‌شد کاربر فکر کند صفحه باز نمی‌شود.
     if (contentFallbackLoading) {
-      return (
-        <div className="flex flex-col items-center justify-center gap-3 py-20 text-slate-500" dir="rtl" role="status" aria-live="polite">
-          <InlineSpinner size="lg" className="text-indigo-600" />
-          <p className="text-xs font-bold">در حال بارگذاری پروندهٔ محتوا…</p>
-        </div>
-      );
+      // به‌جای چرخندهٔ وسط‌چین، قالب همان صفحه (دور ۹۹) تا با رسیدن داده نپرد.
+      return <div dir="rtl"><DetailPageSkeleton label="در حال بارگذاری پروندهٔ محتوا…" tabs={4} /></div>;
     }
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-center text-slate-500" dir="rtl">
@@ -1897,7 +1894,7 @@ export const ContentDetailView: React.FC = () => {
         {!runtime.demoMode && activeTab === 'attachments' && <div className="space-y-5">
           <section className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
             <div className="mb-4"><h3 className="text-xs font-black text-slate-900">فایل‌های مرتبط</h3><p className="mt-1 text-[10px] leading-5 text-slate-500">نام فایل و پوشهٔ آن نمایش داده می‌شود.</p></div>
-            {linkedContentAssets.isLoading && <div className="rounded-xl border border-slate-200 bg-white p-5 text-center text-xs text-slate-400">در حال دریافت فایل‌های ورودی، خروجی و پیوست‌ها…</div>}
+            {linkedContentAssets.isLoading && <ListRowsSkeleton rows={3} label="در حال دریافت فایل‌های ورودی، خروجی و پیوست‌ها…" />}
             {linkedContentAssets.isError && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><span>{parseApiError(linkedContentAssets.error).message}</span><Button variant="secondary" className="text-[10px]" onClick={() => void linkedContentAssets.refetch()}>تلاش دوباره</Button></div>}
             {!linkedContentAssets.isLoading && !linkedContentAssets.isError && <div className="grid gap-3 lg:grid-cols-3">
               <LinkedAssetGroup title="فایل‌های ورودی" assets={inputAssets} empty="فایل ورودی ثبت نشده است." onOpen={asset => setPreviewStageAsset(linkedAssetView(asset, 'فایل ورودی محتوا'))} />
@@ -1914,7 +1911,7 @@ export const ContentDetailView: React.FC = () => {
               </div>
               <span className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">{(contentLinkedRows.data?.meta?.total ?? contentLinkedRows.data?.data.length ?? 0).toLocaleString('fa-IR')} ردیف</span>
             </div>
-            {contentLinkedRows.isLoading && <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-xs text-slate-400">در حال دریافت ردیف‌های جدول اطلاعات…</div>}
+            {contentLinkedRows.isLoading && <ListRowsSkeleton rows={3} label="در حال دریافت ردیف‌های جدول اطلاعات…" />}
             {contentLinkedRows.isError && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><span>{parseApiError(contentLinkedRows.error).message}</span><Button variant="secondary" className="text-[10px]" onClick={() => void contentLinkedRows.refetch()}>تلاش دوباره</Button></div>}
             {rowLinkError && <p role="alert" className="mb-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[11px] leading-6 text-rose-700">{rowLinkError}</p>}
             {!contentLinkedRows.isLoading && !contentLinkedRows.isError && (!(contentLinkedRows.data?.data || []).length

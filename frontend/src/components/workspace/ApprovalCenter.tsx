@@ -9,7 +9,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { request } from '../../api/client';
 import { parseApiError } from '../../api/errors';
-import { Button, EmptyState, ErrorState, FormField, LoadingState, Modal, Textarea } from '../common/Primitives';
+import { Button, EmptyState, ErrorState, FormField, Modal, Textarea } from '../common/Primitives';
+import { ApprovalCardsSkeleton } from '../common/Shimmer';
 import { Pagination } from '../common/WorkspacePatterns';
 import { formatPersianDate } from '../../utils/date';
 import { canUsePermission } from '../../utils/permissions';
@@ -63,7 +64,7 @@ export function ApprovalCenter() {
 
     {(filter.item || filter.content_id || filter.stage_id) && <div><Button variant="ghost" onClick={() => setParams({})}><RotateCcw className="w-4 h-4" />نمایش همهٔ بررسی‌های من</Button></div>}
 
-    {query.isPending ? <LoadingState label="در حال دریافت موارد نیازمند بررسی…" /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? (
+    {query.isPending ? <ApprovalCardsSkeleton count={4} /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? (
       <div className="rounded-3xl border border-emerald-200 bg-emerald-50/60 p-10 text-center"><CheckCircle2 className="w-11 h-11 mx-auto text-emerald-500" /><h2 className="mt-3 font-black text-emerald-900">موردی در انتظار بررسی نیست</h2><p className="mt-1 text-xs text-emerald-700">همهٔ ارجاع‌های شما تعیین تکلیف شده‌اند.</p></div>
     ) : <>
       <div className="grid md:grid-cols-2 gap-4">{query.data.data.map(row => {

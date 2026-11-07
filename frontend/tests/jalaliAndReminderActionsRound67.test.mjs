@@ -61,7 +61,7 @@ test('content list rows expose real actions and a compact progress cell', async 
   const list = await source('../src/components/workspace/WorkspaceList.tsx');
 
   // تنها دکمهٔ ستون عملیات در فهرست محتوا «نمایش» است.
-  assert.match(list, /module === 'contents' \? <Link to=\{detail\(row\.id\)\} aria-label=\{`نمایش \$\{titleOf\(row\)\}`\} title="نمایش"/);
+  assert.match(list, /module === 'contents' \? <Link to=\{detail\(row\.id\)\} onClick=\{\(\) => fresh\.markOpened\(row\.id\)\} aria-label=\{`نمایش \$\{titleOf\(row\)\}`\} title="نمایش"/);
   assert.doesNotMatch(list, /archiveItem\('content'/);
   // ستون وضعیت پهن‌تر و ستون عملیات باریک‌تر شد.
   assert.match(list, /<th className=\{module === 'contents' \? 'w-56 p-4' : 'p-4'\}>وضعیت<\/th>/);
