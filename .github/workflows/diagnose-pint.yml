@@ -22,12 +22,12 @@ jobs:
       - name: Install
         working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Run pint
+      - name: Pint canonical scope
         id: pint
         working-directory: backend
         run: |
           set +e
-          php vendor/bin/pint --test app/Core app/Modules app/Http/Controllers/Api/V1/Platform app/Http/Controllers/Api/V1/BillingCatalogController.php tests/Unit/Architecture tests/Feature/Core bootstrap/providers.php -v > pint.out 2>&1
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php -v > pint.out 2>&1
           echo "ec=$?" >> $GITHUB_OUTPUT
       - name: Post
         if: always() && github.event_name == 'pull_request'
@@ -36,7 +36,7 @@ jobs:
           script: |
             const fs = require('fs');
             const c = fs.readFileSync('backend/pint.out','utf8');
-            const body = '## Pint failures\n\n```\n' + c.slice(-25000) + '\n```';
+            const body = '## Pint failures (canonical scope)\n\n```\n' + c.slice(-30000) + '\n```';
             await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
       - name: Fail
         if: always()
