@@ -14,6 +14,7 @@ use App\Core\Workspaces\Workspace;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+
 /**
  * Write-only secret configuration (Stage C7-4) over the C7-3
  * ScopedSecretService. Responses contain metadata ONLY

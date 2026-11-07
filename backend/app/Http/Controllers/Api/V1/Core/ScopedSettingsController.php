@@ -15,6 +15,7 @@ use App\Core\Workspaces\Workspace;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+
 /**
  * Scoped-settings HTTP surface (Stage C7-4).
  *

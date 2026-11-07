@@ -6,6 +6,7 @@ use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationLifecycleService;
 use App\Http\Controllers\Api\V1\Platform\Concerns\AuthorizesPlatformRequests;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -89,7 +90,7 @@ final class PlatformOrganizationController extends Controller
     }
 
     /**
-     * @param  Closure(\App\Models\User, string, int): Organization  $operation
+     * @param  Closure(User, string, int): Organization  $operation
      */
     private function transition(Request $request, Organization $organization, string $permission, Closure $operation): JsonResponse
     {

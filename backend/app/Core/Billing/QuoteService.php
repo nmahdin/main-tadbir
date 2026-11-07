@@ -97,7 +97,7 @@ final class QuoteService
             return ['quote' => $existing, 'is_replay' => true];
         }
 
-        return DB::transaction(function () use ($actor, $owner, $ownerKey, $planVersion, $period, $promoCode, $normalizedPromo, $idempotencyKey, $at): array {
+        return DB::transaction(function () use ($actor, $owner, $ownerKey, $planVersion, $period, $promoCode, $idempotencyKey, $at): array {
             // Lock plan version row to serialize publications with
             // quote creation (consistent lock order: version then
             // promo row).

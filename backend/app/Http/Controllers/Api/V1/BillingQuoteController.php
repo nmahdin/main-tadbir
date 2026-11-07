@@ -5,10 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Core\Billing\BillingArithmeticException;
 use App\Core\Billing\BillingDomainException;
 use App\Core\Billing\CoreBillingQuote;
-use App\Core\Billing\CatalogService;
 use App\Core\Billing\QuoteService;
 use App\Core\Organizations\Organization;
-use App\Core\Plans\CorePlan;
 use App\Core\Plans\CorePlanVersion;
 use App\Core\Rbac\MembershipPermissions;
 use App\Core\Subscriptions\SubscriptionOwner;
@@ -19,6 +17,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * C5-M2-S3 owner-scoped quote endpoints (SPEC §3.8):
@@ -110,7 +109,7 @@ final class BillingQuoteController extends Controller
 
         try {
             $owner = $resolveOwner($user);
-        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        } catch (HttpException $e) {
             return $this->forbidden('دسترسی برای ایجاد پیش‌فاکتور در این محدوده مجاز نیست.');
         }
 

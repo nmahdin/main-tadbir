@@ -27,6 +27,7 @@ use Database\Seeders\RoleSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+
 /**
  * Demo scenario data (ARCH-01) — LOCAL/TESTING ONLY.
  *

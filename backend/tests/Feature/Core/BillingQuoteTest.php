@@ -5,29 +5,29 @@ namespace Tests\Feature\Core;
 use App\Core\Billing\BillingDomainException;
 use App\Core\Billing\CoreBillingQuote;
 use App\Core\Billing\CorePlanPrice;
-use App\Core\Billing\CoreTaxRule;
 use App\Core\Billing\CorePromoReservation;
-use App\Core\Billing\MoneyToman;
+use App\Core\Billing\CorePromotion;
+use App\Core\Billing\CoreTaxRule;
 use App\Core\Billing\PlanPricePublisher;
 use App\Core\Billing\PromotionService;
 use App\Core\Billing\QuoteService;
 use App\Core\Billing\TaxRuleService;
+use App\Core\Memberships\MembershipStatus;
 use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\CorePlanVersion;
 use App\Core\Plans\PlanProvisioner;
-use App\Core\Plans\PlanProvisioningException;
 use App\Core\Rbac\MembershipPermissions;
 use App\Core\Rbac\PermissionCatalog;
-use App\Core\Memberships\MembershipStatus;
 use App\Core\Rbac\ScopedPermission;
 use App\Core\Rbac\ScopedRole;
+use App\Core\Subscriptions\SubscriptionOwner;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
-use App\Core\Workspaces\Workspace;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -101,7 +101,7 @@ class BillingQuoteTest extends TestCase
         $threw = false;
         try {
             $svc->create($this->actor, $owner, $v, 'quarterly', null, 'kq');
-        } catch (\App\Core\Billing\BillingDomainException $e) {
+        } catch (BillingDomainException $e) {
             $threw = $e->errorCode === 'price_unavailable';
         }
         $this->assertTrue($threw, 'Unpublished quarterly must be rejected.');
@@ -109,7 +109,7 @@ class BillingQuoteTest extends TestCase
         $threw2 = false;
         try {
             $svc->create($this->actor, $owner, $v, 'weekly', null, 'kw');
-        } catch (\App\Core\Billing\BillingDomainException $e) {
+        } catch (BillingDomainException $e) {
             $threw2 = $e->errorCode === 'period_invalid';
         }
         $this->assertTrue($threw2);
@@ -227,7 +227,7 @@ class BillingQuoteTest extends TestCase
 
         $svc->create($this->actor, $this->personalOwner($this->actor), $v, 'monthly', 'RACE', 'kc-0');
 
-        $this->expectException(\App\Core\Billing\BillingDomainException::class);
+        $this->expectException(BillingDomainException::class);
         $this->expectExceptionMessage('redemption limit');
         $svc->create($actorB, $ownerB, $v, 'monthly', 'RACE', 'kc-1');
     }
@@ -261,7 +261,7 @@ class BillingQuoteTest extends TestCase
         ]);
         $this->grantOrgPermission($this->actor, $org, 'organization.billing.manage');
         $svc = app(QuoteService::class);
-        $ownerOrg = new \App\Core\Subscriptions\SubscriptionOwner('organization', $org, null);
+        $ownerOrg = new SubscriptionOwner('organization', $org, null);
         $q = $svc->create($this->actor, $ownerOrg, $v, 'monthly', null, 'k-org')['quote'];
 
         // Other user should not see it.
@@ -331,31 +331,31 @@ class BillingQuoteTest extends TestCase
 
     // ---- helpers ----
 
-    private function personalOwner(User $user): \App\Core\Subscriptions\SubscriptionOwner
+    private function personalOwner(User $user): SubscriptionOwner
     {
         $ws = app(PersonalWorkspaceProvisioner::class)->ensureDefault($user);
 
-        return new \App\Core\Subscriptions\SubscriptionOwner('personal', null, $ws);
+        return new SubscriptionOwner('personal', null, $ws);
     }
 
-    private function publishedVersion(string $planKey, string $audience, array $pricesByPeriod): \App\Core\Plans\CorePlanVersion
+    private function publishedVersion(string $planKey, string $audience, array $pricesByPeriod): CorePlanVersion
     {
         $p = app(PlanProvisioner::class);
         $p->createPlan($planKey, ucfirst($planKey), $audience);
         $p->createDraftVersion($planKey, 1);
         $p->setPlanStatus($planKey, CorePlan::STATUS_ACTIVE);
-        $v = \App\Core\Plans\CorePlanVersion::whereHas('plan', fn ($q) => $q->where('key', $planKey))->firstOrFail();
+        $v = CorePlanVersion::whereHas('plan', fn ($q) => $q->where('key', $planKey))->firstOrFail();
         app(PlanPricePublisher::class)->publishPrices($v, $pricesByPeriod, $this->actor);
 
         return $v->fresh();
     }
 
-    private function activateTax(int $bp): \App\Core\Billing\CoreTaxRule
+    private function activateTax(int $bp): CoreTaxRule
     {
         return app(TaxRuleService::class)->createRule('VAT', $bp, $this->actor, true);
     }
 
-    private function createPromo(string $code, string $type, ?int $bp, ?int $fixed, ?int $maxRedemptions = null, ?int $perOwner = null): \App\Core\Billing\CorePromotion
+    private function createPromo(string $code, string $type, ?int $bp, ?int $fixed, ?int $maxRedemptions = null, ?int $perOwner = null): CorePromotion
     {
         return app(PromotionService::class)->create($code, 'promo', $type, $bp, $fixed, $this->actor, null, null, $maxRedemptions, $perOwner);
     }
@@ -417,14 +417,14 @@ class BillingQuoteTest extends TestCase
         ]);
         $this->grantOrgPermission($owner, $org, MembershipPermissions::ORG_BILLING_MANAGE);
         $svc = app(QuoteService::class);
-        $svc->create($owner, new \App\Core\Subscriptions\SubscriptionOwner('organization', $org, null), $v, 'monthly', null, 'rk-oz');
+        $svc->create($owner, new SubscriptionOwner('organization', $org, null), $v, 'monthly', null, 'rk-oz');
 
         $driver = DB::connection()->getDriverName();
         if (in_array($driver, ['mysql', 'mariadb'], true)) {
             $threw = false;
             try {
                 $org->delete();
-            } catch (\Illuminate\Database\QueryException $e) {
+            } catch (QueryException $e) {
                 $threw = str_contains($e->getMessage(), 'CONSTRAINT') || str_contains($e->getMessage(), 'foreign key') || str_contains($e->getCode(), '23000') || str_contains($e->getCode(), 'HY000');
             }
             $this->assertTrue($threw, 'Organization delete must be restricted while it owns a quote.');
@@ -473,7 +473,7 @@ class BillingQuoteTest extends TestCase
         DB::transaction(function () use ($svc, $r2): void {
             $svc->activate($r2, $this->actor);
         });
-        $this->assertSame(1, \App\Core\Billing\CoreTaxRule::query()->where('is_active', true)->count(), 'At most one tax rule may be active at any instant (Q3=A).');
+        $this->assertSame(1, CoreTaxRule::query()->where('is_active', true)->count(), 'At most one tax rule may be active at any instant (Q3=A).');
     }
 
     private function grantOrgPermission(User $user, Organization $org, string $permKey): void

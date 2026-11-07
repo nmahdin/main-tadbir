@@ -12,6 +12,7 @@ use App\Core\Workspaces\Workspace;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+
 /**
  * Non-secret revision history + restore (Stage C7-4) over the
  * C7-3 ScopedSettingService contracts. History is metadata plus

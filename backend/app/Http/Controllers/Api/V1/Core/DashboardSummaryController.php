@@ -20,8 +20,8 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * UX-02-2 read-only dashboard summaries.

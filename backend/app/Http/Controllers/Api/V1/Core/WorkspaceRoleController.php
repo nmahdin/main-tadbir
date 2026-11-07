@@ -25,8 +25,7 @@ class WorkspaceRoleController extends Controller
     public function __construct(
         private readonly MembershipPermissions $permissions,
         private readonly WorkspaceRoleService $roles,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request, Workspace $workspace): JsonResponse
     {

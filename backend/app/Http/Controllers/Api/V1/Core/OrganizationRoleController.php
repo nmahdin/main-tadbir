@@ -23,8 +23,7 @@ class OrganizationRoleController extends Controller
     public function __construct(
         private readonly MembershipPermissions $permissions,
         private readonly OrganizationRoleService $roles,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request, Organization $organization): JsonResponse
     {

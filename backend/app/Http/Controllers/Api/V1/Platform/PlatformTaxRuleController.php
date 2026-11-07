@@ -25,7 +25,7 @@ final class PlatformTaxRuleController extends Controller
 
     public function index(Request $request, TaxRuleService $service): JsonResponse
     {
-        return $this->platformRespond(function () use ($request, $service): JsonResponse {
+        return $this->platformRespond(function () use ($request): JsonResponse {
             $this->platformActor($request, self::PERMISSION);
             $rules = CoreTaxRule::query()->orderByDesc('id')->get();
 

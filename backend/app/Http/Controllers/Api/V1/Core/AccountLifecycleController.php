@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Core;
 
 use App\Core\Identity\AccountLifecycle;
 use App\Core\Identity\AccountLifecycleException;
+use App\Core\Platform\PlatformAuthorizer;
 use App\Core\Rbac\RbacValidationException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
@@ -33,7 +34,7 @@ final class AccountLifecycleController extends Controller
         abort_unless(
             $actor->isAdmin()
             || $actor->hasPermission('users.status')
-            || app(\App\Core\Platform\PlatformAuthorizer::class)->allows($actor, 'platform.users.manage_status'),
+            || app(PlatformAuthorizer::class)->allows($actor, 'platform.users.manage_status'),
             403,
         );
 
