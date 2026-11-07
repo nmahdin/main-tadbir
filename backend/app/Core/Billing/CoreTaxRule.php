@@ -3,9 +3,9 @@
 namespace App\Core\Billing;
 
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * C5-M2-S2 configured itemized tax rule (M2-D3=A, Q3=A).
@@ -66,7 +66,7 @@ class CoreTaxRule extends Model
         return $this->belongsTo(User::class, 'deactivated_by');
     }
 
-    public function isApplicableAt(Carbon $at): bool
+    public function isApplicableAt(CarbonInterface $at): bool
     {
         if (! $this->is_active) {
             return false;

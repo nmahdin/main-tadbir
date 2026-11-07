@@ -201,10 +201,9 @@ class BillingTaxAndPromotionTest extends TestCase
         $v = CorePlanVersion::whereHas('plan', fn ($q) => $q->where('key', 'pers'))->firstOrFail();
         $publisher->publishPrices($v, ['monthly' => 500_000, 'quarterly' => 1_300_000, 'annual' => 5_000_000], $actor);
 
-        // Inactive plan hidden.
+        // Inactive (draft) plan hidden — createPlan creates plans in draft status.
         $provisioner->createPlan('team', 'Team', CorePlan::AUDIENCE_ORGANIZATION);
         $provisioner->createDraftVersion('team', 1);
-        $provisioner->setPlanStatus('team', CorePlan::STATUS_DRAFT);
 
         // Active plan with no published prices hidden.
         $provisioner->createPlan('noprice', 'NoPrice', CorePlan::AUDIENCE_PERSONAL);

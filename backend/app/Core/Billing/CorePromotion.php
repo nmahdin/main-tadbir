@@ -2,10 +2,12 @@
 
 namespace App\Core\Billing;
 
+use App\Core\Billing\Exceptions\BillingArithmeticException;
+use App\Core\Billing\Exceptions\BillingDomainException;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * C5-M2-S2 promotion code (Q2=A: one promo per quote, no stacking).
@@ -96,7 +98,7 @@ class CorePromotion extends Model
         return $this->belongsTo(User::class, 'deactivated_by');
     }
 
-    public function isValidAt(Carbon $at): bool
+    public function isValidAt(CarbonInterface $at): bool
     {
         if (! $this->is_active) {
             return false;
