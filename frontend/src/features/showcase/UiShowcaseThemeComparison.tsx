@@ -11,6 +11,7 @@ import { Alert, toast } from '../../shared/ui/Notifications';
 import { DataTable, type DataTableState } from '../../shared/ui/DataTable';
 import { initialDataTableState, filterRows, paginateRows, sortRows } from '../../shared/ui/dataTableLogic';
 import './uiShowcaseThemes.css';
+import { OceanDesignLab } from './lab/OceanDesignLab';
 
 /** Canonical Tadbir design template with real components and fictional data. */
 export function UiShowcaseThemeComparison() {
@@ -80,6 +81,7 @@ export function UiShowcaseThemeComparison() {
         })}
       </div>
     </section>
+    <OceanDesignLab />
     <div className="tadbir-theme-lab__surface"><UiShowcasePage /></div>
   </div>;
 }
