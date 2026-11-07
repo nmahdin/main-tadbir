@@ -19,14 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class CorePlanVersion extends Model
 {
-    protected $fillable = [
-        'plan_id',
-        'version',
-        'grace_days',
-        'published_at',
-        'published_monthly_price_id',
-        'published_annual_price_id',
-    ];
+    protected $fillable = ['plan_id', 'version', 'grace_days', 'published_at'];
 
     protected function casts(): array
     {
