@@ -35,7 +35,9 @@ test('task workspace keeps primary tabs, secondary filters and all three views',
     assert.ok(workspace.includes(view), `missing task view ${view}`);
   }
   assert.match(workspace, /filtersOpen/);
-  assert.match(workspace, /value=\{filters\.content_id \|\| ''\}/);
+  // دور ۹۳: کادر «محتوا» برداشته شد و جایش فیلتر وضعیت وظیفه آمد.
+  assert.match(workspace, /aria-label="فیلتر وضعیت وظیفه"/);
+  assert.doesNotMatch(workspace, /aria-label="فیلتر محتوا"/);
   assert.doesNotMatch(workspace, /module === 'tasks' \? 'مسئول'/);
   assert.match(workspace, /const projectAdvancedFilterCount/);
   assert.match(workspace, /aria-expanded=\{filtersOpen\}/);
@@ -90,7 +92,9 @@ test('page-level local search boxes stay removed in favor of global search', asy
 
   const pages = await Promise.all(pageFiles.map(source));
   pages.forEach((page, index) => {
-    assert.doesNotMatch(page, /placeholder="[^"]*(?:جست|search)/i, pageFiles[index]);
+    // فقط کادر جست‌وجوی مستقل صفحه ممنوع است؛ `searchPlaceholder` داخل
+    // منوهای شناور (مثل فیلتر پروژهٔ وظایف) کادر صفحه نیست.
+    assert.doesNotMatch(page, /(?:^|[\s<])placeholder="[^"]*(?:جست|search)/im, pageFiles[index]);
   });
   const globalSearch = await source('../src/components/layout/GlobalSearchModal.tsx');
   assert.match(globalSearch, /placeholder="[^"]*جستجو/);

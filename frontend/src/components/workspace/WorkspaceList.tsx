@@ -34,6 +34,7 @@ import { Button, EmptyState, ErrorState, LoadingState, Select } from '../common/
 import { Pagination } from '../common/WorkspacePatterns';
 import { DeadlineChip } from '../common/DeadlineChip';
 import { Collapsible } from '../common/Collapsible';
+import { SearchableSelect } from '../common/SearchableSelect';
 import { formatPersianDate } from '../../utils/date';
 import { PublicationDateChip } from '../common/PublicationDateChip';
 import { ContentStatusBadge, ContentTypeBadge } from '../../utils/statusBadges';
@@ -156,6 +157,9 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const filters = parseListQuery(location.search, module, customStatuses, contentTypeIds, module === 'contents' ? app.targetAudiences : []);
   // پیوندهای قدیمی به وضعیت‌های نهایی نباید تب حذف‌شده را به فهرست اصلی بازگردانند.
   if (module === 'contents' && ['published', 'archived'].includes(filters.status || '')) delete filters.status;
+  // فیلتر «محتوا» از صفحهٔ وظایف برداشته شد؛ لینک قدیمی که هنوز `content_id`
+  // دارد نباید بی‌صدا فهرست را محدود کند و کاربر هم راهی برای پاک‌کردنش نبیند.
+  if (module === 'tasks') delete filters.content_id;
   const requestedView = search.get('view');
   const view = module === 'tasks'
     ? (requestedView === 'kanban' || requestedView === 'calendar' ? requestedView : 'list')
@@ -288,10 +292,28 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   };
   const total = query.data?.meta?.total ?? rows.length;
   const orderedTaskStatuses = [...app.taskStatuses].sort((left, right) => left.order - right.order).filter(status => status.id !== 'archived');
+  // «سررسید گذشته» وضعیت خودِ وظیفه نیست و سرور آن را از پارامتر `due` می‌خواند؛
+  // پس مقدار انتخاب‌شده را از همان `due` بازمی‌خوانیم تا پس از انتخاب هم روی
+  // گزینه بماند (وگرنه کادر بی‌صدا به «همه وضعیت‌ها» برمی‌گشت).
+  const taskStatusFilterValue = filters.status || ((filters.due || '') === 'overdue' ? 'overdue' : '');
+  const applyTaskStatusFilter = (next: string) => {
+    const nextParams = paramsFromFilters();
+    nextParams.delete('page');
+    if (next === 'overdue') {
+      nextParams.delete('status');
+      nextParams.set('due', 'overdue');
+    } else {
+      if ((filters.due || '') === 'overdue') nextParams.delete('due');
+      if (next) nextParams.set('status', next); else nextParams.delete('status');
+    }
+    setSearch(nextParams);
+  };
   const Icon = config.icon;
   const activeFilterEntries = Object.entries(filters).filter(([key]) => !['page', 'per_page'].includes(key));
   const projectAdvancedFilterCount = ['status', 'priority', 'due', 'sort', 'direction'].filter(key => filters[key]).length;
-  const taskAdvancedFilterCount = ['priority', 'project_id', 'content_id', 'sort', 'direction'].filter(key => filters[key]).length;
+  // «سررسید گذشته» هم از همین پنل انتخاب می‌شود، پس در شمارش فیلترهای فعال می‌آید.
+  const taskAdvancedFilterCount = ['status', 'priority', 'project_id', 'sort', 'direction'].filter(key => filters[key]).length
+    + ((filters.due || '') === 'overdue' ? 1 : 0);
   const contentAdvancedFilterCount = ['type', 'owner', 'target_audience', 'sort', 'direction'].filter(key => filters[key]).length;
   const advancedFilterCount = module === 'projects' ? projectAdvancedFilterCount : module === 'tasks' ? taskAdvancedFilterCount : contentAdvancedFilterCount;
 
@@ -390,12 +412,30 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             {module === 'projects' && <label className="text-[11px] font-bold text-slate-600">سررسید
               <Select aria-label="فیلتر سررسید" value={filters.due || ''} onChange={event => update('due', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="">همه موعدها</option><option value="today">امروز</option><option value="overdue">عقب‌افتاده</option></Select>
             </label>}
-            {module === 'tasks' && <label className="text-[11px] font-bold text-slate-600">پروژه
-              <Select aria-label="فیلتر پروژه" value={filters.project_id || ''} onChange={event => update('project_id', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه پروژه‌ها</option>{app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select>
+            {/* وضعیت وظیفه — دور ۹۳. پیش از این فقط «پیش‌تنظیم‌ها» وضعیت را عوض
+                می‌کردند و در پنل فیلترها راهی برای انتخاب وضعیت دلخواه نبود. */}
+            {module === 'tasks' && <label className="text-[11px] font-bold text-slate-600">وضعیت وظیفه
+              <Select aria-label="فیلتر وضعیت وظیفه" value={taskStatusFilterValue} onChange={event => applyTaskStatusFilter(event.target.value)} className="mt-1.5 min-w-36 text-xs">
+                <option value="">همه وضعیت‌ها</option>
+                {orderedTaskStatuses.map(status => <option key={status.id} value={status.id}>{status.label}</option>)}
+                {/* «تأخیردار» و «عقب‌افتاده» از روی موعد تعیین می‌شوند، نه وضعیت خودِ وظیفه. */}
+                <option value="overdue">سررسید گذشته</option>
+              </Select>
             </label>}
-            {module === 'tasks' && <label className="text-[11px] font-bold text-slate-600">محتوا
-              <Select aria-label="فیلتر محتوا" value={filters.content_id || ''} onChange={event => update('content_id', event.target.value)} className="mt-1.5 min-w-40 text-xs"><option value="">همه محتواها</option>{app.contents.map(content => <option key={content.id} value={content.id}>{content.title}</option>)}</Select>
-            </label>}
+            {/* پروژه با جست‌وجو: فهرست پروژه‌ها بلند است و انتخاب از یک `select`
+                ساده برای کاربر سنگین بود (دور ۹۳). */}
+            {module === 'tasks' && <div className="text-[11px] font-bold text-slate-600">پروژه
+              <SearchableSelect
+                value={filters.project_id || ''}
+                onChange={next => update('project_id', next)}
+                options={app.projects.map(project => ({ value: String(project.id), label: project.name }))}
+                placeholder="همه پروژه‌ها"
+                ariaLabel="فیلتر پروژه"
+                searchPlaceholder="جست‌وجوی پروژه…"
+                emptyText="پروژه‌ای مطابق جست‌وجو نیست."
+                className="mt-1.5 min-w-40"
+              />
+            </div>}
             {module === 'contents' && <label className="text-[11px] font-bold text-slate-600">مالک
               <Select aria-label="مالک" value={filters.owner || ''} onChange={event => update('owner', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="">همهٔ مجاز</option><option value="me">من</option></Select>
             </label>}
