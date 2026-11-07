@@ -26,7 +26,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property string $code
  * @property string $label
- * @property string $discount_type  // 'percent' | 'fixed'
+ * @property string $discount_type // 'percent' | 'fixed'
  * @property int|null $discount_value_bp
  * @property int|null $discount_value_toman
  * @property bool $is_active

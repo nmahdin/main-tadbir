@@ -5,9 +5,9 @@ use App\Http\Controllers\Api\V1\Platform\PlatformAuditController;
 use App\Http\Controllers\Api\V1\Platform\PlatformBillingPriceController;
 use App\Http\Controllers\Api\V1\Platform\PlatformOrganizationController;
 use App\Http\Controllers\Api\V1\Platform\PlatformPromotionController;
-use App\Http\Controllers\Api\V1\Platform\PlatformTaxRuleController;
 use App\Http\Controllers\Api\V1\Platform\PlatformRoleController;
 use App\Http\Controllers\Api\V1\Platform\PlatformSubscriptionController;
+use App\Http\Controllers\Api\V1\Platform\PlatformTaxRuleController;
 use App\Http\Controllers\Api\V1\Platform\PlatformUserController;
 use Illuminate\Support\Facades\Route;
 

@@ -3,6 +3,7 @@
 namespace App\Core\Billing;
 
 use App\Core\Plans\CorePlan;
+use App\Core\Plans\CorePlanVersion;
 use Illuminate\Support\Collection;
 
 /**
@@ -22,7 +23,7 @@ use Illuminate\Support\Collection;
 final class CatalogService
 {
     /**
-     * @return Collection<int, array{plan: CorePlan, version: \App\Core\Plans\CorePlanVersion, monthly: ?CorePlanPrice, quarterly: ?CorePlanPrice, annual: ?CorePlanPrice}>
+     * @return Collection<int, array{plan: CorePlan, version: CorePlanVersion, monthly: ?CorePlanPrice, quarterly: ?CorePlanPrice, annual: ?CorePlanPrice}>
      */
     public function publicCatalog(): Collection
     {
@@ -35,7 +36,7 @@ final class CatalogService
             }])
             ->get()
             ->map(function (CorePlan $plan): ?array {
-                /** @var \App\Core\Plans\CorePlanVersion|null $version */
+                /** @var CorePlanVersion|null $version */
                 $version = $plan->versions->first();
                 if ($version === null) {
                     return null;
