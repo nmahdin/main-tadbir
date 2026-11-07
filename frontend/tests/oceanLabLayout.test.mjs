@@ -19,6 +19,8 @@ test('FE-UX-LAYOUT-01 edit movement and drag ordering preserve membership',()=>{
  assert.equal(moved[0].id,'tasks');
  assert.equal(base[0].id,'projects');
  assert.deepEqual(moveWidget(moved,'tasks','up'),moved);
+ const withHidden=setWidgetVisible(base,'tasks',false);
+ assert.equal(moveWidget(withHidden,'projects','down')[2].id,'projects','visible movement skips hidden widgets');
  const dragged=moveWidgetBefore(base,'insights','projects');
  assert.equal(dragged[0].id,'insights');
  assert.equal(dragged.length,base.length);

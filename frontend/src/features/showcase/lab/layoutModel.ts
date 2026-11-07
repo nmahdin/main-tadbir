@@ -33,8 +33,11 @@ export function validateLayout(value:readonly WidgetPlacement[]):boolean{
   value.some(x=>x.visible);
 }
 export function moveWidget(value:readonly WidgetPlacement[],id:WidgetId,direction:MoveDirection):WidgetPlacement[]{
- const next=cloneLayout(value),from=next.findIndex(x=>x.id===id),to=from+(direction==='up'?-1:1);
- if(from<0||to<0||to>=next.length)return next;
+ const next=cloneLayout(value),from=next.findIndex(x=>x.id===id),step=direction==='up'?-1:1;
+ if(from<0||!next[from].visible)return next;
+ let to=from+step;
+ while(to>=0&&to<next.length&&!next[to].visible)to+=step;
+ if(to<0||to>=next.length)return next;
  const item=next[from];next[from]=next[to];next[to]=item;return next;
 }
 export function moveWidgetBefore(value:readonly WidgetPlacement[],source:WidgetId,target:WidgetId):WidgetPlacement[]{
