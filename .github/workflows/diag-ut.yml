@@ -1,0 +1,56 @@
+name: diag ut full (ephemeral)
+on:
+  pull_request:
+  push:
+    branches: ['arena/**']
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip, opcache
+          coverage: none
+          tools: composer:v2
+      - name: Install
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: PHPUnit all
+        id: ut
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          set +e
+          php vendor/bin/phpunit --colors=never > ut.out 2>&1
+          echo "ec=$?" >> $GITHUB_OUTPUT
+      - name: Post
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let out='';
+            try{out=fs.readFileSync('backend/ut.out','utf8')}catch(e){out='no ut.out'}
+            // first 3 errors only
+            const lines=out.split('\n');
+            const idxs=[];
+            for(let i=0;i<lines.length;i++){if(/^\d+\)/.test(lines[i]))idxs.push(i)}
+            let snippet=out.slice(0,5000);
+            if(idxs.length>0){
+              const end=idxs[Math.min(3,idxs.length)]||lines.length;
+              snippet=lines.slice(idxs[0]-5,Math.min(end+20,lines.length)).join('\n');
+            }
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body:'## ut err\nfailures:'+idxs.length+'\n\n```\n'+snippet.slice(0,30000)+'\n```\n\n## summary tail\n```\n'+out.slice(-2000)+'\n```'});
