@@ -122,7 +122,7 @@ export const DepartmentModal: React.FC<{
                 <label htmlFor="department-manager" className="block text-xs font-bold text-slate-700 mb-1.5">مدیر دپارتمان</label>
                 <Select id="department-manager" disabled={busy} value={managerId} onChange={event => setManagerId(event.target.value)}>
                   <option value="">بدون مدیر</option>
-                  {serverUsers.map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}
+                  {serverUsers.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
                 </Select>
               </div>
               <fieldset disabled={busy}>

@@ -288,7 +288,7 @@ export const EditProjectModal: React.FC = () => {
               >
                 {users.map(u => (
                   <option key={u.id} value={u.id}>
-                    {u.name} ({u.title})
+                    {u.name}
                   </option>
                 ))}
               </select>

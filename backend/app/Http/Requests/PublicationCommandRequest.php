@@ -13,6 +13,11 @@ class PublicationCommandRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['expectedVersion' => 'required|string|size:64'];
+        return [
+            'expectedVersion' => 'required|string|size:64',
+            // تاریخ و ساعت انتشار دلخواه؛ هر دو اختیاری‌اند و پیش‌فرض «همین حالا» است.
+            'publishDate' => ['nullable', 'date_format:Y-m-d'],
+            'publishTime' => ['nullable', 'date_format:H:i'],
+        ];
     }
 }

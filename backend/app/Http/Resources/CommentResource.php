@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Support\Media\PublicMedia;
 
 class CommentResource extends JsonResource
 {
@@ -15,7 +16,7 @@ class CommentResource extends JsonResource
             'id' => (string) $this->id,
             'userId' => $this->user_id ? (string) $this->user_id : '',
             'userName' => $this->user?->name ?? 'کاربر حذف‌شده',
-            'userAvatar' => $this->user?->avatar,
+            'userAvatar' => PublicMedia::url($this->user?->avatar),
             'text' => $this->body,
             'timestamp' => $this->created_at?->toIso8601String(),
             'createdAt' => $this->created_at?->toIso8601String(),

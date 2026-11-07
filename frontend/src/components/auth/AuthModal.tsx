@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { authApi } from '../../api/auth';
+import { apiErrorMessage, loginErrorMessage } from '../../api/errors';
+import { BrandLogo } from '../common/BrandLogo';
 import { IconButton } from '../common/Primitives';
 import { 
   Building2, 
@@ -12,7 +14,8 @@ import {
   ShieldCheck, 
   ShieldAlert, 
   CheckCircle2, 
-  AlertCircle, 
+  AlertCircle,
+  WifiOff,
   Eye, 
   EyeOff, 
   KeyRound, 
@@ -24,6 +27,31 @@ import {
   Bot,
   RotateCcw
 } from 'lucide-react';
+
+/**
+ * نمایش خطای ورود.
+ *
+ * خطای «ارتباط با اینترنت/سرور» دیگر مثل خطای رمز عبور قرمز و ترسناک نیست:
+ * کارت کهربایی با آیکون شبکه و یک راهنمای کوتاه نشان داده می‌شود تا کاربر
+ * بداند باید اتصال خود را بررسی کند، نه اینکه رمزش را دوباره عوض کند.
+ */
+const AuthError: React.FC<{ message: string }> = ({ message }) => {
+  const connection = /ارتباط با|اینترنت|اتصال|شبکه/.test(message);
+  return (
+    <div
+      role="alert"
+      className={`animate-in fade-in flex items-start gap-2.5 rounded-2xl border p-3.5 text-xs ${connection ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-rose-200 bg-rose-50 text-rose-800'}`}
+    >
+      {connection
+        ? <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />}
+      <div className="min-w-0 space-y-1">
+        {connection && <p className="font-black">ارتباط برقرار نشد</p>}
+        <p className="leading-6">{message}</p>
+      </div>
+    </div>
+  );
+};
 
 export const AuthModal: React.FC = () => {
   const { 
@@ -101,7 +129,8 @@ export const AuthModal: React.FC = () => {
     try {
       const result = await loginWithCredentials(identifier.trim(), password, rememberMe);
       if (!result.success) {
-        setErrorMessage(result.error || result.message || 'اطلاعات ورود نادرست است.');
+        // پیام از قبل در `loginWithCredentials` سازمان‌دهی شده است.
+        setErrorMessage(result.error || result.message || 'نام کاربری یا رمز عبور نادرست است.');
       } else {
         setSuccessMessage(result.message || 'با موفقیت وارد شدید!');
         setTimeout(() => {
@@ -127,7 +156,10 @@ export const AuthModal: React.FC = () => {
       setBaleCodeRequested(true);
       setSuccessMessage(response.message);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'ارسال کد ناموفق بود.');
+      // اگر حساب به بله متصل نباشد و ارسال به شماره هم ممکن نباشد، سرور همین‌جا
+      // پیام «امکان ارسال کد وجود ندارد» را می‌فرستد؛ همان متن نمایش داده می‌شود.
+      setBaleCodeRequested(false);
+      setErrorMessage(apiErrorMessage(error, 'ارسال کد یک‌بارمصرف ناموفق بود.'));
     } finally { setIsSubmitting(false); }
   };
 
@@ -141,7 +173,7 @@ export const AuthModal: React.FC = () => {
       setSuccessMessage(response.message || 'ورود امن با بله انجام شد.');
       setTimeout(() => setIsAuthModalOpen(false), 400);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'ورود با کد بله ناموفق بود.');
+      setErrorMessage(loginErrorMessage(error));
     } finally { setIsSubmitting(false); }
   };
 
@@ -158,7 +190,7 @@ export const AuthModal: React.FC = () => {
       setPassword(''); setBaleCode(''); setBaleCodeRequested(false); setResetPassword(''); setResetPasswordConfirmation('');
       setTimeout(() => setMode('login'), 900);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'بازیابی رمز عبور ناموفق بود.');
+      setErrorMessage(apiErrorMessage(error, 'بازیابی رمز عبور ناموفق بود.'));
     } finally { setIsSubmitting(false); }
   };
 
@@ -221,7 +253,11 @@ export const AuthModal: React.FC = () => {
     >
       <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] overflow-hidden">
         {/* Brand Banner Header */}
-        <div className="p-6 bg-gradient-to-br from-indigo-900 via-indigo-700 to-slate-900 text-white relative">
+        {/* نوار عنوان یکدست و هم‌رنگ رنگ اصلی سامانه است؛ گرادیان حذف شد. */}
+        <div
+          className="p-6 text-white relative"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 88%, black)' }}
+        >
           {isLoggedIn && (
             <IconButton
               label="بستن پنجره ورود"
@@ -235,8 +271,16 @@ export const AuthModal: React.FC = () => {
           )}
 
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-md flex items-center justify-center text-indigo-300 shadow-md">
-              <Building2 className="w-6 h-6 text-white" />
+            {/* لوگوی سفارشی سامانه (اگر تنظیم شده باشد) با اندازهٔ بهینه در
+                موبایل و دسکتاپ؛ در غیر این صورت نشان پیش‌فرض. */}
+            <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-md flex items-center justify-center text-indigo-300 shadow-md overflow-hidden shrink-0">
+              <BrandLogo
+                url={generalSettings.logoUrl}
+                priority
+                className="h-full w-full"
+                imgClassName="object-contain bg-white/95 p-1"
+                fallback={<Building2 className="w-6 h-6 sm:w-7 sm:h-7 text-white" />}
+              />
             </div>
             <div className="min-w-0">
               <h2 className="text-xl font-black tracking-tight text-white break-words">{generalSettings.orgName || 'سامانه تدبیر'}</h2>
@@ -249,12 +293,7 @@ export const AuthModal: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           
           {/* Alerts */}
-          {errorMessage && (
-            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2 animate-in fade-in">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
+          {errorMessage && <AuthError message={errorMessage} />}
 
           {successMessage && (
             <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 animate-in fade-in">
@@ -282,22 +321,22 @@ export const AuthModal: React.FC = () => {
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">نام کاربری <span className="text-rose-500">*</span></label>
-                    <div className="relative"><UserIcon className="w-4 h-4 text-slate-400 absolute right-3 top-3" /><input type="text" required value={identifier} onChange={event => setIdentifier(event.target.value)} placeholder="نام کاربری" dir="ltr" className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-left focus:bg-white focus:border-indigo-500 focus:outline-hidden" /></div>
+                    <div className="relative"><UserIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type="text" required value={identifier} onChange={event => setIdentifier(event.target.value)} placeholder="نام کاربری" dir="ltr" className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-left focus:bg-white focus:border-indigo-500 focus:outline-hidden" /></div>
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1.5"><label className="text-xs font-bold text-slate-700">رمز عبور <span className="text-rose-500">*</span></label><button type="button" onClick={() => { setMode('forgot'); setBaleCodeRequested(false); setBaleCode(''); setErrorMessage(''); setSuccessMessage(''); }} className="text-xs text-indigo-600 hover:text-indigo-800 font-bold">رمز عبور را فراموش کرده‌ام</button></div>
-                    <div className="relative"><Lock className="w-4 h-4 text-slate-400 absolute right-3 top-3" /><input type={showPassword ? 'text' : 'password'} required value={password} onChange={event => setPassword(event.target.value)} placeholder="رمز عبور ورود به سامانه" className="w-full pr-9 pl-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden" /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute left-3 top-3 text-slate-400 hover:text-slate-600">{showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button></div>
+                    <div className="relative"><Lock className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type={showPassword ? 'text' : 'password'} required value={password} onChange={event => setPassword(event.target.value)} placeholder="رمز عبور ورود به سامانه" className="w-full pr-9 pl-11 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden" /><button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'پنهان کردن رمز عبور' : 'نمایش رمز عبور'} aria-pressed={showPassword} className="absolute left-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">{showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button></div>
                   </div>
                   <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)} /><span className="text-xs font-bold text-slate-700">مرا به خاطر بسپار</span></label>
-                  <button type="submit" disabled={isSubmitting} aria-busy={isSubmitting} className="w-full py-3 px-4 rounded-xl disabled:opacity-70 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-md shadow-indigo-200 flex items-center justify-center gap-2">{isSubmitting ? <><LoaderCircle className="w-4 h-4 animate-spin" /><span>در حال ورود…</span></> : <><span>ورود به سامانه تدبیر</span><ArrowLeft className="w-4 h-4" /></>}</button>
+                  <button data-button-action="save" type="submit" disabled={isSubmitting} aria-busy={isSubmitting} className="w-full px-4 rounded-xl disabled:opacity-70 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-md shadow-indigo-200 flex items-center justify-center gap-2">{isSubmitting ? <><LoaderCircle className="w-4 h-4 animate-spin" /><span>در حال ورود…</span></> : <><span>ورود به سامانه تدبیر</span><ArrowLeft className="w-4 h-4" /></>}</button>
                 </form>
               ) : (
                 <form onSubmit={handleBaleLogin} className="space-y-4">
-                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 text-[11px] leading-6 text-emerald-900">کد فقط به گفت‌وگوی خصوصی بله‌ای ارسال می‌شود که قبلاً از پروفایل شما به حساب سامانه متصل شده است.</div>
-                  <div><label className="block text-xs font-bold text-slate-700 mb-1.5">نام کاربری</label><div className="relative"><UserIcon className="w-4 h-4 text-slate-400 absolute right-3 top-3" /><input type="text" required disabled={baleCodeRequested} value={identifier} onChange={event => setIdentifier(event.target.value)} placeholder="نام کاربری" dir="ltr" className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-left disabled:opacity-70" /></div></div>
-                  {baleCodeRequested && <div><label className="block text-xs font-bold text-slate-700 mb-1.5">کد یک‌بارمصرف شش‌رقمی</label><div className="relative"><KeyRound className="w-4 h-4 text-slate-400 absolute right-3 top-3" /><input autoFocus inputMode="numeric" maxLength={6} value={baleCode} onChange={event => setBaleCode(event.target.value.replace(/\D/g, ''))} placeholder="••••••" dir="ltr" className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center tracking-[.45em] text-base font-bold" /></div><button type="button" disabled={isSubmitting} onClick={() => void requestBaleCode('login')} className="mt-2 text-[11px] font-bold text-indigo-700 flex items-center gap-1"><RotateCcw className="w-3 h-3" />ارسال کد جدید</button></div>}
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 text-[11px] leading-6 text-emerald-900">کد یک‌بارمصرف فقط به گفت‌وگوی خصوصی ربات بله فرستاده می‌شود؛ پس حساب شما باید از قبل به بله متصل شده باشد. اگر متصل نباشد، پیام «امکان ارسال کد وجود ندارد» نمایش داده می‌شود.</div>
+                  <div><label className="block text-xs font-bold text-slate-700 mb-1.5">نام کاربری</label><div className="relative"><UserIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type="text" required disabled={baleCodeRequested} value={identifier} onChange={event => setIdentifier(event.target.value)} placeholder="نام کاربری" dir="ltr" className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-left disabled:opacity-70" /></div></div>
+                  {baleCodeRequested && <div><label className="block text-xs font-bold text-slate-700 mb-1.5">کد یک‌بارمصرف شش‌رقمی</label><div className="relative"><KeyRound className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input autoFocus inputMode="numeric" maxLength={6} value={baleCode} onChange={event => setBaleCode(event.target.value.replace(/\D/g, ''))} placeholder="••••••" dir="ltr" className="w-full pr-9 pl-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center tracking-[.45em] text-base font-bold" /></div><button type="button" disabled={isSubmitting} onClick={() => void requestBaleCode('login')} className="mt-2 text-[11px] font-bold text-indigo-700 flex items-center gap-1"><RotateCcw className="w-3 h-3" />ارسال کد جدید</button></div>}
                   <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)} /><span className="text-xs font-bold text-slate-700">مرا به خاطر بسپار</span></label>
-                  <button type="submit" disabled={isSubmitting || (baleCodeRequested && baleCode.length !== 6)} aria-busy={isSubmitting} className="w-full py-3 px-4 rounded-xl disabled:opacity-60 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-200 flex items-center justify-center gap-2">{isSubmitting ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}{baleCodeRequested ? 'ورود با کد بله' : 'ارسال کد در بله'}</button>
+                  <button data-button-action="save" type="submit" disabled={isSubmitting || (baleCodeRequested && baleCode.length !== 6)} aria-busy={isSubmitting} className="w-full px-4 rounded-xl disabled:opacity-60 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-200 flex items-center justify-center gap-2">{isSubmitting ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}{baleCodeRequested ? 'ورود با کد بله' : 'ارسال کد در بله'}</button>
                 </form>
               )}
             </>
@@ -417,7 +456,7 @@ export const AuthModal: React.FC = () => {
 
               <button data-button-action="create"
                 type="submit"
-                className="ui-form-action w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs transition-all shadow-md shadow-indigo-200 flex items-center justify-center gap-2 cursor-pointer mt-2"
+                className="ui-form-action w-full px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs transition-all shadow-md shadow-indigo-200 flex items-center justify-center gap-2 cursor-pointer mt-2"
               >
                 <span>ثبت‌نام و عضویت در سامانه</span>
                 <Check className="w-4 h-4" />
@@ -435,7 +474,7 @@ export const AuthModal: React.FC = () => {
                 <div className="grid sm:grid-cols-2 gap-3"><div><label className="block text-xs font-bold text-slate-700 mb-1.5">رمز عبور جدید</label><input type="password" minLength={8} value={resetPassword} onChange={event => setResetPassword(event.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs" /></div><div><label className="block text-xs font-bold text-slate-700 mb-1.5">تکرار رمز عبور</label><input type="password" minLength={8} value={resetPasswordConfirmation} onChange={event => setResetPasswordConfirmation(event.target.value)} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs" /></div></div>
                 <button type="button" disabled={isSubmitting} onClick={() => void requestBaleCode('password_reset')} className="text-[11px] font-bold text-indigo-700 flex items-center gap-1"><RotateCcw className="w-3 h-3" />ارسال دوباره کد</button>
               </>}
-              <button data-button-action={baleCodeRequested ? 'save' : undefined} type="submit" disabled={isSubmitting || (baleCodeRequested && (baleCode.length !== 6 || resetPassword.length < 8))} className={`${baleCodeRequested ? 'ui-form-action' : ''} w-full py-3 px-4 rounded-xl disabled:opacity-60 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2`}>{isSubmitting ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}{baleCodeRequested ? 'ثبت رمز عبور جدید' : 'ارسال کد بازیابی در بله'}</button>
+              <button data-button-action={baleCodeRequested ? 'save' : undefined} type="submit" disabled={isSubmitting || (baleCodeRequested && (baleCode.length !== 6 || resetPassword.length < 8))} className={`${baleCodeRequested ? 'ui-form-action' : ''} w-full px-4 rounded-xl disabled:opacity-60 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2`}>{isSubmitting ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}{baleCodeRequested ? 'ثبت رمز عبور جدید' : 'ارسال کد بازیابی در بله'}</button>
             </form>
           )}
 

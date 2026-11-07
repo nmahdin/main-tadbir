@@ -52,6 +52,22 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   } = useApp();
 
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  /**
+   * پیش از حذف، ۱۸۰ میلی‌ثانیه انیمیشن خروج اجرا می‌شود و بعد پیام از حالت
+   * حذف می‌شود؛ بدون این تاخیر، ردیف همان لحظه از DOM می‌پرید.
+   */
+  const [leaving, setLeaving] = useState(false);
+
+  // تابع حذف در ref نگه داشته می‌شود تا هویت تازهٔ آن در هر رندر، تایمر خروج را
+  // مدام از نو نسازد.
+  const deleteRef = React.useRef(deleteMessage);
+  deleteRef.current = deleteMessage;
+
+  React.useEffect(() => {
+    if (!leaving) return;
+    const timer = window.setTimeout(() => deleteRef.current(message.id), 180);
+    return () => window.clearTimeout(timer);
+  }, [leaving, message.id]);
 
   const conv = conversations.find(c => c.id === message.conversationId);
   const memberInfo = conv?.members?.find(m => m.userId === currentUser.id);
@@ -92,9 +108,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   return (
     <div
       id={`msg-${message.id}`}
-      className={`group relative flex gap-2.5 my-3.5 transition-all text-right ${
+      // ورود نرم با key یکتا (هر پیام یک‌بار) و خروج پیش از حذف.
+      className={`group relative flex gap-2.5 my-3.5 transition-all text-right ui-msg-in ${
         isMe ? 'flex-row-reverse' : 'flex-row'
-      }`}
+      } ${leaving ? 'ui-msg-out pointer-events-none' : ''}`}
     >
       {/* Sender Avatar (shown for others) */}
       {!isMe && (
@@ -382,7 +399,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         {/* Delete Button (Based on conversation delete permissions or admin) */}
         {canDelete && (
           <button
-            onClick={() => deleteMessage(message.id)}
+            onClick={() => setLeaving(true)}
+            disabled={leaving}
             title="حذف پیام"
             className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer"
           >

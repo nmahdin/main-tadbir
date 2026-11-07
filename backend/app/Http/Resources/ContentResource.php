@@ -37,7 +37,12 @@ class ContentResource extends JsonResource
             'periodKey' => $this->period_key,
             'plannedStartAt' => $this->planned_start_at?->toIso8601String(),
             'seriesActivatedAt' => $this->series_activated_at?->toIso8601String(),
-            'isWatched' => $request->user() ? $this->watchers()->where('users.id', $request->user()->id)->exists() : false,
+            // فهرست‌ها مقدار را با `withExists` همراه خودشان می‌آورند؛ فقط وقتی
+            // این ستون انتخاب نشده باشد (مثلاً در جزئیات یک پرونده) کوئری می‌زنیم.
+            'isWatched' => $request->user()
+                ? (bool) ($this->resource->is_watched
+                    ?? $this->watchers()->where('users.id', $request->user()->id)->exists())
+                : false,
             'comments' => CommentResource::collection($this->whenLoaded('comments')),
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),

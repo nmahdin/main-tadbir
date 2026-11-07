@@ -3,17 +3,18 @@ import { usePageCorrection } from '../../routing/usePageCorrection';
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, CheckCircle2, Clock3, ExternalLink, Eye, FileText, RotateCcw, ShieldCheck } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock3, ExternalLink, Eye, EyeOff, RotateCcw, ShieldCheck } from 'lucide-react';
 import { useWorkspacePage } from '../../queries/workspacePages';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { request } from '../../api/client';
 import { parseApiError } from '../../api/errors';
-import { Button, EmptyState, ErrorState, FormField, LoadingState, Modal, Textarea } from '../common/Primitives';
+import { Button, EmptyState, ErrorState, FormField, Modal, Textarea } from '../common/Primitives';
+import { ApprovalCardsSkeleton } from '../common/Shimmer';
 import { Pagination } from '../common/WorkspacePatterns';
 import { formatPersianDate } from '../../utils/date';
 import { canUsePermission } from '../../utils/permissions';
-import { resourceUrl } from '../../utils/resourceUrl';
+import { ApprovalOutputCard } from './ApprovalOutputCard';
 
 export function ApprovalCenter() {
   const { currentUser } = useAuth();
@@ -29,6 +30,9 @@ export function ApprovalCenter() {
   if (params.get('stage') && params.get('stage')!.length <= 120) filter.stage_id = params.get('stage')!;
   const query = useWorkspacePage('approvals', filter, allowed);
   usePageCorrection(query);
+  // پیش‌نمایش تصویر و خواندن ردیف‌های جدول اطلاعات فقط با مجوز مخزن ممکن است؛
+  // بدون آن، همان اطلاعات سبکِ خود خروجی نمایش داده می‌شود و درخواستی نمی‌رود.
+  const canPreviewAssets = canUsePermission(currentUser, [], 'assets.preview');
   const [selection, setSelection] = useState<{ row: any; decision: 'approve' | 'reject' } | null>(null);
   const [outputRow, setOutputRow] = useState<any | null>(null);
   const [note, setNote] = useState('');
@@ -60,7 +64,7 @@ export function ApprovalCenter() {
 
     {(filter.item || filter.content_id || filter.stage_id) && <div><Button variant="ghost" onClick={() => setParams({})}><RotateCcw className="w-4 h-4" />نمایش همهٔ بررسی‌های من</Button></div>}
 
-    {query.isPending ? <LoadingState label="در حال دریافت موارد نیازمند بررسی…" /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? (
+    {query.isPending ? <ApprovalCardsSkeleton count={4} /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? (
       <div className="rounded-3xl border border-emerald-200 bg-emerald-50/60 p-10 text-center"><CheckCircle2 className="w-11 h-11 mx-auto text-emerald-500" /><h2 className="mt-3 font-black text-emerald-900">موردی در انتظار بررسی نیست</h2><p className="mt-1 text-xs text-emerald-700">همهٔ ارجاع‌های شما تعیین تکلیف شده‌اند.</p></div>
     ) : <>
       <div className="grid md:grid-cols-2 gap-4">{query.data.data.map(row => {
@@ -70,22 +74,31 @@ export function ApprovalCenter() {
           <span className={`absolute inset-y-0 right-0 w-1 ${urgent ? 'bg-rose-500' : 'bg-amber-400'}`} />
           <div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className={`inline-flex rounded-lg px-2 py-1 text-[10px] font-black ${urgent ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>{urgent ? 'فوری' : 'منتظر بررسی'}</span><h2 className="mt-2 text-sm font-black text-slate-900 leading-6">{row.title}</h2><p className="mt-1 text-[11px] text-slate-600">مرحلهٔ «{row.stageTitle}»</p></div><ShieldCheck className={`w-5 h-5 shrink-0 ${urgent ? 'text-rose-500' : 'text-amber-500'}`} /></div>
           <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-500"><Clock3 className="w-3.5 h-3.5" /><span>{deadline ? `مهلت: ${formatPersianDate(row.deadline)}` : `ارجاع: ${formatPersianDate(row.createdAt)}`}</span></div>
-          <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" className="!min-h-8 !px-2.5 !py-1 text-[11px]" onClick={() => setOutputRow(row)}><Eye className="w-3.5 h-3.5" />نمایش خروجی</Button><Link className="ui-button ui-button-secondary !min-h-8 !px-2.5 !py-1 text-[11px]" to={`/contents/${row.contentId}`}><ExternalLink className="w-3.5 h-3.5" />محتوا</Link><Button className="!min-h-8 !px-2.5 !py-1 text-[11px]" onClick={() => open(row, 'approve')}><CheckCircle2 className="w-3.5 h-3.5" />تأیید</Button><Button className="!min-h-8 !px-2.5 !py-1 text-[11px]" variant="danger" onClick={() => open(row, 'reject')}><RotateCcw className="w-3.5 h-3.5" />نیازمند اصلاح</Button></div>
+          <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" className="!min-h-8 !px-2.5 !py-1 text-[11px]" onClick={() => setOutputRow(row)}><Eye className="w-3.5 h-3.5" />نمایش خروجی{Array.isArray(row.outputs) && row.outputs.length ? <span className="rounded-full bg-indigo-600 px-1.5 text-[9px] font-black text-white">{row.outputs.length.toLocaleString('fa-IR')}</span> : null}</Button><Link className="ui-button ui-button-secondary !min-h-8 !px-2.5 !py-1 text-[11px]" to={`/contents/${row.contentId}`}><ExternalLink className="w-3.5 h-3.5" />محتوا</Link><Button className="!min-h-8 !px-2.5 !py-1 text-[11px]" onClick={() => open(row, 'approve')}><CheckCircle2 className="w-3.5 h-3.5" />تأیید</Button><Button className="!min-h-8 !px-2.5 !py-1 text-[11px]" variant="danger" onClick={() => open(row, 'reject')}><RotateCcw className="w-3.5 h-3.5" />نیازمند اصلاح</Button></div>
         </article>;
       })}</div>
       <Pagination meta={query.data?.meta} busy={query.isFetching} onPage={nextPage => { const next = new URLSearchParams(params); next.set('page', String(nextPage)); setParams(next); }} />
     </>}
 
-    <Modal open={!!outputRow} title="خروجی مرحله" description={outputRow ? `${outputRow.title} — ${outputRow.stageTitle}` : undefined} onClose={() => setOutputRow(null)}>
+    <Modal open={!!outputRow} size="xl" title="خروجی‌های مرحله" description={outputRow ? `${outputRow.title} — ${outputRow.stageTitle}` : undefined} onClose={() => setOutputRow(null)}>
       <div className="space-y-4 p-5 sm:p-6">
         {outputRow?.stageDescription && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-600">{outputRow.stageDescription}</div>}
         {outputRow?.workReport && <div><h3 className="mb-1.5 text-[11px] font-black text-slate-700">گزارش انجام مرحله</h3><p className="rounded-xl border border-slate-200 bg-white p-3 text-xs leading-6 text-slate-600 whitespace-pre-wrap">{outputRow.workReport}</p></div>}
         <div>
-          <h3 className="mb-2 text-[11px] font-black text-slate-700">فایل‌ها و اقلام تحویلی</h3>
-          {Array.isArray(outputRow?.outputs) && outputRow.outputs.length ? <div className="space-y-2">{outputRow.outputs.map((output: any, index: number) => {
-            const link = resourceUrl(output.url);
-            return <article key={output.id || index} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><FileText className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-xs font-black text-slate-800 break-words">{output.name || output.title || output.fileName || `خروجی ${(index + 1).toLocaleString('fa-IR')}`}</p>{output.value && <p className="mt-1 text-[11px] leading-5 text-slate-500 whitespace-pre-wrap">{output.value}</p>}{link && <a href={link} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700"><ExternalLink className="h-3.5 w-3.5" />بازکردن خروجی</a>}</div></article>;
-          })}</div> : <p className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-xs text-slate-500">خروجی ثبت‌شده‌ای برای این مرحله وجود ندارد.</p>}
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-[11px] font-black text-slate-700">خروجی‌های همین مرحله</h3>
+            <span className="text-[10px] font-bold text-slate-500">
+              {(Array.isArray(outputRow?.outputs) ? outputRow.outputs.length : 0).toLocaleString('fa-IR')} مورد
+            </span>
+          </div>
+          {Array.isArray(outputRow?.outputs) && outputRow.outputs.length ? <div className="space-y-2">{outputRow.outputs.map((output: any, index: number) => (
+            // هر خروجی خودش تصویر/اطلاعات جدول را همان‌جا لود می‌کند؛ دکمهٔ «مشاهده»
+            // تنها برای قالب‌هایی می‌ماند که مرورگر نمی‌تواند درون‌صفحه نشان دهد.
+            <ApprovalOutputCard key={output.id || index} output={output} canPreview={canPreviewAssets} fallbackStageTitle={outputRow.stageTitle} />
+          ))}</div> : <div className="rounded-xl border border-dashed border-slate-300 p-5 text-center">
+            <EyeOff className="mx-auto h-5 w-5 text-slate-300" />
+            <p className="mt-2 text-xs text-slate-500">برای این مرحله خروجی و فایلی ثبت نشده است.</p>
+          </div>}
         </div>
         <div className="flex justify-end border-t border-slate-100 pt-3"><Button variant="secondary" onClick={() => setOutputRow(null)}>بستن</Button></div>
       </div>

@@ -12,23 +12,45 @@ import {
   Layers3,
   Pencil,
   UsersRound,
+  BellRing,
 } from 'lucide-react';
 import { departmentsApi } from '../../api/departments';
+import { tasksApi } from '../../api/tasks';
 import { useApp } from '../../context/AppContext';
 import type { Content, Project, Task } from '../../types';
 import { formatPersianDate } from '../../utils/date';
 import { ContentStatusBadge } from '../../utils/statusBadges';
 import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../common/PriorityPill';
-import { EmptyState, ErrorState, LoadingState } from '../common/Primitives';
+import { EmptyState, ErrorState } from '../common/Primitives';
+import { ListRowsSkeleton, ReportSkeleton } from '../common/Shimmer';
 import { DepartmentModal } from './DepartmentModal';
+import { useSlidingTabs } from '../common/SlidingTabs';
 
 type Tab = 'projects' | 'contents' | 'tasks';
 
 export const DepartmentDashboardView: React.FC = () => {
-  const { currentUser, departments, hasPermission, users, setSelectedTaskId } = useApp();
+  const { currentUser, departments, hasPermission, users, setSelectedTaskId, notify, notifyApiError } = useApp();
   const [search] = useSearchParams();
   const navigate = useNavigate();
   const [editOpen, setEditOpen] = useState(false);
+  const [remindingId, setRemindingId] = useState<string | null>(null);
+
+  /**
+   * یادآوری مسئول اجرا: یک دکمه و دو مقصد. اعلان در سامانه ثبت می‌شود و همان
+   * اعلان از مسیر موجود به بله هم می‌رود؛ سرور در هر ساعت بیش از یک یادآوری
+   * برای هر وظیفه نمی‌سازد و در آن حالت پاسخ ۴۲۹ با پیام روشن می‌دهد.
+   */
+  const remind = async (task: Task) => {
+    setRemindingId(task.id);
+    try {
+      const result = await tasksApi.remind(task.id);
+      notify({ type: 'success', title: 'یادآوری ارسال شد', message: result.message || `برای «${task.title}» یادآوری ثبت شد.` });
+    } catch (error) {
+      notifyApiError('tasks', error, 'یادآوری ارسال نشد');
+    } finally {
+      setRemindingId(null);
+    }
+  };
   const canViewDepartmentList = hasPermission('departments.view');
   const managedDepartmentsQuery = useQuery({
     queryKey: ['managed-departments', currentUser.id],
@@ -45,6 +67,8 @@ export const DepartmentDashboardView: React.FC = () => {
   const departmentId = manageable.some(department => department.id === requested) ? requested! : manageable[0]?.id || '';
   const selectedDepartment = manageable.find(department => department.id === departmentId) || null;
   const [tab, setTab] = useState<Tab>('projects');
+  // نشانگر متحرک تب‌ها (دور ۹۵).
+  const listTabs = useSlidingTabs(tab);
   const query = useQuery({
     queryKey: ['department-dashboard', currentUser.id, departmentId],
     queryFn: () => departmentsApi.dashboard(departmentId),
@@ -56,7 +80,7 @@ export const DepartmentDashboardView: React.FC = () => {
   const canEdit = hasPermission('departments.edit');
 
   if (!canViewDepartmentList && managedDepartmentsQuery.isPending && !manageable.length) {
-    return <section className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8" dir="rtl"><div className="rounded-3xl border border-slate-200 bg-white"><LoadingState label="در حال دریافت دپارتمان‌های تحت مدیریت…" /></div></section>;
+    return <section className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8" dir="rtl"><ListRowsSkeleton rows={4} label="در حال دریافت دپارتمان‌های تحت مدیریت…" /></section>;
   }
   if (!canViewDepartmentList && managedDepartmentsQuery.isError && !manageable.length) {
     return <section className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8" dir="rtl"><div className="rounded-3xl border border-slate-200 bg-white"><ErrorState title="دریافت داشبورد دپارتمان ناموفق بود" error={managedDepartmentsQuery.error} onRetry={() => void managedDepartmentsQuery.refetch()} /></div></section>;
@@ -90,7 +114,7 @@ export const DepartmentDashboardView: React.FC = () => {
       </div>}
     </header>
 
-    {query.isPending ? <div className="rounded-3xl border border-slate-200 bg-white"><LoadingState label="در حال دریافت داشبورد دپارتمان…" /></div>
+    {query.isPending ? <ReportSkeleton label="در حال دریافت داشبورد دپارتمان…" />
       : query.isError ? <div className="rounded-3xl border border-slate-200 bg-white"><ErrorState error={query.error} onRetry={() => void query.refetch()} /></div>
       : data && <>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -102,10 +126,11 @@ export const DepartmentDashboardView: React.FC = () => {
         </div>
 
         <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xs">
-          <div className="flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 p-2" role="tablist">
-            {([['projects', 'پروژه‌ها', Layers3], ['contents', 'محتواها', FileText], ['tasks', 'وظایف', CheckSquare2]] as const).map(([value, label, Icon]) => <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-black ${tab === value ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-white'}`}><Icon className="h-4 w-4" />{label}</button>)}
+          <div ref={listTabs.stripRef} className="relative flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 p-2" role="tablist">
+            {listTabs.pill}
+            {([['projects', 'پروژه‌ها', Layers3], ['contents', 'محتواها', FileText], ['tasks', 'وظایف', CheckSquare2]] as const).map(([value, label, Icon]) => <button key={value} type="button" role="tab" aria-selected={tab === value} data-tab-active={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-black transition-colors ${tab === value ? 'text-white' : 'text-slate-600 hover:bg-white'}`}><Icon className="h-4 w-4" />{label}</button>)}
           </div>
-          {tab === 'projects' ? <ProjectRows projects={data.projects} person={person} onOpen={id => navigate(`/projects/${id}`)} /> : tab === 'contents' ? <ContentRows contents={data.contents} person={person} onOpen={id => navigate(`/contents/${id}`)} /> : <TaskRows tasks={data.tasks} person={person} onOpen={setSelectedTaskId} />}
+          {tab === 'projects' ? <ProjectRows projects={data.projects} person={person} onOpen={id => navigate(`/projects/${id}`)} /> : tab === 'contents' ? <ContentRows contents={data.contents} person={person} onOpen={id => navigate(`/contents/${id}`)} /> : <TaskRows tasks={data.tasks} person={person} onOpen={setSelectedTaskId} onRemind={task => void remind(task)} remindingId={remindingId} />}
         </div>
       </>}
 
@@ -123,7 +148,29 @@ function ContentRows({ contents, person, onOpen }: { contents: Content[]; person
   return <div className="divide-y divide-slate-100">{contents.map(content => <button key={content.id} type="button" onClick={() => onOpen(content.id)} className="flex w-full flex-col gap-3 p-4 text-right hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><strong className="block truncate text-sm text-slate-900">{content.title}</strong><span className="mt-1 block text-[11px] text-slate-500">مالک: {person(content.ownerId)}</span></div><div className="flex items-center gap-3"><ContentStatusBadge status={content.status} />{content.deadline && <span className="inline-flex items-center gap-1 text-[11px] text-slate-500"><CalendarClock className="h-3.5 w-3.5" />{formatPersianDate(content.deadline)}</span>}<ChevronLeft className="h-4 w-4 text-slate-400" /></div></button>)}</div>;
 }
 
-function TaskRows({ tasks, person, onOpen }: { tasks: Task[]; person: (id?: string | null) => string; onOpen: (id: string) => void }) {
+function TaskRows({ tasks, person, onOpen, onRemind, remindingId }: { tasks: Task[]; person: (id?: string | null) => string; onOpen: (id: string) => void; onRemind: (task: Task) => void; remindingId: string | null }) {
   if (!tasks.length) return <EmptyState title="وظیفه مرتبطی برای این دپارتمان پیدا نشد." />;
-  return <div className="divide-y divide-slate-100">{tasks.map(task => <button key={task.id} type="button" onClick={() => onOpen(task.id)} className="flex w-full flex-col gap-3 p-4 text-right hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><strong className="block truncate text-sm text-slate-900">{task.title}</strong><span className="mt-1 block text-[11px] text-slate-500">مسئول: {person(task.assigneeId)}</span></div><div className="flex items-center gap-3"><TaskStatusBadge status={task.status} size="sm" />{task.priority && <PriorityPill priority={task.priority} size="sm" />}<ChevronLeft className="h-4 w-4 text-slate-400" /></div></button>)}</div>;
+  return <div className="divide-y divide-slate-100">{tasks.map(task => (
+    <div key={task.id} className="flex w-full flex-col gap-3 p-4 text-right hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between">
+      <button type="button" onClick={() => onOpen(task.id)} className="min-w-0 flex-1 cursor-pointer text-right">
+        <strong className="block truncate text-sm text-slate-900">{task.title}</strong>
+        <span className="mt-1 block text-[11px] text-slate-500">مسئول اجرا: {person(task.assigneeId)}</span>
+      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <TaskStatusBadge status={task.status} size="sm" />
+        {task.priority && <PriorityPill priority={task.priority} size="sm" />}
+        <button
+          type="button"
+          onClick={() => onRemind(task)}
+          disabled={!task.assigneeId || remindingId === task.id}
+          title={task.assigneeId ? 'یادآوری برای مسئول اجرا: اعلان در سامانه و پیام ربات بله' : 'ابتدا برای این وظیفه مسئول اجرا تعیین کنید'}
+          className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[10px] font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50"
+        >
+          <BellRing className={remindingId === task.id ? 'h-3.5 w-3.5 animate-pulse' : 'h-3.5 w-3.5'} />
+          یادآوری
+        </button>
+        <ChevronLeft className="h-4 w-4 text-slate-400" />
+      </div>
+    </div>
+  ))}</div>;
 }

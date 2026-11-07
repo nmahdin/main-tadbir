@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
 import { usersApi } from '../../api/users';
+import { apiErrorMessage } from '../../api/errors';
 import { Avatar } from '../common/Avatar';
 import { PriorityPill, TaskStatusBadge } from '../common/PriorityPill';
 import { UserStatus } from '../../types';
@@ -50,6 +51,7 @@ export const UserProfileView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'projects' | 'security' | 'activities' | 'bale'>('overview');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [passChangedMsg, setPassChangedMsg] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
@@ -92,6 +94,7 @@ export const UserProfileView: React.FC = () => {
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canEditUser) return;
@@ -101,13 +104,15 @@ export const UserProfileView: React.FC = () => {
       alert('آپلود تصویر فقط برای کاربران ثبت‌شده روی سرور ممکن است.');
       return;
     }
+    setAvatarError('');
     setAvatarUploading(true);
     try {
       const response = await usersApi.uploadAvatar(user.id, file);
+      // مسیر بازگشتی سرور `/storage/...` است و در Avatar با میزبان API ترکیب می‌شود.
       updateUser(user.id, { avatar: response.data.avatar });
     } catch (error) {
       console.error('Uploading avatar failed.', error);
-      alert('آپلود تصویر ناموفق بود.');
+      setAvatarError(apiErrorMessage(error, 'آپلود تصویر ناموفق بود.'));
     } finally {
       setAvatarUploading(false);
       if (avatarInputRef.current) avatarInputRef.current.value = '';
@@ -116,16 +121,33 @@ export const UserProfileView: React.FC = () => {
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPassword || passwordSaving) return;
+    if (passwordSaving) return;
     setPassChangedMsg(false);
     setPasswordError('');
+
+    // همان قواعد سرور، پیش از ارسال: ۸ نویسه و هر دو دستهٔ حرف و رقم.
+    if ([...newPassword].length < 8) {
+      setPasswordError('رمز عبور جدید باید حداقل ۸ نویسه باشد.');
+      return;
+    }
+    if (!/\p{L}/u.test(newPassword) || !/\d/u.test(newPassword)) {
+      setPasswordError('رمز عبور جدید باید دست‌کم یک حرف و یک رقم داشته باشد.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('رمز عبور و تکرار آن یکسان نیستند.');
+      return;
+    }
+
     setPasswordSaving(true);
     try {
       await updateUserAsync(user.id, { temporaryPassword: newPassword });
       setPassChangedMsg(true);
       setNewPassword('');
+      setConfirmPassword('');
     } catch (error) {
-      setPasswordError(error instanceof Error ? error.message : 'تغییر رمز عبور انجام نشد.');
+      // پیام دقیق سرور (مثلاً «رمز عبور و تکرار آن یکسان نیستند») نمایش داده می‌شود.
+      setPasswordError(apiErrorMessage(error, 'تغییر رمز عبور انجام نشد.'));
     } finally {
       setPasswordSaving(false);
     }
@@ -153,7 +175,14 @@ export const UserProfileView: React.FC = () => {
       </div>
 
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="h-20 bg-slate-900 sm:h-24" style={{ borderTop: `4px solid ${userRole?.color || '#6366f1'}` }} />
+        {/* نوار بالای کارت و پس‌زمینهٔ آن هر دو رنگ اصلی سامانه‌اند (نه مشکی). */}
+        <div
+          className="h-20 sm:h-24"
+          style={{
+            borderTop: '4px solid var(--color-primary-hover)',
+            backgroundImage: 'linear-gradient(115deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 82%, black))',
+          }}
+        />
         <div className="relative px-4 pb-5 sm:px-6">
           <div className="-mt-10 flex flex-col items-center justify-between gap-4 sm:flex-row sm:items-end">
             <div className="flex min-w-0 flex-col items-center gap-4 text-center sm:flex-row sm:items-end sm:text-right">
@@ -179,12 +208,11 @@ export const UserProfileView: React.FC = () => {
             {canEditUser && <button onClick={handleEdit} className="ui-button ui-button-primary shrink-0"><Edit3 className="h-4 w-4" />ویرایش اطلاعات</button>}
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-5 lg:grid-cols-4">
+          <div className="mt-5 grid grid-cols-1 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-3">
             {[
               { label: 'پروژه‌های مرتبط', value: `${userProjects.length.toLocaleString('fa-IR')} پروژه`, icon: FolderKanban },
               { label: 'تسک‌های تکمیل‌شده', value: `${completedTasks.length.toLocaleString('fa-IR')} تسک`, icon: CheckCircle2 },
               { label: 'تسک‌های جاری', value: `${pendingTasks.length.toLocaleString('fa-IR')} تسک`, icon: Clock },
-              { label: 'بار کاری', value: user.workloadPercentage == null ? 'ثبت نشده' : `${user.workloadPercentage.toLocaleString('fa-IR')}٪`, icon: Activity },
             ].map(metric => <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5"><metric.icon className="mb-3 h-4 w-4 text-slate-400" /><span className="block text-[10px] font-bold text-slate-500">{metric.label}</span><strong className="mt-1 block text-sm font-black text-slate-900">{metric.value}</strong></div>)}
           </div>
         </div>
@@ -283,6 +311,7 @@ export const UserProfileView: React.FC = () => {
             {/* Contact & Organization */}
             <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-4">
               <h3 className="text-sm font-extrabold text-slate-900">مشخصات تماس و سازمانی</h3>
+              {avatarError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-[11px] font-bold text-rose-700">{avatarError}</p>}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div className="p-3 rounded-2xl bg-slate-50 flex items-center gap-3">
                   <AtSign className="w-4 h-4 text-indigo-600 shrink-0" />
@@ -499,24 +528,42 @@ export const UserProfileView: React.FC = () => {
             )}
 
             {passwordError && <p role="alert" className="text-xs text-rose-700">{passwordError}</p>}
-            <form onSubmit={handlePasswordChange} className="space-y-3">
+            <form onSubmit={handlePasswordChange} className="space-y-3" noValidate>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1" htmlFor="profile-new-password">
                   رمز عبور جدید
                 </label>
                 <input
+                  id="profile-new-password"
                   type="password"
+                  autoComplete="new-password"
                   required minLength={8} disabled={passwordSaving}
                   value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  placeholder="حداقل ۸ کاراکتر ترکیبی..."
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition-all"
+                  onChange={e => { setNewPassword(e.target.value); setPasswordError(''); setPassChangedMsg(false); }}
+                  placeholder="حداقل ۸ نویسه، شامل حرف و رقم"
+                  className="ui-input text-xs"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1" htmlFor="profile-confirm-password">
+                  تکرار رمز عبور جدید
+                </label>
+                <input
+                  id="profile-confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  required minLength={8} disabled={passwordSaving}
+                  value={confirmPassword}
+                  onChange={e => { setConfirmPassword(e.target.value); setPasswordError(''); setPassChangedMsg(false); }}
+                  placeholder="همان رمز جدید را دوباره وارد کنید"
+                  className="ui-input text-xs"
+                />
+              </div>
+              {confirmPassword && newPassword !== confirmPassword && <p className="text-[11px] font-bold text-rose-600">رمز عبور و تکرار آن یکسان نیستند.</p>}
 
               <button data-button-action="save"
-                type="submit" disabled={passwordSaving}
-                className="ui-form-action px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold cursor-pointer transition-colors"
+                type="submit" disabled={passwordSaving || !newPassword || !confirmPassword}
+                className="ui-form-action px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold cursor-pointer transition-colors disabled:opacity-60"
               >
                 {passwordSaving ? 'در حال ذخیره…' : 'ذخیره رمز عبور جدید'}
               </button>

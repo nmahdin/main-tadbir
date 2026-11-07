@@ -41,9 +41,19 @@ final class BaleAuthChallenge
             return;
         }
         $user = User::query()->where('username', $login)->first();
-        $link = $user ? BaleUserLink::where('user_id', $user->id)->first() : null;
-        if (! $user?->isActive() || ! $link) {
+        // حساب ناشناس یا غیرفعال همان پاسخ عمومی را می‌گیرد تا نام کاربری لو نرود.
+        if (! $user?->isActive()) {
             return;
+        }
+        $link = BaleUserLink::where('user_id', $user->id)->first();
+        if (! $link) {
+            // کد یک‌بارمصرف فقط به گفت‌وگوی خصوصیِ حساب متصل فرستاده می‌شود.
+            // بله اجازهٔ پیام به «شمارهٔ خام» (بدون اتصال) را نمی‌دهد؛ پس همان
+            // اول صریح می‌گوییم که راهی برای دریافت کد نیست تا کاربر بی‌دلیل
+            // منتظر پیامی نماند که هرگز نمی‌آید.
+            throw ValidationException::withMessages([
+                'login' => 'امکان ارسال کد یک‌بارمصرف وجود ندارد؛ حساب شما به ربات بله متصل نشده است. برای دریافت کد، ابتدا از بخش تنظیمات حساب، بله را متصل کنید یا با مدیر سیستم تماس بگیرید.',
+            ]);
         }
 
         $code = (string) random_int(100000, 999999);
@@ -86,7 +96,10 @@ final class BaleAuthChallenge
 
         $user = DB::transaction(function () use ($login, $purpose, $code): ?User {
             $user = User::query()->where('username', $login)->lockForUpdate()->first();
-            if (! $user?->isActive() || ! BaleUserLink::where('user_id', $user->id)->exists()) {
+            // اتصال به بله شرط ورود نیست: کد می‌تواند از مسیر شمارهٔ کاربر در
+            // بله آمده باشد. وجودِ چالش (که فقط پس از ارسال موفق ساخته می‌شود)
+            // و اعتبار/انقضای آن، همان تضمین لازم را می‌دهد.
+            if (! $user?->isActive()) {
                 return null;
             }
             $challenge = DB::table('bale_auth_challenges')->where('user_id', $user->id)->where('purpose', $purpose)->lockForUpdate()->first();

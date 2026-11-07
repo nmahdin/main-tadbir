@@ -40,6 +40,8 @@ code, kbd, samp, pre, .font-mono {
 :root {
   --color-primary: #4f46e5;
   --color-primary-hover: #4338ca;
+  /* رنگ دوم سامانه: لهجهٔ مکمل رنگ اصلی. سازمان می‌تواند آن را در تنظیمات عوض کند. */
+  --brand-secondary: #0ea5e9;
   --color-background: #f8fafc;
   --color-surface: #fff;
   --color-surface-muted: #f1f5f9;
@@ -54,15 +56,28 @@ code, kbd, samp, pre, .font-mono {
   --radius-md: .75rem;
   --radius-lg: 1rem;
   --control-height: 2.5rem;
+  /* ارتفاع استاندارد همهٔ دکمه‌های سامانه: ۳۶px (برای ورودی‌ها همان ۴۰px می‌ماند). */
+  --button-height: 2.25rem;
+  /*
+   * سایهٔ «دکمه‌های اقدام» (ذخیره/انصراف/حذف/ایجاد و دکمه‌های اصلی مدال).
+   * دو لایه است: یک لایهٔ چسبیده برای تعریف لبه و یک لایهٔ پخش‌شده و کم‌رنگ
+   * برای عمق. سایهٔ تک‌لایهٔ قبلی روی پس‌زمینهٔ سفید تقریباً دیده نمی‌شد.
+   */
+  --button-shadow: 0 1px 1px 0 rgb(15 23 42 / .035), 0 1px 4px -2px rgb(15 23 42 / .07), inset 0 1px 0 rgb(255 255 255 / .12);
+  /* شناورشدن آرام هنگام هاور: همان لایه‌ها، کمی بلندتر و نرم‌تر. */
+  --button-shadow-hover: 0 1px 2px 0 rgb(15 23 42 / .045), 0 3px 7px -3px rgb(15 23 42 / .1), inset 0 1px 0 rgb(255 255 255 / .16);
+  /* حالت فشرده‌شدن هنگام کلیک: سایهٔ درونی، همان حس فرورفتگی. */
+  --button-shadow-pressed: inset 0 1px 2px 0 rgb(15 23 42 / .11), inset 0 0 0 1px rgb(15 23 42 / .04);
   /* الگوی فشرده فقط برای ذخیره، انصراف، حذف و ایجاد رکورد جدید. */
-  --form-action-min-height: 2.125rem;
+  --form-action-min-height: var(--button-height);
   --form-action-padding-block: .5rem;
   --form-action-padding-inline: .875rem;
   --form-action-gap: .375rem;
-  --form-action-shadow: 0 1px 2px 0 rgb(15 23 42 / .05);
 }
 /* Existing indigo utilities resolve through one palette instead of runtime selector overrides. */
 @theme inline {
+  /* `bg-secondary`/`text-secondary` همیشه از رنگ دوم سازمان پیروی می‌کنند. */
+  --color-secondary: var(--brand-secondary);
   --color-indigo-50: color-mix(in srgb, var(--color-primary) 6%, white);
   --color-indigo-100: color-mix(in srgb, var(--color-primary) 12%, white);
   --color-indigo-200: color-mix(in srgb, var(--color-primary) 22%, white);
@@ -74,28 +89,299 @@ code, kbd, samp, pre, .font-mono {
   --color-indigo-800: color-mix(in srgb, var(--color-primary) 75%, black);
   --color-indigo-900: color-mix(in srgb, var(--color-primary) 55%, black);
 }
-/* زبان مشترک کنترل‌ها: دکمه‌های تخت، بدون گرادیانت یا عمق سه‌بعدی. */
+/*
+ * زبان مشترک کنترل‌ها: دکمه‌های کاملاً تخت و بدون سایه (بدون گرادیانت یا عمق
+ * سه‌بعدی) — شامل دکمه‌های سربرگ فهرست‌ها، عنوان کارت‌ها، تب‌ها، سایدبار و
+ * نوارهای ابزار. جداسازی دکمه از سطح فقط با رنگ/حاشیه است و کلیک، حس
+ * فرورفتگی (جابه‌جایی یک‌پیکسلی) می‌دهد.
+ * استثنای آگاهانه: دکمه‌هایی که با کلاس `!min-h-*`/`!h-*` اندازهٔ خاص خود را
+ * صریح اعلام می‌کنند (ردیف‌های فشردهٔ جدول و نوار ابزار) همان اندازه را نگه می‌دارند.
+ */
 button, [role='button'] {
   border-radius: var(--radius-md);
-  transition: color .18s ease, background-color .18s ease, border-color .18s ease;
+  min-height: var(--button-height);
+  /*
+   * انتقال نرم‌تر: تغییر رنگ ۱۸۰ms، و برای حس ملموسِ فشردن، مقیاس با منحنی
+   * فنریِ کوتاه (۱۴۰ms) تا دکمه «توی خودش» فرو برود و آرام برگردد.
+   */
+  transition: color .18s ease, background-color .18s ease, border-color .18s ease,
+    box-shadow .16s ease, transform .14s cubic-bezier(.22, 1, .36, 1);
   background-image: none !important;
   box-shadow: none !important;
   filter: none !important;
   transform: none !important;
 }
+/*
+ * فشار دادن دکمه: فقط کوچک‌شدن به سمت درون (بدون جابه‌جایی به پایین) + سایهٔ
+ * درونی ریز، تا کلیک حس «فرو رفتن در سطح» بدهد نه «افتادن».
+ */
+button:active:not(:disabled), [role='button']:active:not(:disabled) {
+  transform: scale(.965) !important;
+  box-shadow: var(--button-shadow-pressed) !important;
+}
+button:disabled, [role='button'][aria-disabled='true'] {
+  box-shadow: none !important;
+  transform: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  button, [role='button'] { transition: none; }
+  button:active:not(:disabled), [role='button']:active:not(:disabled) { transform: none !important; }
+}
 button:focus-visible, [role='button']:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-primary) 70%, white); outline-offset: 2px; }
+
+/*
+ * کنترل‌های دایره‌ای روی دکمه‌ها.
+ *
+ * قاعدهٔ پایهٔ `button` گردی `--radius-md` می‌گذارد و چون بیرون از لایه‌های
+ * تیلویند نوشته شده است، بر کلاس `rounded-full` (که در لایهٔ utilities است)
+ * غلبه می‌کرد. نتیجه این بود که کنترل‌هایی که در کد «دایره» ساخته شده‌اند —
+ * تیکِ گرد وظایف مرتبط در پروندهٔ محتوا، دکمهٔ پخش مرکز ویدیو، دکمه‌های
+ * بلندی صدا — در صفحه به شکل مربعِ گوشه‌گرد دیده می‌شدند. این قاعده بعد از
+ * قاعدهٔ پایه می‌آید و فقط همان دایره‌ها را برمی‌گرداند؛ هیچ گردی دیگری عوض
+ * نمی‌شود.
+ */
+button.rounded-full,
+[role='button'].rounded-full,
+.ui-check-circle {
+  border-radius: 9999px;
+}
+
+/*
+ * دکمه‌های دایره‌ایِ «تیک تکمیل وظیفه» همیشه گرد می‌مانند.
+ *
+ * قاعدهٔ پایهٔ `button` بیرون از لایه‌های تیلویند نوشته شده است؛ اگر روزی
+ * کلاس گردی حذف یا بازنویسی شود، تیک وظیفه دوباره چک‌باکس مربعی می‌شود.
+ * این قاعده با انتخابگر قوی‌تر (`td button.ui-check-circle`) و
+ * `!important` تضمین می‌کند تیک تکمیل وظیفه در همهٔ جدول‌ها — وظایف مرتبط
+ * محتوا، فهرست وظایف من و کارت‌ها — همیشه دایره باشد.
+ */
+td button.ui-check-circle,
+button.ui-check-circle,
+.ui-check-circle {
+  border-radius: 9999px !important;
+}
+
+/*
+ * سطح لمس آیکون‌های نوار بالا (منو، جست‌وجو، اعلان، پروفایل).
+ * روی موبایل حداقل ۳۶px لازم است و این دکمه‌ها هرگز نباید در فشار عرض
+ * کوچک شوند؛ پیش‌تر آیکون جست‌وجو می‌توانست از کادر بیرون برود و «باکس
+ * سرچ» در موبایل باز نشود.
+ */
+/*
+ * «نمایش» کنترل‌ها در لایهٔ base تعریف می‌شود، نه بیرون از لایه‌ها.
+ *
+ * در تیلویند ۴ هر CSSای که بیرون از لایه‌ها نوشته شود بر utilities غلبه
+ * می‌کند؛ پس `display: inline-flex` روی این کلاس‌ها، `hidden`/`sm:hidden`/
+ * `lg:hidden` را خنثی می‌کرد و دکمهٔ منو و جست‌وجوی موبایل روی نمایشگر
+ * دسکتاپ هم دیده می‌شدند. راه‌حلِ درست همان چیزی است که تیلویند می‌خواهد:
+ * نمایش در لایهٔ base، پنهان‌سازی با utilities — بدون کلاس موازی و بدون
+ * `!important`.
+ */
+@layer base {
+  .ui-tap,
+  .ui-button,
+  .ui-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+.ui-tap {
+  box-sizing: border-box;
+  min-width: var(--button-height);
+  min-height: var(--button-height);
+  flex: 0 0 auto;
+}
+
+/*
+ * استثنای «دکمه‌های اقدام»: فقط ذخیره/انصراف/حذف/ایجاد (‏`ui-form-action` و
+ * `data-button-action`) و دکمهٔ اصلی/خطر مدال‌ها سایهٔ بسیار جزئی دارند تا از
+ * سطح جدا شوند. همهٔ دکمه‌های دیگر — سربرگ فهرست‌ها، عنوان کارت‌ها،
+ * سایدبار و نوارهای ابزار — کاملاً تخت می‌مانند. تنها استثنا «تب فعال» است
+ * (قاعدهٔ پایین‌تر) که دور ۸۵ خواسته باشد یک سایهٔ بسیار کم داشته باشد؛
+ * از دور ۸۹ این سایه برای تب فعالِ رنگی هم واقعاً دیده می‌شود.
+ */
+/*
+ * دکمه‌های اقدام همیشه دقیقاً ۳۶px هستند (پدینگ عمودی ۸px + خط ۲۰px)؛
+ * کلاس‌های `py-3`/`py-2.5` روی دکمه‌های خام مدال‌ها (مثل ورود یا ارسال نامه)
+ * ارتفاع را به ۴۰px می‌رساندند.
+ */
+.ui-form-action,
+[data-button-action],
+.ui-modal-panel .ui-button-primary,
+.ui-modal-panel .ui-button-danger {
+  box-shadow: var(--button-shadow) !important;
+  box-sizing: border-box;
+  min-height: var(--button-height);
+  padding-top: .5rem;
+  padding-bottom: .5rem;
+}
+
+/* هاور: سایه کمی بلندتر می‌شود تا دکمه از سطح بلند شود؛ فشار دادن آن را درونی می‌کند. */
+.ui-form-action:hover:not(:disabled),
+[data-button-action]:hover:not(:disabled),
+.ui-modal-panel .ui-button-primary:hover:not(:disabled),
+.ui-modal-panel .ui-button-danger:hover:not(:disabled) {
+  box-shadow: var(--button-shadow-hover) !important;
+}
+.ui-form-action:active:not(:disabled),
+[data-button-action]:active:not(:disabled),
+.ui-modal-panel .ui-button-primary:active:not(:disabled),
+.ui-modal-panel .ui-button-danger:active:not(:disabled) {
+  box-shadow: var(--button-shadow-pressed) !important;
+}
+
+/*
+ * دکمه‌های «صفحه قبل/بعد» در نوار صفحه‌بندی: ارتفاع ۳۶px (هم‌قد انتخابگر
+ * «تعداد در صفحه») و همان سایهٔ جزئی دکمه‌های اقدام تا از سطح جدا شوند.
+ */
+.pagination-button {
+  box-sizing: border-box;
+  height: var(--button-height);
+  min-height: var(--button-height);
+  padding-top: .5rem;
+  padding-bottom: .5rem;
+  box-shadow: var(--button-shadow) !important;
+}
+.pagination-button:hover:not(:disabled) {
+  box-shadow: var(--button-shadow-hover) !important;
+}
+.pagination-button:active:not(:disabled) {
+  box-shadow: var(--button-shadow-pressed) !important;
+}
+
+/*
+ * کلید «روشن/خاموش» هر مجوز در ماتریس دسترسی نقش‌ها.
+ * قاعدهٔ سراسری دکمه‌ها `min-height: 36px` می‌دهد ولی عرض کلاس محلی ۲۸px بود؛
+ * نتیجه مستطیل باریکی می‌شد که گوشه‌هایش گرد به‌نظر نمی‌رسید. اینجا هر دو بُعد
+ * ۳۶px و گردی ۱۲px است: مربعِ کامل با گوشه‌های گرد.
+ */
+.permission-toggle {
+  box-sizing: border-box;
+  width: var(--button-height);
+  min-width: var(--button-height);
+  max-width: var(--button-height);
+  height: var(--button-height);
+  min-height: var(--button-height);
+  padding: 0;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-inline: auto;
+}
+
+/*
+ * دکمه‌های عملیات (کپی/لغو انتشار/بایگانی/انتشار آنی و تنظیمات میز انتشار):
+ * ارتفاع ۳۶px با سایهٔ ریز، بدون اینکه بخشی از اکشن‌های فرم شوند.
+ */
+.ui-action-button {
+  box-sizing: border-box;
+  height: var(--button-height);
+  min-height: var(--button-height);
+  padding-top: .5rem;
+  padding-bottom: .5rem;
+  box-shadow: var(--button-shadow) !important;
+}
+.ui-action-button:hover:not(:disabled) {
+  box-shadow: var(--button-shadow-hover) !important;
+}
+.ui-action-button:active:not(:disabled) {
+  box-shadow: var(--button-shadow-pressed) !important;
+}
+
+/*
+ * «سایهٔ بسیار کم» برای دکمه‌های اصلی سربرگ صفحهٔ محتوا (انتشار و ویرایش).
+ *
+ * قاعدهٔ «دکمه‌ها تخت بمانند» سایهٔ همهٔ دکمه‌های خام را صفر می‌کند؛ درخواست
+ * صریح این بود که فقط همین دو دکمه سایهٔ خیلی کمی داشته باشند تا از کارت جدا
+ * دیده شوند ولی حالت برجسته/شناور نگیرند.
+ */
+.ui-quiet-shadow {
+  /* یک لبهٔ نیم‌پیکسلیِ محو؛ فقط برای جدا شدن از کارت، بدون حس شناور بودن. */
+  box-shadow: 0 1px 1px rgb(15 23 42 / .035) !important;
+}
+.ui-quiet-shadow:hover:not(:disabled) {
+  box-shadow: 0 1px 2px rgb(15 23 42 / .05) !important;
+}
+/*
+ * لحظهٔ کلیک: سایهٔ درونی (فشرده‌شدن) — دور ۹۰، اصلاح بازخورد کاربر.
+ *
+ * قاعدهٔ عمومی `button:active` سایهٔ فشرده را می‌گذارد، اما `.ui-quiet-shadow:hover`
+ * اختصاصی‌تر است (سه کلاس در برابر دو کلاس + یک تگ) و در حالت کلیک هم که نشانگر
+ * روی دکمه است، سایهٔ هاور را نگه می‌داشت؛ نتیجه این بود که دکمه‌های «انتشار» و
+ * «ویرایش محتوا» هنگام کلیک هیچ سایهٔ درونی‌ای نمی‌گرفتند. این قاعده با همان
+ * اختصاصی‌بودن و بعد از قاعدهٔ هاور می‌آید تا در حالت فعال برنده شود.
+ */
+.ui-quiet-shadow:active:not(:disabled) {
+  box-shadow: inset 0 1px 3px rgb(15 23 42 / .16), inset 0 0 0 1px rgb(15 23 42 / .05) !important;
+}
+/*
+ * روی دکمه‌های پُررنگ (انتشار سبز و لغو انتشار خاکستری) همان سایهٔ درونی روی زمینهٔ
+ * تیره تقریباً دیده نمی‌شود؛ برای همین کمی عمیق‌ترش می‌کنیم تا حس فشرده‌شدن بماند.
+ */
+.ui-quiet-shadow.bg-emerald-600:active:not(:disabled),
+.ui-quiet-shadow.bg-slate-600:active:not(:disabled) {
+  box-shadow: inset 0 2px 5px rgb(15 23 42 / .38), inset 0 0 0 1px rgb(15 23 42 / .18) !important;
+}
+
+/*
+ * ایمنی دوباره برای سطح‌هایی که ممکن است سایه‌شان از کلاس کمکی بیاید:
+ * تب‌ها، آیتم‌های سایدبار و هر دکمهٔ نشان‌دار `data-button-flat`.
+ */
+[role='tab'],
+[role='tablist'] > button,
+aside button,
+[id^='nav-item-'],
+[data-button-flat] {
+  box-shadow: none !important;
+}
+
+/*
+ * تب فعال در همهٔ نوارهای تب سامانه یک سایهٔ بسیار کم دارد (دور ۸۵).
+ *
+ * قاعدهٔ بالا سایهٔ دکمه‌ها را صفر می‌کند تا نوار تب تخت بماند؛ اما تب فعال باید
+ * از همسایه‌هایش جدا دیده شود. همهٔ نوارهای تب با `role="tab"` و
+ * `aria-selected` ساخته می‌شوند، پس همین یک قاعده همه‌جا کافی است: یک سایهٔ
+ * یک‌پیکسلی بسیار ملایم، بدون حاشیهٔ اضافه و بدون تغییر اندازه.
+ */
+[role='tab'][aria-selected='true'],
+[role='tab'][data-state='active'],
+[data-tab-active='true'] {
+  box-shadow: 0 1px 2px rgb(15 23 42 / .12), 0 1px 3px rgb(15 23 42 / .06) !important;
+}
+
+/*
+ * تب فعالِ تیره (نوار تب با زمینهٔ اصلی) — دور ۸۹.
+ *
+ * قاعدهٔ دور ۸۵ این حالت را کاملاً بی‌سایه کرده بود؛ نتیجه این بود که در
+ * «محتواها»، «ایده‌ها»، «جلسات»، «تسک‌ها» و بقیهٔ نوارها هیچ سایه‌ای دیده
+ * نمی‌شد، چون همهٔ تب‌های فعال زمینهٔ اصلی دارند. حالا همان سایهٔ کم، ولی
+ * مخصوص زمینهٔ رنگی: یک لبهٔ تیرهٔ یک‌پیکسلی و یک هالهٔ نرم زیر تب.
+ */
+[role='tab'][aria-selected='true'].bg-indigo-600,
+[role='tab'][aria-selected='true'].bg-indigo-700,
+[role='tab'][aria-selected='true'].ui-button-primary {
+  box-shadow: 0 1px 2px rgb(15 23 42 / .18), 0 2px 8px -3px rgb(15 23 42 / .32) !important;
+}
+
 button:disabled { cursor: not-allowed; opacity: .55; }
 button > svg, [role='button'] > svg { flex: 0 0 auto; }
 
 .ui-button {
-  min-height: var(--control-height); display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
-  padding: .625rem 1rem; border: 1px solid transparent; border-radius: var(--radius-md); font-size: .8125rem; line-height: 1.25rem;
+  min-height: var(--button-height); gap: .5rem;
+  padding: .5rem 1rem; border: 1px solid transparent; border-radius: var(--radius-md); font-size: .8125rem; line-height: 1.25rem;
   font-weight: 800; cursor: pointer;
 }
 .ui-button-primary { background: var(--color-primary); color: white; border-color: var(--color-primary); }
 .ui-button-primary:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
 .ui-button-secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
-.ui-button-secondary:hover:not(:disabled) { border-color: #cbd5e1; background: var(--color-surface-muted); }
+.ui-button-secondary:hover:not(:disabled) {
+  /* لهجهٔ رنگ دوم: مرز دکمهٔ ثانویه هنگام هاور هم‌خانوادهٔ پالت سازمان می‌شود. */
+  border-color: color-mix(in srgb, var(--brand-secondary) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--brand-secondary) 7%, var(--color-surface));
+}
 .ui-button-ghost { background: transparent; color: var(--color-text-muted); }
 .ui-button-ghost:hover:not(:disabled) { background: var(--color-surface-muted); color: var(--color-text); }
 .ui-button-danger { background: var(--color-danger); color: white; border-color: var(--color-danger); }
@@ -116,17 +402,50 @@ button > svg, [role='button'] > svg { flex: 0 0 auto; }
   font-size: .75rem;
   line-height: 1rem;
   font-weight: 700;
-  box-shadow: var(--form-action-shadow) !important;
+}
+/* اندازهٔ واقعی و یکسان دکمه‌های سربرگ فهرست محتوا؛ مستقل از طول متن و واریانت رنگی. */
+.content-header-action {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: 0;
+  height: var(--form-action-min-height);
+  min-height: var(--form-action-min-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--form-action-gap);
+  padding: 0 .5rem;
+  font-size: .75rem;
+  line-height: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+  border-radius: var(--radius-md);
 }
 .ui-form-action[data-button-action='cancel'] { background: #fff; color: #334155; border: 1px solid #e2e8f0; }
 .ui-form-action[data-button-action='cancel']:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
-.ui-icon-button { width: var(--control-height); min-width: var(--control-height); height: var(--control-height); padding: 0; border-radius: var(--radius-md); }
+.ui-icon-button { width: var(--button-height); min-width: var(--button-height); height: var(--button-height); min-height: var(--button-height); padding: 0; border-radius: var(--radius-md); }
 /* بازگشت و بستن هر دو تخت و فقط آیکون‌اند، اما نقششان با رنگ متفاوت خوانده می‌شود. */
 .ui-icon-button-back { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 7%, white); border-color: color-mix(in srgb, var(--color-primary) 22%, white); }
 .ui-icon-button-back:hover:not(:disabled) { color: var(--color-primary-hover); background: color-mix(in srgb, var(--color-primary) 12%, white); border-color: color-mix(in srgb, var(--color-primary) 34%, white); }
 .ui-icon-button-close { color: #64748b; background: #f8fafc; border-color: #e2e8f0; }
 .ui-icon-button-close:hover:not(:disabled) { color: #be123c; background: #fff1f2; border-color: #fecdd3; }
 .ui-button:disabled { opacity: .55; cursor: not-allowed; }
+
+/*
+ * دکمه‌های ردیفی مخزن دارایی (پیش‌نمایش/دانلود) یک منبع حقیقت دارند؛
+ * فایل آپلودی و دارایی متنی دقیقاً همین هندسه و رنگ را می‌گیرند.
+ */
+.ui-asset-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: .25rem;
+  padding: .5rem; border: 1px solid transparent; border-radius: var(--radius-md);
+  background: transparent; cursor: pointer;
+}
+.ui-asset-action:disabled { opacity: .5; cursor: not-allowed; }
+.ui-asset-action-preview { color: var(--color-primary); }
+.ui-asset-action-preview:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, white); }
+.ui-asset-action-download { color: #059669; }
+.ui-asset-action-download:hover:not(:disabled) { background: #ecfdf5; }
 .ui-button:focus-visible, .ui-input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 .ui-input,
@@ -172,6 +491,70 @@ select:not([multiple]) {
 }
 select:disabled { cursor: not-allowed; opacity: .62; }
 
+/*
+ * کنترل «تعداد در صفحه» در نوار صفحه‌بندی جدول‌ها: یک انتخابگر کوچک است، نه
+ * یک فیلد تمام‌عرض. `ui-input` عرض ۱۰۰٪ می‌داد و همین باعث می‌شد متن «تعداد در
+ * صفحه» فشرده/چندخطی شود و خود کنترل از جای خودش بیرون بزند. اینجا عرض ثابت،
+ * پدینگ راست کوتاه و جای فلش هم‌اندازهٔ کنترل است. انتخابگر با `select.` نوشته
+ * شده تا از قاعدهٔ عمومی `select:not([multiple])` (که پدینگ و ارتفاع می‌دهد)
+ * جلوتر بماند.
+ */
+select.per-page-select {
+  flex: 0 0 auto;
+  width: 4.75rem !important;
+  min-width: 4.75rem;
+  max-width: 4.75rem;
+  padding-right: .5rem !important;
+  padding-left: 1.9rem !important;
+  background-position: left .6rem center;
+  background-size: .9rem;
+  font-size: .75rem;
+  font-weight: 700;
+  text-align: center;
+  text-align-last: center;
+  /* هم‌قد دکمه‌های «صفحه قبل/بعد» (۳۶px) تا نوار صفحه‌بندی یک خط تمیز بماند. */
+  height: var(--button-height);
+  min-height: var(--button-height);
+  padding-top: .25rem !important;
+  padding-bottom: .25rem !important;
+}
+
+/*
+ * نوار ابزار ویرایشگر متن: انتخابگرهای سبک/اندازه/نوع قلم باید به اندازهٔ متنِ
+ * خودشان باشند و کنار هم بنشینند. قاعدهٔ عمومیِ `.ui-input` عرض کامل می‌دهد و
+ * همین باعث می‌شد هر سه انتخابگر تمام‌عرض و زیر هم بیفتند.
+ */
+.rich-text-toolbar .ui-input {
+  width: auto;
+  flex: 0 0 auto;
+  height: var(--button-height);
+  min-height: var(--button-height);
+  padding-top: .2rem !important;
+  padding-bottom: .2rem !important;
+  padding-left: 1.95rem !important;
+  font-size: .6875rem;
+  font-weight: 700;
+  line-height: 1.4;
+  border-radius: .5rem;
+  background-position: left .55rem center;
+  background-size: .85rem;
+}
+/* دکمه‌های نوار ابزار هم مربع و هم‌اندازهٔ ۳۶px باشند. */
+.rich-text-toolbar button {
+  width: var(--button-height);
+  min-width: var(--button-height);
+  height: var(--button-height);
+  min-height: var(--button-height);
+}
+.rich-text-toolbar .rt-toolbar-style { width: 8.25rem; }
+.rich-text-toolbar .rt-toolbar-size { width: 6.5rem; }
+.rich-text-toolbar .rt-toolbar-font { width: 7rem; }
+@media (max-width: 420px) {
+  .rich-text-toolbar .rt-toolbar-style,
+  .rich-text-toolbar .rt-toolbar-size,
+  .rich-text-toolbar .rt-toolbar-font { width: 6.25rem; }
+}
+
 input[type='checkbox'], input[type='radio'] {
   appearance: none;
   -webkit-appearance: none;
@@ -210,6 +593,14 @@ input[type='checkbox']:checked::before, input[type='radio']:checked::before { tr
 input[type='checkbox']:focus-visible, input[type='radio']:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent); }
 input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allowed; opacity: .55; }
 
+/**
+ * مدال یک ناحیهٔ پیمایش دارد: بدنهٔ آن. کادر مدال و کادرهای درونی اسکرول
+ * نمی‌شوند تا دو نوار پیمایش روی هم نیفتد. دستهٔ تغییر اندازهٔ textarea هم
+ * داخل مدال حذف می‌شود؛ اندازهٔ مدال ثابت و قابل پیش‌بینی است.
+ */
+.ui-modal textarea { resize: none; }
+.ui-modal [data-modal-body] { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+
 /* فیلدهای مدال‌ها از یک زبان بصری مشترک پیروی می‌کنند؛ کلاس‌های صریح همچنان اولویت دارند. */
 .ui-modal input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='color']),
 .ui-modal textarea,
@@ -222,4 +613,406 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 11%, transparent);
+}
+
+/*
+ * انیمیشن ورود و خروج مدال‌ها.
+ *
+ * دو مسیر استفاده می‌شود: کلاس‌های `ui-modal-*` (کامپوننت مشترک Modal، با
+ * انیمیشن خروج واقعی پیش از unmount) و کلاس‌های `animate-in`/`fade-in`/
+ * `zoom-in-95` که ده‌ها مدال دست‌ساز از قبل در JSX دارند ولی تا امروز بدون
+ * افزونهٔ Tailwind بی‌اثر بودند.
+ */
+@keyframes ui-overlay-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes ui-overlay-out { from { opacity: 1 } to { opacity: 0 } }
+@keyframes ui-panel-in {
+  from { opacity: 0; transform: translateY(10px) scale(.97) }
+  to { opacity: 1; transform: translateY(0) scale(1) }
+}
+@keyframes ui-panel-out {
+  from { opacity: 1; transform: translateY(0) scale(1) }
+  to { opacity: 0; transform: translateY(6px) scale(.98) }
+}
+@keyframes ui-slide-up-in { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes ui-slide-start-in { from { opacity: 0; transform: translateX(16px) } to { opacity: 1; transform: translateX(0) } }
+@keyframes ui-slide-end-in { from { opacity: 0; transform: translateX(-16px) } to { opacity: 1; transform: translateX(0) } }
+
+.ui-modal-overlay { animation: ui-overlay-in .18s ease-out both; }
+.ui-modal-panel { animation: ui-panel-in .2s cubic-bezier(.16, 1, .3, 1) both; }
+.ui-modal-overlay[data-state='closing'] { animation: ui-overlay-out .16s ease-in both; }
+.ui-modal-panel[data-state='closing'] { animation: ui-panel-out .16s ease-in both; }
+
+/* انیمیشن خروج مدال‌های دست‌ساز و منوهای شناور (نوبت ۷۵)؛ کلاس‌ها را
+   `modalExitLayer` و `useExitPresence` مدیریت می‌کنند. */
+.ui-layer-out { animation: ui-overlay-out .16s ease-in both; }
+.ui-panel-out { animation: ui-panel-out .16s ease-in both; }
+/*
+ * منوهای شناور (دور ۹۱): انیمیشن ورود و خروج نرم و یکسان برای همه.
+ *
+ * پیش‌تر `.ui-pop` از کی‌فریم مشترک مدال‌ها استفاده می‌کرد (۱۰px بالا آمدن) که
+ * برای پنل کوچکی که از دکمه‌اش باز می‌شود زیادی بود و کمی «پرش» حس می‌شد. حالا
+ * یک حرکت کوتاه‌تر با منحنی نرم‌تر دارد: کمی پایین‌تر و کوچک‌تر شروع می‌شود و
+ * آرام به جای خودش می‌نشیند؛ خروج هم سریع‌تر و بدون توقف است.
+ */
+@keyframes ui-menu-in {
+  from { opacity: 0; transform: translateY(4px) scale(.96) }
+  to { opacity: 1; transform: translateY(0) scale(1) }
+}
+@keyframes ui-menu-out {
+  from { opacity: 1; transform: translateY(0) scale(1) }
+  to { opacity: 0; transform: translateY(3px) scale(.97) }
+}
+.ui-pop {
+  animation: ui-menu-in .19s cubic-bezier(.22, 1, .36, 1) both;
+  transform-origin: top right;
+  will-change: transform, opacity;
+  /* از لبهٔ دکمه دیده نشود؛ سایه هم در پایان انیمیشن باقی می‌ماند. */
+  backface-visibility: hidden;
+}
+.ui-pop[data-state='closing'] { animation: ui-menu-out .13s cubic-bezier(.4, 0, 1, 1) both; }
+
+/*
+ * نشانگر متحرک تب‌ها (دور ۹۵).
+ *
+ * پس‌زمینهٔ تب فعال دیگر روی خودِ دکمه نیست؛ یک لایهٔ مطلق است که همان اندازه و
+ * گوشهٔ تب فعال را می‌گیرد و با `transform` بین تب‌ها می‌لغزد. چون فقط
+ * `transform`/`width`/`height` عوض می‌شود، حرکت روی لایهٔ کامپوزیت انجام می‌شود و
+ * چیدمان دوباره محاسبه نمی‌شود. پیش از اولین اندازه‌گیری (`data-state='idle'`)
+ * انتقال خاموش است تا نشانگر از گوشهٔ نوار به جای تب فعال پرواز نکند.
+ */
+.ui-tab-pill {
+  will-change: transform, width, height;
+  transition: none;
+  /* لبه‌های نیم‌پیکسلی در حرکت، رنگ را کمی محو نشان می‌دهند. */
+  backface-visibility: hidden;
+}
+/*
+ * اسکلت در حال بارگذاری (دور ۹۷).
+ *
+ * جای چرخندهٔ وسط‌چین، شکل همان محتوا با یک درخشش نرم کشیده می‌شود. گرادیان
+ * سه‌رنگ روی خودِ بلوک حرکت می‌کند؛ چون `background-position` است، روی لایهٔ
+ * کامپوزیت اجرا می‌شود و چیدمان را دست نمی‌زند.
+ */
+@keyframes ui-shimmer {
+  from { background-position: 100% 0 }
+  to { background-position: 0 0 }
+}
+/*
+ * نقطهٔ «تازه» (دور ۹۹).
+ *
+ * یک نقطهٔ کوچک آبی با هالهٔ نرم که فقط یک بار، آرام، باز می‌شود؛ نه حلقهٔ
+ * بی‌پایان، تا چشم را اذیت نکند. کاهش حرکت آن را کاملاً خاموش می‌کند.
+ */
+@keyframes ui-fresh-in {
+  from { opacity: 0; transform: scale(.4) }
+  to { opacity: 1; transform: scale(1) }
+}
+.ui-fresh-dot {
+  display: inline-block;
+  width: .375rem;
+  height: .375rem;
+  border-radius: 9999px;
+  background-color: #0284c7;
+  box-shadow: 0 0 0 2px #e0f2fe;
+  animation: ui-fresh-in .22s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.ui-shimmer {
+  background-color: #eef2f7;
+  background-image: linear-gradient(90deg, #eef2f7 20%, #f8fafc 40%, #eef2f7 60%);
+  background-size: 300% 100%;
+  animation: ui-shimmer 1.35s ease-in-out infinite;
+}
+/* ورود نرم محتوای واقعی روی اسکلت؛ ارتفاع را عوض نمی‌کند تا صفحه نپرد. */
+@keyframes ui-swap-in {
+  from { opacity: 0; transform: translateY(2px) }
+  to { opacity: 1; transform: translateY(0) }
+}
+.ui-swap-in { animation: ui-swap-in .18s ease-out both; }
+
+.ui-tab-pill[data-state='moving'] {
+  transition:
+    transform .26s cubic-bezier(.22, 1, .36, 1),
+    width .26s cubic-bezier(.22, 1, .36, 1),
+    height .26s cubic-bezier(.22, 1, .36, 1),
+    border-radius .26s cubic-bezier(.22, 1, .36, 1);
+}
+
+
+/*
+ * چرخندهٔ لودینگ سریع (دور ۹۱).
+ *
+ * پیش‌فرض `animate-spin` تالبویند یک دور کامل در ۱ ثانیه است که برای نشانگرهای
+ * کوچکِ داخل دکمه‌ها مناسب است، اما در لودینگ تمام‌صفحه و لودینگ‌های سطح صفحه
+ * کند و بی‌واکنش حس می‌شد. این کلاس فقط همان دو حالت را سریع می‌کند (۰٫۶ ثانیه)،
+ * نه چرخنده‌های کوچک داخل دکمه‌ها را.
+ */
+@keyframes ui-spin-fast {
+  to { transform: rotate(360deg) }
+}
+.ui-spin-fast { animation: ui-spin-fast .6s linear infinite !important; }
+
+/* کلاس‌های tailwindcss-animate که در JSX استفاده شده‌اند (پیاده‌سازی سبک و بومی). */
+.animate-in { animation-duration: .2s; animation-timing-function: cubic-bezier(.16, 1, .3, 1); animation-fill-mode: both; }
+.animate-in.fade-in { animation-name: ui-overlay-in; }
+.animate-in.fade-in.zoom-in-95 { animation-name: ui-panel-in; }
+.animate-in.fade-in.slide-in-from-bottom-2 { animation-name: ui-slide-up-in; }
+.animate-in.fade-in.slide-in-from-right-2 { animation-name: ui-slide-start-in; }
+.animate-in.fade-in.slide-in-from-left-2 { animation-name: ui-slide-end-in; }
+.animate-out { animation-duration: .16s; animation-timing-function: ease-in; animation-fill-mode: both; }
+.animate-out.fade-out { animation-name: ui-overlay-out; }
+.animate-out.fade-out.zoom-out-95 { animation-name: ui-panel-out; }
+
+/*
+ * ورود و خروج پیام‌های شناور (توست).
+ *
+ * پیش‌تر فقط انیمیشن ورود وجود داشت؛ با بستن، پیام همان لحظه از DOM حذف
+ * می‌شد. `ToastViewport` ردیف در حال خروج را تا پایان همین انیمیشن نگه
+ * می‌دارد، پس خروج هم نرم دیده می‌شود.
+ */
+.ui-toast-in { animation: ui-toast-in .2s cubic-bezier(.16, 1, .3, 1) both; }
+.ui-toast-out { animation: ui-toast-out .18s ease-in both; pointer-events: none; }
+@keyframes ui-toast-in {
+  from { opacity: 0; transform: translateY(10px) scale(.98) }
+  to { opacity: 1; transform: translateY(0) scale(1) }
+}
+@keyframes ui-toast-out {
+  from { opacity: 1; transform: translateY(0) scale(1) }
+  to { opacity: 0; transform: translateY(8px) scale(.98) }
+}
+
+/*
+ * ورود و خروج پیام‌های گفتگو (چت).
+ *
+ * پیش‌تر پیام‌ها بی‌درنگ روی صفحه می‌پریدند و حذف هم لحظه‌ای بود. حالا
+ * `MessageBubble` با `ui-msg-in` وارد می‌شود و پیش از حذف، ۱۸۰ میلی‌ثانیه
+ * `ui-msg-out` می‌گیرد تا ردیف نرم محو شود.
+ */
+.ui-msg-in { animation: ui-msg-in .22s cubic-bezier(.16, 1, .3, 1) both; }
+.ui-msg-out { animation: ui-msg-out .18s ease-in both; }
+@keyframes ui-msg-in {
+  from { opacity: 0; transform: translateY(10px) scale(.98) }
+  to { opacity: 1; transform: translateY(0) scale(1) }
+}
+@keyframes ui-msg-out {
+  from { opacity: 1; transform: translateY(0) scale(1) }
+  to { opacity: 0; transform: translateY(-6px) scale(.98) }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-modal-overlay, .ui-modal-panel,
+  .ui-modal-overlay[data-state='closing'], .ui-modal-panel[data-state='closing'],
+  .ui-layer-out, .ui-panel-out, .ui-pop, .ui-pop[data-state='closing'],
+  .ui-toast-in, .ui-toast-out, .ui-msg-in, .ui-msg-out,
+  .animate-in, .animate-out { animation: none !important; }
+  /* نشانگر تب، اسکلت بارگذاری و گذار صفحه (دورهای ۹۵–۹۶). */
+  .ui-tab-pill, .ui-tab-pill[data-state='moving'] { transition: none !important; }
+  .ui-shimmer { animation: none !important; background-image: none; }
+  .ui-fresh-dot { animation: none !important; }
+  .ui-swap-in { animation: none !important; }
+}
+
+/*
+ * بخش‌های جمع‌شو و بازشو (نوبت ۶۷): ارتفاعِ واقعی محتوا با انیمیشن باز می‌شود.
+ * `0fr → 1fr` بدون اندازه‌گیری با JS کار می‌کند و پرشِ `max-height` حدسی را
+ * ندارد. لایهٔ درونی با `overflow: hidden` دیده‌شدن محتوا در حالت بسته را قطع
+ * می‌کند و `inert` در کامپوننت، فوکوس را هم می‌بندد.
+ */
+.ui-collapsible {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 280ms cubic-bezier(.16, 1, .3, 1), opacity 200ms ease;
+}
+.ui-collapsible[data-open='true'] { grid-template-rows: 1fr; opacity: 1; }
+.ui-collapsible > .ui-collapsible-inner { overflow: hidden; min-height: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-collapsible { transition: none; }
+}
+
+/*
+ * لود تدریجی تصاویر (نوبت ۷۲)
+ *
+ * تصویر همان‌لحظه‌ای که کارت ساخته می‌شود درخواست می‌شود (هیچ تأخیری در شروع
+ * لود نیست) اما تا کامل‌شدن، به‌صورت «مات» دیده می‌شود: یک لایهٔ درخشانِ آرام
+ * جای تصویر را نگه می‌دارد و خودِ تصویر با بلور زیاد و کمی بزرگ‌تر، فِرِیم‌های
+ * ناقص یا کش‌شده را نشان می‌دهد. پس از آماده‌شدن، بلور و مقیاس در ۵۵۰ms به
+ * حالت واضح می‌رسند؛ پس هیچ هزینهٔ شبکه‌ای اضافه‌ای پرداخت نمی‌شود و سرعت لود
+ * فقط تابع همان یک درخواست است.
+ */
+.ui-img { background: var(--color-surface-muted); }
+.ui-img-glow {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(100deg, var(--color-surface-muted) 12%, #e8edf5 22%, var(--color-surface-muted) 34%);
+  background-size: 240% 100%;
+  animation: ui-img-shimmer 1.5s linear infinite;
+  transition: opacity .35s ease;
+}
+.ui-img-media {
+  opacity: .38;
+  filter: blur(20px);
+  transform: scale(1.08);
+  transition: opacity .28s ease, filter .55s cubic-bezier(.22, 1, .36, 1), transform .55s cubic-bezier(.22, 1, .36, 1);
+}
+/* `filter: none` هم‌ارز لیست همانی است و گذارِ نرم از بلور را حفظ می‌کند. */
+.ui-img-media.is-ready { opacity: 1; filter: none; transform: scale(1); }
+.ui-img-spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  border: 2px solid rgb(255 255 255 / .65);
+  border-top-color: var(--color-primary);
+  animation: ui-img-spin .8s linear infinite;
+}
+
+@keyframes ui-img-shimmer {
+  from { background-position: 140% 0; }
+  to { background-position: -140% 0; }
+}
+@keyframes ui-img-spin { to { transform: rotate(1turn); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-img-glow { animation: none; }
+  .ui-img-media { transition: none; opacity: 1; filter: none; transform: none; }
+  .ui-img-spinner { animation: none; }
+}
+
+/* اسکلت لودینگ پیش‌نمایش‌ها: شکل محتوا را نگه می‌دارد تا پرش چیدمان نباشد. */
+.ui-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: .75rem;
+  background: var(--color-surface-muted);
+}
+.ui-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(100deg, transparent 20%, #e8edf5 45%, transparent 70%);
+  background-size: 240% 100%;
+  animation: ui-img-shimmer 1.5s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-skeleton::after { animation: none; }
+}
+
+/*
+ * پخش‌کنندهٔ رسانه (دور ۷۶)
+ *
+ * در تمام‌صفحه، کلاس‌های اندازهٔ خودِ کادر و ویدیو باید آزاد شوند؛ پیش‌تر کادر
+ * تمام‌صفحه می‌شد ولی ویدیو ارتفاع ثابت `62dvh` را نگه می‌داشت و وسط صفحه یک
+ * تصویر کوچک می‌ماند. این قواعد بیرون از لایهٔ utilities هستند، پس بر کلاس‌های
+ * Tailwind اولویت دارند.
+ */
+.ui-media-stage:fullscreen {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ui-media-stage:fullscreen video {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+.ui-media-stage:fullscreen .ui-media-controls { padding-inline: 1.25rem; }
+/* همان قواعد برای موتور WebKit که پیشوند اختصاصی می‌خواهد. */
+.ui-media-stage:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: #000;
+}
+.ui-media-stage:-webkit-full-screen video {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+/* وقتی نوار کنترل خودکار پنهان می‌شود، نشانگر هم کنار می‌رود تا تصویر کامل دیده شود. */
+.ui-media-stage[data-controls='hidden'] { cursor: none; }
+
+/* لغزندهٔ بلندی صدا در منوی شناور پخش‌کننده. */
+.ui-volume {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  /*
+   * بخش پرشدهٔ نوار رنگی است: تا هر جا لغزنده آمده باشد با رنگ اصلی پر می‌شود
+   * و بقیه خاکستری می‌ماند. درصد از `--ui-volume-fill` می‌آید (لغزنده در RTL
+   * هم با `dir="ltr"` از چپ شروع می‌شود).
+   */
+  background: linear-gradient(
+    to right,
+    var(--color-primary) 0 var(--ui-volume-fill, 0%),
+    #e2e8f0 var(--ui-volume-fill, 0%) 100%
+  );
+  outline: none;
+  cursor: pointer;
+}
+.ui-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+}
+.ui-volume::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+}
+
+/*
+ * انیمیشن «مات → شفاف» برای نمایش داده‌ای که تازه رسیده است (ردیف‌های جدول
+ * اطلاعات در مدال پیش‌نمایش). اطلاعات به‌جای ظاهر‌شدن ناگهانی، از حالت مات و
+ * کم‌رنگ واضح می‌شود.
+ */
+@keyframes ui-clear-in {
+  from { opacity: 0; filter: blur(6px); }
+  to { opacity: 1; filter: none; }
+}
+.ui-clear-in { animation: ui-clear-in .34s cubic-bezier(.22, 1, .36, 1) both; }
+
+/*
+ * کادر تصویرِ شفاف: لوگوی سامانه و آیکون پیش‌فرض سایدبار نباید زمینهٔ خاکستری
+ * لودر تصویر را بگیرند؛ آن‌جا زمینهٔ رنگی خود کادر باید دیده شود.
+ */
+.ui-img.is-plain { background: transparent; }
+
+/*
+ * استثنای «کلیک ناوبری»: عنوان‌ها و ردیف‌هایی که فقط کاربر را به صفحهٔ دیگری
+ * می‌برند دکمهٔ عملیات نیستند؛ کوچک‌شدن و سایهٔ فشردن روی آن‌ها اشتباه دیده
+ * می‌شد (مثلاً کلیک روی عنوان محتوا در فهرست محتواهای یک مجموعه).
+ */
+[data-press='none']:active,
+button[data-press='none']:active:not(:disabled),
+[data-press='none'] button:active:not(:disabled),
+[data-press='none'] [role='button']:active:not(:disabled) {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-clear-in { animation: none; }
 }

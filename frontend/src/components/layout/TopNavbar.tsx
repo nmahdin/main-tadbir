@@ -1,12 +1,15 @@
 import { runtime } from '../../config/runtime';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { notificationDestination } from '../../routing/listQuery';
-import { ErrorState, LoadingState, Modal } from '../common/Primitives';
+import { ErrorState, Modal } from '../common/Primitives';
+import { ListRowsSkeleton } from '../common/Shimmer';
 import { useWorkspacePage, useNotificationRead } from '../../queries/workspacePages';
+import { preloadGlobalSearch } from '../../routing/lazyOverlays';
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
+import { useExitPresence } from '../common/useExitPresence';
 import {
   Menu,
   Search,
@@ -25,7 +28,8 @@ import {
   Building2,
   X,
   AlarmClock,
-  ExternalLink
+  ExternalLink,
+  LoaderCircle,
 } from 'lucide-react';
 
 export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSidebar }) => {
@@ -59,11 +63,21 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
   const currentRoleName = roles.find(r => r.id === currentUser.roleId || r.key === currentUser.role)?.name
     || (currentUser.role === 'admin' ? 'مدیر سیستم' : currentUser.role === 'project_manager' ? 'مدیر پروژه' : 'عضو تیم');
 
+  /**
+   * ماژول جست‌وجوی سراسری تنبل بارگیری می‌شود؛ با هاور/لمسِ آیکون، پیش از
+   * باز شدن مدال دانلود می‌شود تا روی موبایل با اولین ضربه هم بستهٔ جداگانه
+   * منتظر نماند (کیبورد هم بی‌درنگ بالا می‌آید).
+   */
+  const warmSearch = () => { preloadGlobalSearch(); };
+
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [tickerIndex, setTickerIndex] = useState(0);
   const [tickerPaused, setTickerPaused] = useState(false);
   const [focusedNotif, setFocusedNotif] = useState<typeof notifications[0] | null>(null);
+  // منوهای شناور با انیمیشن نرم باز و بسته می‌شوند (خروج هم انیمیشن دارد).
+  const notifMenu = useExitPresence(isNotifOpen);
+  const userMenu = useExitPresence(isUserDropdownOpen);
 
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -149,6 +163,9 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
         return <MessageSquare className="w-4 h-4 text-amber-600" />;
       case 'deadline':
         return <Clock className="w-4 h-4 text-purple-600" />;
+      case 'reminder':
+        // یادآوری انتشار (و هر یادآوری دستی) آیکون ساعت شنی/زنگ دارد.
+        return <AlarmClock className="w-4 h-4 text-teal-600" />;
       default:
         return <Bell className="w-4 h-4 text-slate-600" />;
     }
@@ -166,14 +183,14 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
 
 
   return (
-    <header className="h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 flex items-center justify-between text-right">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 border-b border-slate-200 bg-white/90 px-3 text-right backdrop-blur-md sm:px-6">
       {/* Right section: Hamburger & View title in RTL */}
       <div className="flex items-center gap-3">
         {onOpenSidebar && (
           <button
             id="mobile-sidebar-toggle"
             onClick={onOpenSidebar}
-            className="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
+            className="ui-tap inline-flex shrink-0 items-center justify-center rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 lg:hidden"
             aria-label="باز کردن منو"
           >
             <Menu className="w-5 h-5" />
@@ -206,6 +223,9 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
         )}
         <button
           id="top-search-bar"
+          type="button"
+          onPointerEnter={warmSearch}
+          onFocus={warmSearch}
           onClick={() => setIsSearchOpen(true)}
           className="min-w-0 flex-1 flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-sm text-slate-600 transition-all shadow-2xs group cursor-pointer"
         >
@@ -215,33 +235,40 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           </div>
         </button>
       </div>
-      <div className="flex-1 sm:hidden flex justify-end mx-2">
-         <button
-            onClick={() => setIsSearchOpen(true)}
-            className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-         >
-            <Search className="w-5 h-5" />
-         </button>
-      </div>
 
-      {/* Left Action Icons in RTL */}
-      <div className="flex items-center gap-2">
+      {/* Left action icons in RTL. On phones the search lives here as a real
+          36px button: previously it sat in a shrinking in-flow column and could
+          be squeezed out of the header, so the search box never opened. */}
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <button
+          id="top-search-btn"
+          type="button"
+          onPointerEnter={warmSearch}
+          onFocus={warmSearch}
+          onClick={() => setIsSearchOpen(true)}
+          title="جست‌وجوی سراسری"
+          aria-label="جست‌وجوی سراسری"
+          aria-haspopup="dialog"
+          className="ui-tap inline-flex shrink-0 items-center justify-center rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 sm:hidden"
+        >
+          <Search className="h-5 w-5" />
+        </button>
         {/* Calendar shortcut */}
         <button
           id="top-calendar-btn"
           onClick={() => setActiveView('calendar')}
           title="تقویم زمان‌بندی"
-          className={`p-2 rounded-xl inline-flex items-center gap-1.5 transition-colors cursor-pointer ${activeView === 'calendar' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
+          className={`ui-tap inline-flex shrink-0 items-center gap-1.5 rounded-xl p-2 transition-colors ${activeView === 'calendar' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
           aria-label="تقویم"
         >
-          <Calendar className="w-4 h-4" /><span className="text-xs font-bold">تقویم</span>
+          <Calendar className="h-4 w-4 shrink-0" /><span className="hidden text-xs font-bold sm:inline">تقویم</span>
         </button>
         {/* Notifications Dropdown */}
         <div className="relative" ref={notifRef}>
           <button
             id="top-notifications-bell"
             onClick={() => setIsNotifOpen(!isNotifOpen)}
-            className="relative p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+            className="ui-tap relative shrink-0 rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
             aria-label="اعلان‌ها"
           >
             <Bell className="w-4 h-4" />
@@ -250,12 +277,12 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
             )}
           </button>
 
-          {isNotifOpen && (
-            <div className="absolute left-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-[320px] sm:max-w-none bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
-              {inbox.isPending && !runtime.demoMode && <LoadingState />}
+          {notifMenu.visible && (
+            <div data-state={notifMenu.state} className="ui-pop absolute left-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-[320px] sm:max-w-none bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
+              {inbox.isPending && !runtime.demoMode && <ListRowsSkeleton rows={3} label="در حال دریافت اعلان‌ها…" />}
               {inbox.isError && <ErrorState error={inbox.error} onRetry={() => void inbox.refetch()} />}
               {readMutation.isError && <ErrorState error={readMutation.error} />}
-              <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
+              <div className="mx-2 mb-2 flex items-center justify-between rounded-xl border-b border-slate-100 px-3 py-2.5">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-sm text-slate-900">مرکز اعلان‌ها</span>
                   {unreadCount > 0 && (
@@ -266,18 +293,29 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                 </div>
                 {unreadCount > 0 && (
                   <button
-                    onClick={markAllNotificationsAsRead} disabled={readMutation.isPending}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
+                    type="button"
+                    onClick={markAllNotificationsAsRead}
+                    disabled={readMutation.isPending}
+                    aria-busy={readMutation.isPending || undefined}
+                    className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer disabled:cursor-wait disabled:opacity-70"
                   >
-                    علامت‌گذاری همه به عنوان خوانده‌شده
+                    {/* خانهٔ ثابت آیکون + رزرو عرض برچسب: با شروع/پایان درخواست،
+                        متن و چرخنده جابه‌جا نمی‌شوند. */}
+                    <span className="grid h-3.5 w-3.5 shrink-0 place-items-center" aria-hidden>
+                      {readMutation.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <span className="h-3.5 w-3.5" />}
+                    </span>
+                    <span className="grid text-right">
+                      <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-nowrap">در حال علامت‌گذاری…</span>
+                      <span className="col-start-1 row-start-1 whitespace-nowrap">{readMutation.isPending ? 'در حال علامت‌گذاری…' : 'علامت‌گذاری همه به عنوان خوانده‌شده'}</span>
+                    </span>
                   </button>
                 )}
               </div>
 
               {/* Notification list */}
-              <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+              <div className="max-h-80 space-y-1.5 overflow-y-auto px-2 pb-1">
                 {inbox.isPending || inbox.isError ? null : notifications.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-slate-600">
+                  <div className="mx-1 rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-600">
                     اعلان نخوانده‌ای ندارید.
                   </div>
                 ) : (
@@ -285,8 +323,8 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                     <button type="button"
                       key={notif.id}
                       onClick={() => void handleNotificationClick(notif)} disabled={readMutation.isPending}
-                      className={`w-full text-right p-3.5 hover:bg-slate-50 cursor-pointer transition-colors flex items-start gap-3 ${
-                        !notif.read ? 'bg-indigo-50/30' : ''
+                      className={`flex w-full items-start gap-3 rounded-xl border border-transparent p-3 text-right transition-colors hover:border-slate-200 hover:bg-slate-50 ${
+                        !notif.read ? 'border-indigo-100 bg-indigo-50/40' : 'bg-white'
                       }`}
                     >
                       <div className="p-2 rounded-xl bg-slate-100 shrink-0 mt-0.5">
@@ -321,7 +359,7 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                   setIsNotifOpen(false);
                   setActiveView('notifications');
                 }}
-                className="w-full mt-1 px-4 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 border-t border-slate-100 transition-colors cursor-pointer"
+                className="mx-2 mt-2 w-[calc(100%-1rem)] rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-2.5 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 cursor-pointer"
               >
                 مشاهده همه اعلان‌ها در مرکز اعلان‌ها
               </button>
@@ -361,7 +399,13 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
           <button
             id="top-user-avatar-btn"
             onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
-            className="flex items-center gap-2 p-1 pr-1.5 rounded-full hover:bg-slate-100 transition-colors border border-transparent hover:border-slate-200 cursor-pointer"
+            // دور ۸۵/۸۶: مانند بقیهٔ دکمه‌های سربرگ، گوشهٔ گردِ معمولی (نه کپسولی)؛
+            // در حالت عادی بدون پس‌زمینه و بدون حاشیه، و فقط با هاور کمی خاکستری
+            // می‌شود. `!rounded-xl` تضمین می‌کند قاعدهٔ سراسریِ گردیِ دکمه‌ها
+            // (که بیرون از لایهٔ utilities است) دوباره آن را کپسولی نکند.
+            className="ui-tap flex shrink-0 items-center gap-2 !rounded-xl border-0 bg-transparent p-1 pr-1.5 transition-colors hover:bg-slate-100"
+            aria-haspopup="menu"
+            aria-expanded={isUserDropdownOpen}
           >
             <Avatar user={currentUser} size="sm" />
             <span className="hidden md:inline-block text-xs font-bold text-slate-800 max-w-[100px] truncate">
@@ -370,8 +414,8 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
             <ChevronDown className="w-3 h-3 text-slate-600 hidden md:inline-block" />
           </button>
 
-          {isUserDropdownOpen && (
-            <div className="absolute left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 text-right">
+          {userMenu.visible && (
+            <div data-state={userMenu.state} className="ui-pop absolute left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 text-right">
               <div className="px-4 py-3 border-b border-slate-100 space-y-1">
                 <div className="flex items-center gap-2.5">
                   <Avatar user={currentUser} size="md" />

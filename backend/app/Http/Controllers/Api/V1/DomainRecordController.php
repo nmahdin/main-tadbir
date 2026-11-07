@@ -85,7 +85,7 @@ class DomainRecordController extends Controller
                 'userId' => ['required', 'integer', 'exists:users,id'],
                 'title' => ['required', 'string', 'max:255'],
                 'message' => ['required', 'string', 'max:3000'],
-                'type' => ['required', Rule::in(['assignment', 'deadline', 'status_change', 'comment', 'reply', 'overdue', 'mention', 'system', 'info'])],
+                'type' => ['required', Rule::in(['assignment', 'deadline', 'status_change', 'comment', 'reply', 'overdue', 'mention', 'reminder', 'system', 'info'])],
                 'notificationCategory' => ['sometimes', Rule::in(['tasks', 'content', 'meetings', 'secretariat', 'collaboration', 'system'])],
                 'linkTaskId' => ['sometimes', 'nullable', 'integer'],
                 'linkProjectId' => ['sometimes', 'nullable', 'integer'],

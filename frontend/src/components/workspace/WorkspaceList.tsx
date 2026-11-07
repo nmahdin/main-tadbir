@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Archive,
   ArrowDown,
@@ -27,17 +27,36 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useWorkspacePage } from '../../queries/workspacePages';
-import { parseListQuery, listStatuses } from '../../routing/listQuery';
+import { CONTENT_DEFAULT_SORT, parseListQuery, listStatuses } from '../../routing/listQuery';
 import { usePageCorrection } from '../../routing/usePageCorrection';
 import { useApp } from '../../context/AppContext';
-import { Button, EmptyState, ErrorState, LoadingState, Select } from '../common/Primitives';
+import { Button, EmptyState, ErrorState, Select } from '../common/Primitives';
 import { Pagination } from '../common/WorkspacePatterns';
+import { DeadlineChip } from '../common/DeadlineChip';
+import { Collapsible } from '../common/Collapsible';
+import { SearchableSelect } from '../common/SearchableSelect';
 import { formatPersianDate } from '../../utils/date';
-import { ContentStatusBadge } from '../../utils/statusBadges';
+import { PublicationDateChip } from '../common/PublicationDateChip';
+import { ContentStatusBadge, ContentTypeBadge } from '../../utils/statusBadges';
 import { PriorityPill, ProjectStatusBadge, TaskStatusBadge } from '../common/PriorityPill';
 import type { ContentStatus, Priority, ProjectStatus, Task, TaskStatus } from '../../types';
-import { addMonths, format, getDay, getDaysInMonth, isSameDay, startOfMonth, subMonths } from 'date-fns-jalali';
+import {
+  CalendarGrid,
+  CalendarRangeToolbar,
+  buildCalendarDays,
+  calendarRangeLabel,
+  shiftCalendarAnchor,
+  type CalendarDay,
+  type CalendarRangeMode,
+} from '../calendar/CalendarViews';
+import { CalendarEventCard } from '../calendar/CalendarEventCard';
+import { CalendarDayModal } from '../calendar/CalendarDayModal';
+import { calendarDueInfo, calendarTimeLabel, sortCalendarEventsByTime } from '../../utils/calendarTone';
 import { EditTaskModal } from '../tasks/EditTaskModal';
+import { useSlidingTabs } from '../common/SlidingTabs';
+import { BoardSkeleton, CardGridSkeleton, TableSkeleton } from '../common/Shimmer';
+import { FreshDot } from '../common/FreshDot';
+import { useFreshRecords } from '../../utils/freshness';
 
 const filterNames: Record<string, string> = {
   status: 'وضعیت', search: 'جستجو', due: 'سررسید', assignee: 'مسئول', owner: 'مالک',
@@ -82,8 +101,8 @@ const MODULE_CONFIG: Record<MainModule, ModuleConfig> = {
     description: 'چرخه ایده‌پردازی، تولید، بازبینی و آماده‌سازی انتشار محتوا',
     createLabel: 'محتوای جدید',
     icon: PenTool,
-    iconBox: 'bg-violet-600 shadow-violet-200',
-    activePill: 'bg-violet-600 border-violet-600 text-white',
+    iconBox: 'bg-indigo-600 shadow-indigo-200',
+    activePill: 'bg-indigo-600 border-indigo-600 text-white',
   },
 };
 
@@ -100,15 +119,16 @@ const PRESETS: Record<MainModule, Preset[]> = {
     { label: 'همه وظایف من', icon: List, values: {} },
     { label: 'نزدیک موعد', icon: CalendarClock, values: { due: 'near' } },
     { label: 'تأخیردار', icon: Clock3, values: { due: 'overdue' } },
-    { label: 'در صف بررسی', icon: Eye, values: { status: 'review' } },
+    { label: 'در حال بررسی', icon: Eye, values: { status: 'review' } },
   ],
   contents: [
     { label: 'همه محتواها', icon: FileText, values: {} },
     { label: 'نیازمند اقدام', icon: CircleDot, values: { status: 'open' } },
+    // «برنامه‌ریزی» همان وضعیت planning است؛ پرونده‌های آمادهٔ انتشار عمداً در
+    // «نیازمند اقدام» نمی‌آیند و در همین تب و تب «همه محتواها» دیده می‌شوند.
+    { label: 'برنامه‌ریزی', icon: Sparkles, values: { status: 'planning' } },
     { label: 'در حال تولید', icon: PenTool, values: { status: 'producing' } },
     { label: 'در حال بررسی', icon: Eye, values: { status: 'reviewing' } },
-    { label: 'منتشرشده', icon: CheckCircle2, values: { status: 'published' } },
-    { label: 'بایگانی‌شده', icon: Archive, values: { status: 'archived' } },
   ],
 };
 
@@ -117,6 +137,12 @@ const SCOPE_FILTERS: Record<MainModule, string[]> = {
   tasks: ['status', 'due'],
   contents: ['status', 'owner'],
 };
+
+/** سه اکشن سربرگ مدیریت محتوا یک هندسهٔ مشترک دارند؛ رنگ تنها تفاوت بصری است. */
+const CONTENT_HEADER_ACTION_CLASS = 'ui-form-action content-header-action border transition-colors';
+
+/** مرحله‌های تمام‌شدهٔ جریان محتوا؛ منبع شمارش نوار پیشرفت فهرست محتوا. */
+const COMPLETED_STAGE_STATUSES = ['completed', 'approved', 'skipped'];
 
 function statusBadge(module: MainModule, row: any, labels: Record<string, string>) {
   if (module === 'projects') return <ProjectStatusBadge status={row.status as ProjectStatus} size="sm" />;
@@ -133,21 +159,39 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   const customStatuses = module === 'contents' ? app.contentStatuses.map(status => status.id) : [];
   const contentTypeIds = module === 'contents' ? app.contentTypes.map(type => type.id) : [];
   const filters = parseListQuery(location.search, module, customStatuses, contentTypeIds, module === 'contents' ? app.targetAudiences : []);
+  // پیوندهای قدیمی به وضعیت‌های نهایی نباید تب حذف‌شده را به فهرست اصلی بازگردانند.
+  if (module === 'contents' && ['published', 'archived'].includes(filters.status || '')) delete filters.status;
+  // فیلتر «محتوا» از صفحهٔ وظایف برداشته شد؛ لینک قدیمی که هنوز `content_id`
+  // دارد نباید بی‌صدا فهرست را محدود کند و کاربر هم راهی برای پاک‌کردنش نبیند.
+  if (module === 'tasks') delete filters.content_id;
   const requestedView = search.get('view');
   const view = module === 'tasks'
     ? (requestedView === 'kanban' || requestedView === 'calendar' ? requestedView : 'list')
-    : requestedView === 'cards' ? 'cards' : 'list';
+    : module === 'contents'
+      ? (requestedView === 'cards' ? 'cards' : 'list')
+      : requestedView === 'cards' ? 'cards' : 'list';
+  const navigate = useNavigate();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetStatus, setDropTargetStatus] = useState<string | null>(null);
   const [statusMenuTaskId, setStatusMenuTaskId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // نمای کانبان/تقویم وظایف همهٔ موارد پالایه‌شده را در یک صفحه نشان می‌دهند.
   const perPage = module === 'tasks' && view !== 'list' ? 100 : Number(filters.per_page || 20);
   // Personal task scope is evaluated on the server; other users' tasks never reach this page.
-  const query = useWorkspacePage(module, { ...filters, ...(module === 'tasks' ? { assignee: 'me' } : {}), per_page: perPage });
+  const defaultSort = module === 'contents' ? CONTENT_DEFAULT_SORT : 'created_at';
+  const defaultDirection = module === 'contents' ? 'asc' : 'desc';
+  // ترتیب پیش‌فرض همیشه به سرور فرستاده می‌شود تا صفحه‌بندی هم بر همان مبنا باشد؛ برای محتوا همیشه از نزدیک‌ترین به دورترین (صعودی)
+  const query = useWorkspacePage(module, { ...filters, ...(module === 'contents' ? { active_only: 1 } : {}), sort: filters.sort || defaultSort, direction: filters.direction || defaultDirection, ...(module === 'tasks' ? { assignee: 'me' } : {}), per_page: perPage });
   usePageCorrection(query);
   const rows = query.data?.data ?? [];
+  /**
+   * نشانگر «تازه» (دور ۹۹): ردیفی که از آخرین بازدید این فهرست تغییر کرده، نقطهٔ
+   * آبی می‌گیرد و با باز شدنش نقطه برداشته می‌شود.
+   */
+  const fresh = useFreshRecords(`workspace:${module}`, rows);
+  const freshMark = (row: any) => fresh.isFresh(row) ? <FreshDot className="mt-0.5" /> : null;
   const labels = {
     ...listStatuses[module],
     ...(module === 'contents' ? Object.fromEntries(app.contentStatuses.map(status => [status.id, status.label])) : {}),
@@ -177,6 +221,12 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     const scope = SCOPE_FILTERS[module];
     return scope.every(key => (filters[key] || '') === (preset.values[key] || ''));
   };
+  // نشانگر متحرک تب‌ها (دور ۹۵): چهار نوار مستقل داریم؛ هر کدام ref و نشانگر خودش
+  // را می‌گیرد و چون فقط یکی از آن‌ها در هر لحظه رندر می‌شود، بقیه بی‌اثرند.
+  const taskPresetTabs = useSlidingTabs(`tasks:${PRESETS.tasks.findIndex(preset => presetActive(preset))}`);
+  const contentPresetTabs = useSlidingTabs(`contents:${PRESETS.contents.findIndex(preset => presetActive(preset))}`);
+  const taskViewTabs = useSlidingTabs(view);
+  const listViewTabs = useSlidingTabs(view);
 
   const create = module === 'projects'
     ? () => app.setIsCreateProjectOpen(true)
@@ -192,18 +242,55 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
     return `/${module}/${id}?${context}`;
   };
   const titleOf = (row: any) => row.name || row.title || 'بدون عنوان';
+  /** رنگ و نام نوع محتوا از پیکربندی خودِ نوع خوانده می‌شود تا نشانگر با سامانه یکدست بماند. */
+  const typeOf = (row: any) => app.contentTypes.find(type => type.id === row.type) || null;
+  const typeNameOf = (row: any) => typeOf(row)?.name || row.type || 'محتوا';
   const subtitleOf = (row: any) => {
     if (module === 'projects') return row.category || 'پروژه سازمانی';
     if (module === 'tasks') return app.projects.find(project => project.id === row.projectId)?.name || 'بدون پروژه';
-    return app.contentTypes.find(type => type.id === row.type)?.name || row.type || 'محتوا';
+    // زیر عنوان محتوا: کد پایدار پرونده و نام مجموعه؛ پروندهٔ بدون مجموعه «عمومی» است.
+    const series = row.seriesName || 'عمومی';
+    return row.code ? `${row.code} · ${series}` : series;
   };
+  /** پیشرفت جریان محتوا فقط از مرحله‌های واقعی پرونده محاسبه می‌شود؛ بدون دادهٔ ساختگی. */
+  const contentProgressOf = (row: any) => {
+    const stages = [...((row?.stages || []) as Array<{ status?: string; order?: number }>)].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const total = stages.length;
+    const done = stages.filter(stage => COMPLETED_STAGE_STATUSES.includes(String(stage.status))).length;
+    const activeIndex = stages.findIndex(stage => !COMPLETED_STAGE_STATUSES.includes(String(stage.status)));
+    const current = total ? (done >= total ? total : Math.max(0, activeIndex) + 1) : 0;
+    const percentage = total ? Math.round((done / total) * 100) : 0;
+    return { total, done, current, percentage };
+  };
+  const ContentProgressBar: React.FC<{ row: any; compact?: boolean }> = ({ row, compact = false }) => {
+    const progress = contentProgressOf(row);
+    // در نمای جدولی، جای خالی بهتر از جملهٔ بلندِ ۹ پیکسلی است؛ در کارت‌ها همان
+    // توضیح می‌ماند تا کاربر بداند چرا نواری دیده نمی‌شود.
+    if (!progress.total) return compact ? null : <p className="mt-1.5 text-[9px] font-bold text-slate-400">جریان تولید برای این پرونده تعریف نشده است</p>;
+    return (
+      <div className="mt-1.5 w-40 max-w-full">
+        <div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-bold text-slate-500">
+          <span>مرحله {progress.current.toLocaleString('fa-IR')} از {progress.total.toLocaleString('fa-IR')}</span>
+          <span>{progress.percentage.toLocaleString('fa-IR')}٪</span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percentage} aria-label={`پیشرفت جریان محتوا ${progress.percentage} درصد`}>
+          <span className="block h-full rounded-full bg-indigo-600 transition-[width]" style={{ width: `${progress.percentage}%` }} />
+        </div>
+      </div>
+    );
+  };
+  /**
+   * مسئول هر فهرست: مدیر پروژه برای پروژه‌ها، مسئول وظیفه برای وظایف و
+   * «منتشرکننده» برای محتوا (نه مالک پرونده). نام فقط از فهرست واقعی کاربران
+   * خوانده می‌شود و اگر تعیین نشده باشد، همان را صریح می‌گوید.
+   */
   const personOf = (row: any) => {
-    const id = module === 'projects' ? row.projectManagerId : module === 'tasks' ? row.assigneeId : row.ownerId;
+    const id = module === 'projects' ? row.projectManagerId : module === 'tasks' ? row.assigneeId : row.publisherId;
     return app.users.find(user => user.id === id)?.name || (id ? `کاربر #${id}` : 'تعیین نشده');
   };
   const recordTitle = (row: any, className: string) => module === 'tasks'
-    ? <button type="button" className={`${className} text-right`} onClick={() => app.setSelectedTaskId(row.id)}>{titleOf(row)}</button>
-    : <Link className={className} to={detail(row.id)}>{titleOf(row)}</Link>;
+    ? <button type="button" data-press="none" className={`${className} text-right`} onClick={() => { fresh.markOpened(row.id); app.setSelectedTaskId(row.id); }}>{titleOf(row)}</button>
+    : <Link className={className} to={detail(row.id)} onClick={() => fresh.markOpened(row.id)}>{titleOf(row)}</Link>;
   const handleTaskDrop = (status: string) => {
     if (!draggedTaskId) return;
     const task = rows.find((row: any) => row.id === draggedTaskId);
@@ -221,10 +308,28 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
   };
   const total = query.data?.meta?.total ?? rows.length;
   const orderedTaskStatuses = [...app.taskStatuses].sort((left, right) => left.order - right.order).filter(status => status.id !== 'archived');
+  // «سررسید گذشته» وضعیت خودِ وظیفه نیست و سرور آن را از پارامتر `due` می‌خواند؛
+  // پس مقدار انتخاب‌شده را از همان `due` بازمی‌خوانیم تا پس از انتخاب هم روی
+  // گزینه بماند (وگرنه کادر بی‌صدا به «همه وضعیت‌ها» برمی‌گشت).
+  const taskStatusFilterValue = filters.status || ((filters.due || '') === 'overdue' ? 'overdue' : '');
+  const applyTaskStatusFilter = (next: string) => {
+    const nextParams = paramsFromFilters();
+    nextParams.delete('page');
+    if (next === 'overdue') {
+      nextParams.delete('status');
+      nextParams.set('due', 'overdue');
+    } else {
+      if ((filters.due || '') === 'overdue') nextParams.delete('due');
+      if (next) nextParams.set('status', next); else nextParams.delete('status');
+    }
+    setSearch(nextParams);
+  };
   const Icon = config.icon;
   const activeFilterEntries = Object.entries(filters).filter(([key]) => !['page', 'per_page'].includes(key));
   const projectAdvancedFilterCount = ['status', 'priority', 'due', 'sort', 'direction'].filter(key => filters[key]).length;
-  const taskAdvancedFilterCount = ['priority', 'project_id', 'content_id', 'sort', 'direction'].filter(key => filters[key]).length;
+  // «سررسید گذشته» هم از همین پنل انتخاب می‌شود، پس در شمارش فیلترهای فعال می‌آید.
+  const taskAdvancedFilterCount = ['status', 'priority', 'project_id', 'sort', 'direction'].filter(key => filters[key]).length
+    + ((filters.due || '') === 'overdue' ? 1 : 0);
   const contentAdvancedFilterCount = ['type', 'owner', 'target_audience', 'sort', 'direction'].filter(key => filters[key]).length;
   const advancedFilterCount = module === 'projects' ? projectAdvancedFilterCount : module === 'tasks' ? taskAdvancedFilterCount : contentAdvancedFilterCount;
 
@@ -248,16 +353,16 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           )}
           {module === 'contents' && (
             <>
-              <Button variant="secondary" onClick={() => app.setActiveView('content-publishing')} className="text-xs sm:text-sm">
-                <CalendarClock className="w-4 h-4 text-violet-600" />میز انتشار
-              </Button>
-              <Button variant="success" onClick={() => app.setActiveView('content-published')} className="text-xs sm:text-sm">
+              <button type="button" onClick={() => app.setActiveView('content-publishing')} className={`${CONTENT_HEADER_ACTION_CLASS} border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}>
+                <CalendarClock className="w-4 h-4 text-indigo-600" />میز انتشار
+              </button>
+              <button type="button" onClick={() => app.setActiveView('content-published')} className={`${CONTENT_HEADER_ACTION_CLASS} border-transparent bg-green-600 text-white hover:bg-green-700`}>
                 <CheckCircle2 className="w-4 h-4" />محتواهای منتشرشده
-              </Button>
+              </button>
             </>
           )}
           {canCreate && (
-            <button data-button-action="create" type="button" onClick={create} className={`ui-form-action px-4 py-2.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 transition-all ${module === 'contents' ? 'bg-violet-600 hover:bg-violet-700 shadow-violet-200' : module === 'tasks' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}>
+            <button data-button-action="create" type="button" onClick={create} className={module === 'contents' ? `${CONTENT_HEADER_ACTION_CLASS} border-transparent bg-indigo-600 text-white hover:bg-indigo-700` : 'ui-form-action px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-200 flex items-center gap-2 transition-all'}>
               <Plus className="w-4 h-4" />{config.createLabel}
             </button>
           )}
@@ -265,21 +370,23 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
       </header>
 
       {module === 'tasks' && (
-        <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="دسته‌بندی وظایف">
+        <div ref={taskPresetTabs.stripRef} className="relative flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="دسته‌بندی وظایف">
+          {taskPresetTabs.pill}
           {PRESETS.tasks.map(preset => {
             const PresetIcon = preset.icon;
             const active = presetActive(preset);
-            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 ${active ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="w-3.5 h-3.5" />{preset.label}</button>;
+            return <button key={preset.label} type="button" role="tab" aria-selected={active} data-tab-active={active} onClick={() => applyPreset(preset)} className={`relative z-10 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-colors ${active ? 'text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="w-3.5 h-3.5" />{preset.label}</button>;
           })}
         </div>
       )}
 
       {module === 'contents' && (
-        <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="وضعیت محتوا">
+        <div ref={contentPresetTabs.stripRef} className="relative flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="وضعیت محتوا">
+          {contentPresetTabs.pill}
           {PRESETS.contents.map(preset => {
             const PresetIcon = preset.icon;
             const active = presetActive(preset);
-            return <button key={preset.label} type="button" role="tab" aria-selected={active} onClick={() => applyPreset(preset)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold ${active ? 'bg-violet-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="h-3.5 w-3.5" />{preset.label}</button>;
+            return <button key={preset.label} type="button" role="tab" aria-selected={active} data-tab-active={active} onClick={() => applyPreset(preset)} className={`relative z-10 flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${active ? 'text-white' : 'text-slate-600 hover:bg-slate-100'}`}><PresetIcon className="h-3.5 w-3.5" />{preset.label}</button>;
           })}
         </div>
       )}
@@ -287,24 +394,27 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/60 space-y-3" aria-label="کنترل‌های فهرست">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || advancedFilterCount ? module === 'tasks' ? '!border-indigo-300 !text-indigo-700' : module === 'contents' ? '!border-violet-300 !text-violet-700' : '!border-indigo-300 !text-indigo-700' : ''}`}>
+            <button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(open => !open)} className={`ui-button ui-button-secondary text-xs ${filtersOpen || advancedFilterCount ? '!border-indigo-300 !text-indigo-700' : ''}`}>
               <SlidersHorizontal className="w-4 h-4" />فیلترها
-              {advancedFilterCount > 0 && <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-[10px] text-white ${module === 'tasks' ? 'bg-indigo-600' : module === 'contents' ? 'bg-violet-600' : 'bg-indigo-600'}`}>{advancedFilterCount.toLocaleString('fa-IR')}</span>}
+              {advancedFilterCount > 0 && <span className="min-w-5 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] text-white">{advancedFilterCount.toLocaleString('fa-IR')}</span>}
             </button>
 
             {module === 'tasks' ? (
-              <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای وظایف">
-                {([['list', 'فهرست', List], ['kanban', 'کانبان', LayoutGrid], ['calendar', 'تقویم', CalendarClock]] as const).map(([value, label, ViewIcon]) => <button key={value} type="button" role="tab" aria-selected={view === value} onClick={() => update('view', value)} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === value ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}><ViewIcon className="w-3.5 h-3.5" />{label}</button>)}
+              <div ref={taskViewTabs.stripRef} className="relative flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای وظایف">
+                {taskViewTabs.pill}
+                {([['list', 'فهرست', List], ['kanban', 'کانبان', LayoutGrid], ['calendar', 'تقویم', CalendarClock]] as const).map(([value, label, ViewIcon]) => <button key={value} type="button" role="tab" aria-selected={view === value} data-tab-active={view === value} onClick={() => update('view', value)} className={`relative z-10 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${view === value ? 'text-white' : 'text-slate-500 hover:bg-slate-50'}`}><ViewIcon className="w-3.5 h-3.5" />{label}</button>)}
               </div>
             ) : (
-              <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای فهرست">
-                <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => update('view', 'list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><List className="w-3.5 h-3.5" />فهرست</button>
-                <button type="button" role="tab" aria-selected={view === 'cards'} onClick={() => update('view', 'cards')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${view === 'cards' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}><LayoutGrid className="w-3.5 h-3.5" />کارت</button>
+              <div ref={listViewTabs.stripRef} className="relative flex items-center rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="نمای فهرست">
+                {listViewTabs.pill}
+                <button type="button" role="tab" aria-selected={view === 'list'} data-tab-active={view === 'list'} onClick={() => update('view', 'list')} className={`relative z-10 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${view === 'list' ? 'text-white' : 'text-slate-500 hover:bg-slate-50'}`}><List className="w-3.5 h-3.5" />فهرست</button>
+                <button type="button" role="tab" aria-selected={view === 'cards'} data-tab-active={view === 'cards'} onClick={() => update('view', 'cards')} className={`relative z-10 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${view === 'cards' ? 'text-white' : 'text-slate-500 hover:bg-slate-50'}`}><LayoutGrid className="w-3.5 h-3.5" />کارت</button>
               </div>
             )}
           </div>
 
-          {filtersOpen && <div className="flex items-end gap-2 flex-wrap rounded-2xl border border-slate-200 bg-white p-3">
+          <Collapsible open={filtersOpen}>
+            <div className="flex items-end gap-2 flex-wrap rounded-2xl border border-slate-200 bg-white p-3">
             {module === 'projects' && <label className="text-[11px] font-bold text-slate-600">وضعیت
               <Select aria-label="فیلتر وضعیت" value={filters.status || ''} onChange={event => update('status', event.target.value)} className="mt-1.5 min-w-36 text-xs">
                 <option value="">همه وضعیت‌ها</option>
@@ -322,12 +432,30 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
             {module === 'projects' && <label className="text-[11px] font-bold text-slate-600">سررسید
               <Select aria-label="فیلتر سررسید" value={filters.due || ''} onChange={event => update('due', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="">همه موعدها</option><option value="today">امروز</option><option value="overdue">عقب‌افتاده</option></Select>
             </label>}
-            {module === 'tasks' && <label className="text-[11px] font-bold text-slate-600">پروژه
-              <Select aria-label="فیلتر پروژه" value={filters.project_id || ''} onChange={event => update('project_id', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه پروژه‌ها</option>{app.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</Select>
+            {/* وضعیت وظیفه — دور ۹۳. پیش از این فقط «پیش‌تنظیم‌ها» وضعیت را عوض
+                می‌کردند و در پنل فیلترها راهی برای انتخاب وضعیت دلخواه نبود. */}
+            {module === 'tasks' && <label className="text-[11px] font-bold text-slate-600">وضعیت وظیفه
+              <Select aria-label="فیلتر وضعیت وظیفه" value={taskStatusFilterValue} onChange={event => applyTaskStatusFilter(event.target.value)} className="mt-1.5 min-w-36 text-xs">
+                <option value="">همه وضعیت‌ها</option>
+                {orderedTaskStatuses.map(status => <option key={status.id} value={status.id}>{status.label}</option>)}
+                {/* «تأخیردار» و «عقب‌افتاده» از روی موعد تعیین می‌شوند، نه وضعیت خودِ وظیفه. */}
+                <option value="overdue">سررسید گذشته</option>
+              </Select>
             </label>}
-            {module === 'tasks' && <label className="text-[11px] font-bold text-slate-600">محتوا
-              <Select aria-label="فیلتر محتوا" value={filters.content_id || ''} onChange={event => update('content_id', event.target.value)} className="mt-1.5 min-w-40 text-xs"><option value="">همه محتواها</option>{app.contents.map(content => <option key={content.id} value={content.id}>{content.title}</option>)}</Select>
-            </label>}
+            {/* پروژه با جست‌وجو: فهرست پروژه‌ها بلند است و انتخاب از یک `select`
+                ساده برای کاربر سنگین بود (دور ۹۳). */}
+            {module === 'tasks' && <div className="text-[11px] font-bold text-slate-600">پروژه
+              <SearchableSelect
+                value={filters.project_id || ''}
+                onChange={next => update('project_id', next)}
+                options={app.projects.map(project => ({ value: String(project.id), label: project.name }))}
+                placeholder="همه پروژه‌ها"
+                ariaLabel="فیلتر پروژه"
+                searchPlaceholder="جست‌وجوی پروژه…"
+                emptyText="پروژه‌ای مطابق جست‌وجو نیست."
+                className="mt-1.5 min-w-40"
+              />
+            </div>}
             {module === 'contents' && <label className="text-[11px] font-bold text-slate-600">مالک
               <Select aria-label="مالک" value={filters.owner || ''} onChange={event => update('owner', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="">همهٔ مجاز</option><option value="me">من</option></Select>
             </label>}
@@ -335,7 +463,7 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               <Select aria-label="فیلتر مخاطب هدف" value={filters.target_audience || ''} onChange={event => update('target_audience', event.target.value)} className="mt-1.5 min-w-36 text-xs"><option value="">همه مخاطبان</option>{app.targetAudiences.map(audience => <option key={audience} value={audience}>{audience}</option>)}</Select>
             </label>}
             <label className="text-[11px] font-bold text-slate-600">مرتب‌سازی
-              <Select aria-label="مرتب‌سازی" value={filters.sort || 'created_at'} onChange={event => update('sort', event.target.value)} className="mt-1.5 min-w-28 text-xs"><option value="created_at">تاریخ ایجاد</option><option value="updated_at">آخرین تغییر</option><option value="deadline">سررسید</option></Select>
+              <Select aria-label="مرتب‌سازی" value={filters.sort || defaultSort} onChange={event => update('sort', event.target.value)} className="mt-1.5 min-w-28 text-xs">{module === 'contents' && <option value="publish_at">تاریخ انتشار</option>}<option value="created_at">تاریخ ایجاد</option><option value="updated_at">آخرین تغییر</option>{module !== 'contents' && <option value="deadline">سررسید</option>}</Select>
             </label>
             <div className="text-[11px] font-bold text-slate-600">جهت
               <button
@@ -348,7 +476,8 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                 {filters.direction === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
               </button>
             </div>
-          </div>}
+            </div>
+          </Collapsible>
         </div>
 
         {activeFilterEntries.length > 0 && (
@@ -363,8 +492,14 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
           </div>
         )}
 
-        {query.isPending ? <LoadingState label="در حال دریافت فهرست از سرور…" /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : (
-          <div aria-busy={query.isFetching} className="relative">
+        {query.isPending ? (
+          // اسکلت هم‌شکل با همان نمایی که کاربر انتخاب کرده (دور ۹۷): جدول با
+          // سرستون‌های واقعی، کارت‌ها با همان اندازه، کانبان با همان ستون‌ها.
+          view === 'cards' ? <CardGridSkeleton count={6} />
+            : module === 'tasks' && view === 'kanban' ? <BoardSkeleton columns={4} />
+            : <div className="overflow-x-auto"><TableSkeleton rows={6} columns={module === 'tasks' ? ['عنوان', 'وضعیت', 'اولویت', 'سررسید', 'عملیات'] : module === 'contents' ? ['عنوان', 'وضعیت', 'نوع', 'منتشرکننده', 'تاریخ انتشار', 'عملیات'] : ['عنوان', 'وضعیت', 'اولویت', 'مدیر پروژه', 'سررسید', 'عملیات']} /></div>
+        ) : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : (
+          <div aria-busy={query.isFetching} className="ui-swap-in relative">
             {query.isFetching && <div role="status" className="absolute top-2 left-3 z-10 px-2.5 py-1 rounded-lg bg-white/95 border border-slate-200 text-[11px] text-slate-500 shadow-xs">در حال تازه‌سازی…</div>}
             {!rows.length ? (
               <EmptyState title="موردی مطابق فیلترها یافت نشد.">
@@ -374,26 +509,29 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
               <div className="overflow-x-auto">
                 <table className={`w-full text-right text-sm ${module === 'tasks' ? 'min-w-[680px]' : 'min-w-[760px]'}`}>
                   <thead><tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-500">
-                    <th className="p-4">عنوان</th><th className="p-4">وضعیت</th><th className="p-4">{module === 'contents' ? 'نوع' : 'اولویت'}</th>{module !== 'tasks' && <th className="p-4">{module === 'projects' ? 'مدیر پروژه' : 'مالک محتوا'}</th>}<th className="p-4">سررسید</th><th className="p-4 text-left">عملیات</th>
+                    <th className="p-4">عنوان</th><th className={module === 'contents' ? 'w-56 p-4' : 'p-4'}>وضعیت</th><th className="p-4">{module === 'contents' ? 'نوع' : 'اولویت'}</th>{module !== 'tasks' && <th className="p-4">{module === 'projects' ? 'مدیر پروژه' : 'منتشرکننده'}</th>}{module !== 'contents' && <th className="p-4">سررسید</th>}{module === 'contents' && <th className="p-4">تاریخ انتشار</th>}<th className={module === 'contents' ? 'w-14 p-4 text-left' : 'p-4 text-left'}>عملیات</th>
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((row: any) => (
                       <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-4 max-w-sm">{recordTitle(row, 'font-extrabold text-slate-900 hover:text-indigo-700 break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></td>
+                        <td className="p-4 max-w-sm"><span className="flex min-w-0 items-start gap-1.5">{recordTitle(row, 'font-extrabold text-slate-900 hover:text-indigo-700 break-words')}{freshMark(row)}</span><p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></td>
                         <td className="p-4">{module === 'tasks' ? <div className="relative inline-block">
                           <button type="button" aria-haspopup="menu" aria-expanded={statusMenuTaskId === row.id} disabled={row.kind === 'content_review' && (row.status === 'completed' || !app.hasPermission('content.approve'))} onClick={() => setStatusMenuTaskId(current => current === row.id ? null : row.id)} className="rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-200 disabled:cursor-default" title={row.kind === 'content_review' ? 'تأیید مرحله محتوا و تکمیل وظیفه' : 'تغییر وضعیت'}>{statusBadge(module, row, labels)}</button>
                           {statusMenuTaskId === row.id && <div role="menu" className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
                             {(row.kind === 'content_review' ? orderedTaskStatuses.filter(status => status.id === 'completed') : orderedTaskStatuses).map(status => <button key={status.id} type="button" role="menuitem" disabled={status.id === row.status} onClick={() => { setStatusMenuTaskId(null); if (status.id !== row.status) void app.moveTaskStatus(row.id, status.id as TaskStatus); }} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-right text-xs font-bold ${status.id === row.status ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: status.color }} />{row.kind === 'content_review' ? 'تأیید و تکمیل' : status.label}</button>)}
                           </div>}
-                        </div> : statusBadge(module, row, labels)}</td>
-                        <td className="p-4">{module === 'contents' ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: app.contentTypes.find(type => type.id === row.type)?.color || '#7c3aed' }} />{subtitleOf(row)}</span> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
+                        </div> : module === 'contents' ? <div className="w-48 min-w-0">{statusBadge(module, row, labels)}<ContentProgressBar row={row} compact /></div> : statusBadge(module, row, labels)}</td>
+                        <td className="p-4">{module === 'contents' ? <ContentTypeBadge color={typeOf(row)?.color} label={typeNameOf(row)} /> : row.priority ? <PriorityPill priority={row.priority as Priority} size="sm" /> : '—'}</td>
                         {module !== 'tasks' && <td className="p-4 text-xs font-medium text-slate-700">{personOf(row)}</td>}
-                        <td className="p-4 text-xs text-slate-500 whitespace-nowrap">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</td>
-                        <td className="p-4"><div className="flex items-center justify-end gap-1.5">
+                        {module !== 'contents' && <td className="p-4 whitespace-nowrap">{module === 'tasks'
+                          ? <DeadlineChip deadline={row.deadline} settled={['completed', 'archived'].includes(String(row.status))} />
+                          : <span className="text-xs text-slate-500">{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>}</td>}
+                        {module === 'contents' && <td className="p-4"><PublicationDateChip content={row} /></td>}
+                        <td className={module === 'contents' ? 'w-14 p-4' : 'p-4'}><div className="flex items-center justify-end gap-1.5">
                           {module === 'tasks' ? <>
-                            <button type="button" onClick={() => app.setSelectedTaskId(row.id)} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => { fresh.markOpened(row.id); app.setSelectedTaskId(row.id); }} aria-label={`جزئیات ${titleOf(row)}`} title="جزئیات" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></button>
                             {(row.assigneeId === app.currentUser.id || app.hasPermission('tasks.edit')) && <button type="button" onClick={() => setEditingTask(row as Task)} aria-label={`ویرایش ${titleOf(row)}`} title="ویرایش" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Pencil className="w-4 h-4" /></button>}
-                          </> : <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-indigo-700 hover:bg-indigo-50"><ChevronLeft className="w-4 h-4" /></Link>}
+                          </> : module === 'contents' ? <Link to={detail(row.id)} onClick={() => fresh.markOpened(row.id)} aria-label={`نمایش ${titleOf(row)}`} title="نمایش" className="p-2 rounded-xl text-indigo-700 hover:bg-indigo-50"><Eye className="w-4 h-4" /></Link> : <Link to={detail(row.id)} onClick={() => fresh.markOpened(row.id)} aria-label={`باز کردن ${titleOf(row)}`} className="p-2 rounded-xl text-slate-400 hover:text-indigo-700 hover:bg-indigo-50"><ChevronLeft className="w-4 h-4" /></Link>}
                         </div></td>
                       </tr>
                     ))}
@@ -412,18 +550,18 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
                 })}
               </div>
             ) : module === 'tasks' && view === 'calendar' ? (
-              <TaskWorkspaceCalendar tasks={rows as Task[]} projects={app.projects} currentDate={calendarDate} onDateChange={setCalendarDate} onSelectTask={app.setSelectedTaskId} />
+              <TaskWorkspaceCalendar tasks={rows as Task[]} projects={app.projects} taskStatuses={app.taskStatuses} currentDate={calendarDate} onDateChange={setCalendarDate} onSelectTask={app.setSelectedTaskId} />
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 sm:p-5">
                 {rows.map((row: any) => (
                   <article key={row.id} className="bg-white rounded-3xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all p-5 flex flex-col justify-between relative overflow-hidden min-w-0">
                     <div className="absolute top-0 inset-x-0 h-1.5" style={{ backgroundColor: cardColor(row) }} />
                     <div className="space-y-4 pt-1">
-                      <div className="flex items-start justify-between gap-3"><div className="min-w-0">{recordTitle(row, 'font-black text-slate-900 hover:text-indigo-700 break-words')}<p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></div>{statusBadge(module, row, labels)}</div>
+                      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className="flex min-w-0 items-start gap-1.5">{recordTitle(row, 'font-black text-slate-900 hover:text-indigo-700 break-words')}{freshMark(row)}</span><p className="text-xs text-slate-500 mt-1 truncate">{subtitleOf(row)}</p></div>{module === 'contents' ? <div className="min-w-0 shrink-0">{statusBadge(module, row, labels)}<ContentProgressBar row={row} /></div> : statusBadge(module, row, labels)}</div>
                       {row.description && <p className="text-xs leading-6 text-slate-500 line-clamp-2">{row.description}</p>}
-                      <div className="flex items-center gap-2 flex-wrap">{module !== 'contents' && row.priority && <PriorityPill priority={row.priority as Priority} size="sm" />}<span className="text-[11px] text-slate-500 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" />{personOf(row)}</span></div>
+                      <div className="flex items-center gap-2 flex-wrap">{module === 'contents' ? <ContentTypeBadge color={typeOf(row)?.color} label={typeNameOf(row)} /> : row.priority && <PriorityPill priority={row.priority as Priority} size="sm" />}<span className="text-[11px] text-slate-500 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" />{module === 'contents' ? `منتشرکننده: ${personOf(row)}` : personOf(row)}</span></div>
                     </div>
-                    <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2"><span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>{module === 'projects' && <Link to={detail(row.id)} aria-label={`باز کردن ${titleOf(row)}`} title="باز کردن پروژه" className="rounded-xl p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-700"><ChevronLeft className="h-4 w-4" /></Link>}</footer>
+                    <footer className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">{module === 'contents' ? <PublicationDateChip content={row} /> : <span className="text-[11px] text-slate-500 flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{row.deadline ? formatPersianDate(row.deadline) : 'بدون سررسید'}</span>}{module === 'projects' && <Link to={detail(row.id)} onClick={() => fresh.markOpened(row.id)} aria-label={`باز کردن ${titleOf(row)}`} title="باز کردن پروژه" className="rounded-xl p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-700"><ChevronLeft className="h-4 w-4" /></Link>}</footer>
                   </article>
                 ))}
               </div>
@@ -447,32 +585,80 @@ export const WorkspaceList: React.FC<{ module: MainModule }> = ({ module }) => {
 const TaskWorkspaceCalendar: React.FC<{
   tasks: Task[];
   projects: Array<{ id: string; name: string; color?: string }>;
+  taskStatuses: Array<{ id: string; label: string; color: string; order: number }>;
   currentDate: Date;
   onDateChange: (date: Date) => void;
   onSelectTask: (id: string) => void;
-}> = ({ tasks, currentDate, onDateChange, onSelectTask }) => {
-  const daysInMonth = getDaysInMonth(currentDate);
-  let firstDayIndex = getDay(startOfMonth(currentDate)) + 1;
-  if (firstDayIndex === 7) firstDayIndex = 0;
+}> = ({ tasks, projects, taskStatuses, currentDate, onDateChange, onSelectTask }) => {
+  const [rangeMode, setRangeMode] = useState<CalendarRangeMode>('month');
+  const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
+  const days = buildCalendarDays(currentDate, rangeMode);
+  const tasksOfDay = (iso: string) => sortCalendarEventsByTime<Task>(
+    tasks.filter(task => String(task.deadline || '').slice(0, 10) === iso),
+    task => task.deadline,
+  );
+  const inRange = days.reduce((total, day) => total + tasksOfDay(day.iso).length, 0);
+
+  const isSettledTask = (task: Task) => ['completed', 'archived'].includes(String(task.status));
+  const taskCard = (task: Task, compact = false, onOpen?: () => void) => {
+    const status = taskStatuses.find(item => item.id === task.status);
+    const due = calendarDueInfo(task.deadline, { settled: isSettledTask(task) });
+    return <CalendarEventCard
+      key={task.id}
+      kind="task"
+      title={task.title}
+      tone={due.tone}
+      status={{ label: status?.label || String(task.status), color: status?.color || '#64748b' }}
+      settled={['completed', 'archived'].includes(String(task.status))}
+      timeLabel={calendarTimeLabel(task.deadline) || 'تمام روز'}
+      meta={projects.find(project => project.id === task.projectId)?.name}
+      compact={compact}
+      onOpen={onOpen || (() => onSelectTask(task.id))}
+    />;
+  };
+  /** کارهای باز بالا؛ موارد انجام‌شده در یک گروه جمع‌شده پایین. */
+  const renderDay = (iso: string) => {
+    const rows = tasksOfDay(iso);
+    return <>{rows.map(task => taskCard(task))}</>;
+  };
 
   return <div className="p-4 sm:p-5">
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
-      <header className="flex items-center justify-between gap-3 flex-wrap">
-        <div><h2 className="text-base font-black text-slate-900">{format(currentDate, 'MMMM yyyy')}</h2><p className="mt-1 text-xs text-slate-500">سررسید وظایف مطابق فیلترهای فعال</p></div>
-        <div className="flex items-center gap-2" dir="ltr"><button type="button" onClick={() => onDateChange(subMonths(currentDate, 1))} className="p-2 rounded-lg border border-slate-200"><ChevronLeft className="w-4 h-4" /></button><button type="button" onClick={() => onDateChange(new Date())} className="px-3 py-2 rounded-lg bg-slate-100 text-xs font-bold">امروز</button><button type="button" onClick={() => onDateChange(addMonths(currentDate, 1))} className="p-2 rounded-lg border border-slate-200"><ChevronLeft className="w-4 h-4 rotate-180" /></button></div>
-      </header>
-      <div className="grid grid-cols-7 gap-2 border-b border-slate-100 py-2 text-center text-[11px] font-bold text-slate-500">{['شنبه', 'یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'].map(day => <span key={day}>{day}</span>)}</div>
-      <div className="grid grid-cols-7 gap-2">{Array.from({ length: firstDayIndex }).map((_, index) => <div key={`empty-${index}`} className="min-h-24 rounded-xl border border-slate-100 bg-slate-50/50" />)}{Array.from({ length: daysInMonth }).map((_, index) => {
-        const day = index + 1;
-        const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - Number(format(currentDate, 'd')) + day);
-        const dayTasks = tasks.filter(task => task.deadline && isSameDay(new Date(task.deadline), dayDate));
-        const today = isSameDay(dayDate, new Date());
-        return <div key={day} className={`min-h-24 rounded-xl border p-2 ${today ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200 bg-white'}`}><span className={`text-xs font-bold ${today ? 'text-indigo-700' : 'text-slate-600'}`}>{day.toLocaleString('fa-IR')}</span><div className="mt-1.5 space-y-1">{dayTasks.map(task => {
-          const priorityColor = ({ low: '#94a3b8', medium: '#0ea5e9', high: '#f59e0b', urgent: '#ef4444' } as const)[task.priority] || '#94a3b8';
-          const statusColor = ({ backlog: '#64748b', in_progress: '#2563eb', review: '#7c3aed', completed: '#10b981', archived: '#94a3b8' } as const)[task.status] || '#64748b';
-          return <button type="button" key={task.id} onClick={() => onSelectTask(task.id)} className="flex w-full min-w-0 items-center gap-1 rounded-md border-2 bg-slate-50 px-1.5 py-1 text-right text-[9px] font-bold text-slate-700" style={{ borderColor: priorityColor }}><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: statusColor }} /><span className="truncate">{task.title}</span></button>;
-        })}</div></div>;
-      })}</div>
-    </div>
+    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4" dir="rtl" aria-label="تقویم وظایف">
+      <CalendarRangeToolbar
+        mode={rangeMode}
+        onModeChange={setRangeMode}
+        label={calendarRangeLabel(currentDate, rangeMode)}
+        title="تقویم وظایف"
+        hint={`${inRange.toLocaleString('fa-IR')} وظیفه در این بازه · سررسیدها رنگی‌اند`}
+        onShift={direction => onDateChange(shiftCalendarAnchor(currentDate, rangeMode, direction))}
+        onToday={() => onDateChange(new Date())}
+      />
+      <CalendarGrid
+        days={days}
+        mode={rangeMode}
+        onSelectDay={setSelectedDay}
+        agendaHint="در نمای هفتگی، زیر عنوان هر روز کارت‌ها به ترتیب ساعت می‌آیند."
+        eventCount={day => tasksOfDay(day.iso).length}
+        renderEvents={day => renderDay(day.iso)}
+        emptyDayLabel="وظیفه‌ای با این سررسید نیست."
+      />
+      <CalendarDayModal
+        day={selectedDay}
+        count={selectedDay ? tasksOfDay(selectedDay.iso).length : 0}
+        onClose={() => setSelectedDay(null)}
+        emptyText="برای این روز وظیفه‌ای با این سررسید نیست."
+        hint="تقویم وظایف"
+      >
+        {selectedDay && (() => {
+          const rows = tasksOfDay(selectedDay.iso);
+          const card = (task: Task) => (
+            <div key={`modal-${task.id}`} className="space-y-1">
+              {taskCard(task, false, () => { setSelectedDay(null); onSelectTask(task.id); })}
+            </div>
+          );
+          return <>{rows.map(card)}</>;
+        })()}
+      </CalendarDayModal>
+    </section>
   </div>;
 };

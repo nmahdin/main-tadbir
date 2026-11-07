@@ -9,6 +9,7 @@ use App\Models\BaleOutbox;
 use App\Models\BaleUserLink;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Support\Activity\ActivityLabels;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -218,6 +219,11 @@ final class Settings
 
     public function audit(User $actor, string $type): void
     {
-        ActivityLog::create(['user_id' => $actor->id, 'type' => $type, 'action' => $type]);
+        // `type` کد ماشینی می‌ماند (برای فیلتر و پایش) اما متن نمایش‌داده‌شده فارسی است.
+        ActivityLog::create([
+            'user_id' => $actor->id,
+            'type' => $type,
+            'action' => ActivityLabels::action($type, $type),
+        ]);
     }
 }

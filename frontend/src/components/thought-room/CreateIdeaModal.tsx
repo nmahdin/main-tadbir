@@ -1,9 +1,10 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { X, Lightbulb, Plus, Trash2, BarChart2 } from 'lucide-react';
+import { X, Lightbulb, Plus, Trash2, BarChart2, LoaderCircle } from 'lucide-react';
 import { Priority, Idea } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 import { request } from '../../api/client';
+import { useModalExit } from '../common/useModalExit';
 
 interface CreateIdeaModalProps {
   isOpen: boolean;
@@ -94,10 +95,12 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
     submitController.current?.abort();
     submitController.current = null;
     setIsSubmitting(false);
-    onClose();
+    presence.requestClose();
   };
 
-  if (!isOpen) return null;
+    // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
+  const presence = useModalExit(isOpen, onClose);
+  if (!presence.visible) return null;
 
   const handleAddPollOption = () => {
     setPollOptions([...pollOptions, '']);
@@ -208,7 +211,7 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
           body: { related_type: 'idea', related_id: Number(savedIdeaId) },
         })));
       }
-      if (!controller.signal.aborted) onClose();
+      if (!controller.signal.aborted) presence.requestClose();
     } catch (error) {
       if (!(error instanceof Error && error.name === 'AbortError')) {
         console.error('Creating idea failed.', error);
@@ -224,9 +227,9 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
 
   return (
     <>
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div data-state={presence.state} className="ui-modal-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div 
-        className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
+        data-state={presence.state} className="ui-modal-panel bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] "
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -480,16 +483,16 @@ export const CreateIdeaModal: React.FC<CreateIdeaModalProps> = ({ isOpen, onClos
             <button data-button-action="cancel"
               type="button"
               onClick={cancelAndClose}
-              className="ui-form-action px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
+              className="ui-form-action px-4 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
             >
               انصراف
             </button>
             <button data-button-action={isEditing ? 'save' : 'create'}
               type="submit"
               disabled={isSubmitting}
-              className="ui-form-action px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md transition-all flex items-center gap-2"
+              className="ui-form-action px-5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md transition-all flex items-center gap-2"
             >
-              <Lightbulb className="w-4 h-4" />
+              {isSubmitting ? <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden /> : <Lightbulb className="w-4 h-4" aria-hidden />}
               <span>{isSubmitting ? 'در حال ذخیره...' : isEditing ? 'ذخیره تغییرات' : 'ثبت ایده'}</span>
             </button>
           </div>

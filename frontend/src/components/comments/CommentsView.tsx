@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { mediaUrl } from '../../utils/mediaUrl';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown,
@@ -15,7 +16,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { commentsApi, CommentSubjectType, UnifiedComment } from '../../api/comments';
 import { useApp } from '../../context/AppContext';
-import { EmptyState, ErrorState, LoadingState } from '../common/Primitives';
+import { EmptyState, ErrorState } from '../common/Primitives';
+import { ListRowsSkeleton } from '../common/Shimmer';
 
 const labels: Record<CommentSubjectType, string> = { task: 'وظیفه', content: 'محتوا', idea: 'ایده', asset: 'دارایی' };
 const tones: Record<CommentSubjectType, string> = {
@@ -95,7 +97,7 @@ export const CommentsView: React.FC = () => {
     const open = composer?.comment.id === comment.id;
     return <article key={comment.id} className={depth === 0 ? 'rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-5' : 'mt-2 rounded-xl border border-slate-200 bg-white p-3'}>
       <div className="flex items-start gap-3">
-        <span className={`${depth ? 'h-8 w-8 rounded-xl' : 'h-10 w-10 rounded-2xl'} flex shrink-0 items-center justify-center overflow-hidden bg-slate-100 text-xs font-black text-slate-600`}>{comment.userAvatar ? <img src={comment.userAvatar} alt="" className="h-full w-full object-cover" /> : comment.userName.slice(0, 1)}</span>
+        <span className={`${depth ? 'h-8 w-8 rounded-xl' : 'h-10 w-10 rounded-2xl'} flex shrink-0 items-center justify-center overflow-hidden bg-slate-100 text-xs font-black text-slate-600`}>{comment.userAvatar ? <img src={mediaUrl(comment.userAvatar) || comment.userAvatar} alt="" className="h-full w-full object-cover" /> : comment.userName.slice(0, 1)}</span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <strong className="text-xs font-extrabold text-slate-800">{comment.userName}</strong>
@@ -128,12 +130,12 @@ export const CommentsView: React.FC = () => {
     </header>
 
     <div className="space-y-3">
-      {query.isLoading ? <div className="rounded-3xl border border-slate-200 bg-white"><LoadingState label="در حال دریافت دیدگاه‌ها…" /></div>
+      {query.isLoading ? <ListRowsSkeleton rows={5} label="در حال دریافت دیدگاه‌ها…" />
         : query.isError ? <div className="rounded-3xl border border-slate-200 bg-white"><ErrorState error={query.error} onRetry={() => void query.refetch()} /></div>
         : rows.length === 0 ? <div className="rounded-3xl border border-dashed border-slate-300 bg-white"><EmptyState title="دیدگاهی پیدا نشد"><p className="mt-2 text-xs">فیلتر را تغییر دهید و دوباره بررسی کنید.</p></EmptyState></div>
         : roots.map(comment => renderComment(comment))}
     </div>
 
-    <footer className="flex flex-col-reverse items-center justify-between gap-3 text-xs text-slate-500 sm:flex-row"><span>نمایش {rows.length.toLocaleString('fa-IR')} مورد از {total.toLocaleString('fa-IR')}</span><div className="flex flex-wrap items-center justify-center gap-2"><label className="flex items-center gap-2 font-bold text-slate-600">تعداد در صفحه<select value={perPage} onChange={event => { setPerPage(Number(event.target.value)); setPage(1); }} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">{[10, 20, 50, 100].map(value => <option key={value} value={value}>{value.toLocaleString('fa-IR')}</option>)}</select></label>{lastPage > 1 && <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1"><button type="button" aria-label="صفحه قبل" disabled={page <= 1 || query.isFetching} onClick={() => setPage(value => value - 1)} className="rounded-lg p-1.5 hover:bg-slate-100 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button><span className="px-3 font-bold text-slate-700">{page.toLocaleString('fa-IR')} از {lastPage.toLocaleString('fa-IR')}</span><button type="button" aria-label="صفحه بعد" disabled={page >= lastPage || query.isFetching} onClick={() => setPage(value => value + 1)} className="rounded-lg p-1.5 hover:bg-slate-100 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button></div>}</div></footer>
+    <footer className="flex flex-col-reverse items-center justify-between gap-3 text-xs text-slate-500 sm:flex-row"><span>نمایش {rows.length.toLocaleString('fa-IR')} مورد از {total.toLocaleString('fa-IR')}</span><div className="flex flex-wrap items-center justify-center gap-2"><label className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap font-bold text-slate-600">تعداد در صفحه<select value={perPage} onChange={event => { setPerPage(Number(event.target.value)); setPage(1); }} className="per-page-select rounded-xl border border-slate-200 bg-white text-xs">{[10, 20, 50, 100].map(value => <option key={value} value={value}>{value.toLocaleString('fa-IR')}</option>)}</select></label>{lastPage > 1 && <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1"><button type="button" aria-label="صفحه قبل" disabled={page <= 1 || query.isFetching} onClick={() => setPage(value => value - 1)} className="rounded-lg p-1.5 hover:bg-slate-100 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button><span className="px-3 font-bold text-slate-700">{page.toLocaleString('fa-IR')} از {lastPage.toLocaleString('fa-IR')}</span><button type="button" aria-label="صفحه بعد" disabled={page >= lastPage || query.isFetching} onClick={() => setPage(value => value + 1)} className="rounded-lg p-1.5 hover:bg-slate-100 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button></div>}</div></footer>
   </section>;
 };

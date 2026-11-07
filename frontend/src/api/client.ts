@@ -2,6 +2,7 @@ import { invalidateWorkspaceModules } from '../queries/queryClient';
 import { snapshotSession, rememberApiResponse } from '../queries/serverSnapshots';
 import { runtime } from '../config/runtime';
 import { ApiConnectionError, ApiError, SessionChangedError, parseApiError } from './errors';
+import { markConnectionLost, markConnectionRestored } from '../utils/connectionState';
 export { ApiError } from './errors';
 export type { ApiValidationErrors } from './errors';
 
@@ -47,6 +48,29 @@ const getErrorMessage = (payload: any, fallback: string) => {
   return fallback;
 };
 
+/**
+ * کدهایی که پیامِ خودِ سرور باید دست‌نخورده به کاربر برسد (حتی در پاسخ ۵xx).
+ *
+ * `maintenance_mode` پیامِ «سامانه در تعمیر است» را دارد؛ پیامِ عمومیِ «عملیات
+ * انجام نشد» این وضعیت را پنهان می‌کرد و کاربر فکر می‌کرد خطای شبکه است.
+ */
+const keepServerDetailFor = (payload: any): boolean =>
+  payload?.code === 'installation_incomplete' || payload?.code === 'maintenance_mode';
+
+/**
+ * اعلام حالت تعمیر به کل رابط کاربری.
+ *
+ * هر درخواستی که در حالت تعمیر رد شود، این رویداد را می‌فرستد؛ `AuthContext`
+ * آن را می‌شنود و حتی اگر کاربر وسط کار بوده، صفحهٔ تعمیر را نشان می‌دهد.
+ */
+const announceMaintenanceMode = (payload: any): void => {
+  const maintenance = payload?.data?.maintenance ?? {
+    enabled: true,
+    message: typeof payload?.message === 'string' ? payload.message : '',
+  };
+  window.dispatchEvent(new CustomEvent('tadbir:maintenance-mode', { detail: maintenance }));
+};
+
 const getCookie = (name: string): string | null => {
   const prefix = `${name}=`;
   const cookie = document.cookie.split('; ').find(value => value.startsWith(prefix));
@@ -66,12 +90,17 @@ async function parseResponse(response: Response): Promise<unknown> {
 
 async function fetchFromServer(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
   try {
-    return await fetch(input, init);
+    const response = await fetch(input, init);
+    // پاسخ سرور (هر وضعیتی) یعنی شبکه سالم است؛ خطای ۴xx/۵xx به «قطع اینترنت»
+    // ربطی ندارد و نباید نوار قطع اتصال را باز کند.
+    markConnectionRestored();
+    return response;
   } catch (error) {
     // Abort is intentional (for example when a loading modal closes). Preserve
     // it so query/mutation callers can stop silently instead of showing a false
     // connection failure after the modal has already disappeared.
     if (error instanceof Error && error.name === 'AbortError') throw error;
+    markConnectionLost();
     throw new ApiConnectionError('ارتباط با سرور برقرار نشد. اتصال اینترنت یا تنظیمات آدرس API را بررسی کنید.');
   }
 }
@@ -110,15 +139,19 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   if (responseScope !== snapshotSession()) throw new SessionChangedError();
   if (!response.ok) {
     const bodyPayload = payload as any;
+    const keepServerDetail = keepServerDetailFor(bodyPayload);
     if ([401, 419].includes(response.status) && !path.includes('/auth/')) {
       window.dispatchEvent(new CustomEvent('tadbir:session-expired', { detail: response.status }));
     }
+    if (bodyPayload?.code === 'maintenance_mode') announceMaintenanceMode(bodyPayload);
     throw new ApiError(
-      response.status >= 500 && bodyPayload?.code !== 'installation_incomplete' ? parseApiError(new ApiError('', response.status)).message : getErrorMessage(bodyPayload, `خطا در ارتباط با سرور (${response.status})`),
+      response.status >= 500 && !keepServerDetail ? parseApiError(new ApiError('', response.status)).message : getErrorMessage(bodyPayload, `خطا در ارتباط با سرور (${response.status})`),
       response.status,
       bodyPayload?.errors,
-      response.status >= 500 ? undefined : payload,
+      response.status >= 500 && !keepServerDetail ? undefined : payload,
       response.headers.get('X-Request-ID') || undefined,
+      // ثانیه‌های انتظار سرور برای ۴۲۹؛ بدون آن کاربر فقط «کمی بعد» می‌دید.
+      Number(response.headers.get('Retry-After')) || undefined,
     );
   }
 
@@ -167,12 +200,15 @@ export async function uploadRequest<T>(path: string, body: FormData, onProgress?
         if ([401, 419].includes(xhr.status) && !path.includes('/auth/')) {
           window.dispatchEvent(new CustomEvent('tadbir:session-expired', { detail: xhr.status }));
         }
+        const keepServerDetail = keepServerDetailFor(payload);
+        if (payload?.code === 'maintenance_mode') announceMaintenanceMode(payload);
         reject(new ApiError(
-          xhr.status >= 500 ? parseApiError(new ApiError('', xhr.status)).message : getErrorMessage(payload, `خطا در بارگذاری فایل (${xhr.status})`),
+          xhr.status >= 500 && !keepServerDetail ? parseApiError(new ApiError('', xhr.status)).message : getErrorMessage(payload, `خطا در بارگذاری فایل (${xhr.status})`),
           xhr.status,
           payload?.errors,
-          xhr.status >= 500 ? undefined : payload,
+          xhr.status >= 500 && !keepServerDetail ? undefined : payload,
           xhr.getResponseHeader('X-Request-ID') || undefined,
+          Number(xhr.getResponseHeader('Retry-After')) || undefined,
         ));
         return;
       }

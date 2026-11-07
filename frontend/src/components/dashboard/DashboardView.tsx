@@ -1,8 +1,10 @@
+import { AnimatedProgress, CountUp } from '../common/CountUp';
+import { StatCardsSkeleton } from '../common/Shimmer';
 import React, { useMemo } from 'react';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
 import { PriorityPill, TaskStatusBadge, ProjectStatusBadge } from '../common/PriorityPill';
-import { Avatar, ProgressBar } from '../common/Avatar';
+import { Avatar } from '../common/Avatar';
 import { BackendStatusPanel } from './BackendStatusPanel';
 import {
   FolderKanban,
@@ -55,7 +57,8 @@ export const DashboardView: React.FC = () => {
     setIsCreateTaskOpen,
     setIsCreateProjectOpen,
     setSelectedContentId,
-    setSelectedIdeaId
+    setSelectedIdeaId,
+    isWorkspaceLoading
   } = useApp();
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -102,7 +105,9 @@ export const DashboardView: React.FC = () => {
         </div>
       </div>
 
-      {/* Primary KPI Metrics */}
+      {/* Primary KPI Metrics — تا رسیدن دادهٔ فضای کاری، شکل همان کارت‌ها با شامر
+          کشیده می‌شود تا اعداد از صفر به مقدار واقعی نپرند (دور ۹۷). */}
+      {isWorkspaceLoading ? <StatCardsSkeleton count={4} className="grid grid-cols-2 md:grid-cols-4 gap-4" /> : (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div 
           onClick={() => setActiveView('projects')}
@@ -112,7 +117,7 @@ export const DashboardView: React.FC = () => {
             <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
               <FolderKanban className="w-5 h-5" />
             </div>
-            <span className="text-2xl font-black text-slate-900">{projects.filter(p => p.status === 'active').length}</span>
+            <CountUp value={projects.filter(p => p.status === 'active').length} className="text-2xl font-black text-slate-900" />
           </div>
           <p className="text-sm font-bold text-slate-700">پروژه‌های فعال</p>
           <p className="text-[11px] text-slate-500 mt-1">مدیریت و پیگیری پروژه‌ها</p>
@@ -126,7 +131,7 @@ export const DashboardView: React.FC = () => {
             <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-colors">
               <AlertTriangle className="w-5 h-5" />
             </div>
-            <span className="text-2xl font-black text-slate-900">{myPendingTasks.length}</span>
+            <CountUp value={myPendingTasks.length} className="text-2xl font-black text-slate-900" />
           </div>
           <p className="text-sm font-bold text-slate-700">وظایف جاری من</p>
           <p className="text-[11px] text-slate-500 mt-1">نیاز به اقدام شما</p>
@@ -140,7 +145,7 @@ export const DashboardView: React.FC = () => {
             <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
               <FileText className="w-5 h-5" />
             </div>
-            <span className="text-2xl font-black text-slate-900">{activeContents.length}</span>
+            <CountUp value={activeContents.length} className="text-2xl font-black text-slate-900" />
           </div>
           <p className="text-sm font-bold text-slate-700">محتوای در حال تولید</p>
           <p className="text-[11px] text-slate-500 mt-1">در چرخه بررسی و نشر</p>
@@ -154,12 +159,13 @@ export const DashboardView: React.FC = () => {
             <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
               <Inbox className="w-5 h-5" />
             </div>
-            <span className="text-2xl font-black text-slate-900">{pendingLetters.length}</span>
+            <CountUp value={pendingLetters.length} className="text-2xl font-black text-slate-900" />
           </div>
           <p className="text-sm font-bold text-slate-700">نامه‌های جاری</p>
           <p className="text-[11px] text-slate-500 mt-1">صندوق دبیرخانه</p>
         </div>
       </div>
+      )}
 
       {/* وضعیت سبک بک‌اند: اتصال API/دیتابیس، زمان سرور و آدرس API */}
       <BackendStatusPanel />
@@ -202,9 +208,9 @@ export const DashboardView: React.FC = () => {
                     </div>
                     <ProjectStatusBadge status={proj.status} size="sm" />
                   </div>
-                  <ProgressBar progress={proj.progress} color={proj.color} size="md" showLabel />
+                  <AnimatedProgress progress={proj.progress} color={proj.color} size="md" showLabel label="پیشرفت" />
                   <div className="flex items-center justify-between mt-3 text-[11px] font-medium text-slate-500">
-                    <span>{doneCount} از {projTasks.length} تسک تکمیل شد</span>
+                    <span><CountUp value={doneCount} className="font-bold text-slate-700" /> از <CountUp value={projTasks.length} className="font-bold text-slate-700" /> تسک تکمیل شد</span>
                     <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> مهلت: {formatPersianDate(proj.deadline)}</span>
                   </div>
                 </div>

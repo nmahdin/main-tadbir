@@ -24,6 +24,7 @@ import {
 import { SecretariatLetter, LetterStatus, ReferralActionType } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
+import { useModalExit } from '../common/useModalExit';
 
 interface LetterDetailsModalProps {
   letterId: string;
@@ -60,7 +61,9 @@ export const LetterDetailsModal: React.FC<LetterDetailsModalProps> = ({
 
   const letter = secretariatLetters.find(l => l.id === letterId);
 
-  if (!isOpen || !letter) return null;
+  // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
+  const presence = useModalExit(isOpen, onClose);
+  if (!presence.visible) return null;
 
   const relatedLetter = letter.relatedLetterId 
     ? secretariatLetters.find(l => l.id === letter.relatedLetterId) 
@@ -81,9 +84,9 @@ export const LetterDetailsModal: React.FC<LetterDetailsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div data-state={presence.state} className="ui-modal-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div 
-        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150"
+        data-state={presence.state} className="ui-modal-panel bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] "
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Bar */}
@@ -116,7 +119,7 @@ export const LetterDetailsModal: React.FC<LetterDetailsModalProps> = ({
               <Printer className="w-4 h-4" />
             </button>
             <button
-              onClick={onClose}
+              onClick={presence.requestClose}
               className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -489,7 +492,7 @@ export const LetterDetailsModal: React.FC<LetterDetailsModalProps> = ({
                 onClick={() => onOpenArchive(letter)}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs"
               >
-                <Archive className="w-4 h-4 text-emerald-600" />
+                <Archive className="w-4 h-4 text-slate-600" />
                 بایگانی در پرونده
               </button>
             )}

@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Check, CheckCircle2, ChevronLeft, ChevronRight, Eye, FileStack, Layers3, Link2, Settings2, UserRound } from 'lucide-react';
+import { Check, CheckCircle2, ChevronLeft, ChevronRight, Eye, FileStack, Layers3, Link2, Pencil, Settings2, UserRound } from 'lucide-react';
+import { ProcessTemplateModal } from '../../settings/ProcessTemplateModal';
 import { seriesApi, type SeriesInput } from '../../../api/series';
 import { parseApiError } from '../../../api/errors';
 import { useApp } from '../../../context/AppContext';
 import type { ContentSeries, SeriesRecurrenceType } from '../../../types';
 import { platformIcon } from '../../../utils/platformIcons';
+import { todayLocalISO } from '../../../utils/date';
 import { Button, FormField, Input, Modal, Select, Textarea } from '../../common/Primitives';
 import { PersianDatePicker } from '../../common/PersianDatePicker';
 
@@ -30,7 +32,7 @@ export function SeriesForm({
 }) {
   const {
     projects, departments, users, contentTypes, processTemplates, publishingPlatforms, targetAudiences,
-    assets, currentUser, notify,
+    assets, currentUser, notify, updateProcessTemplate,
   } = useApp();
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
@@ -59,6 +61,8 @@ export function SeriesForm({
   const [assetIds, setAssetIds] = useState<string[]>([]);
   const [stageAssignments, setStageAssignments] = useState<Record<string, { assigneeId: string; reviewerId: string }>>({});
   const [changeReason, setChangeReason] = useState('');
+  const [editingTemplate, setEditingTemplate] = useState<any>(null);
+  const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -75,7 +79,7 @@ export function SeriesForm({
     const initialTemplate = processTemplates.find(template => template.id === initial?.processTemplateId && template.type === nextContentType);
     setTemplateId(initialTemplate?.id || processTemplates.find(template => template.type === nextContentType)?.id || '');
     setRecurrence(initial?.recurrenceType || 'weekly');
-    setStartDate(initial?.recurrenceConfig.startDate || new Date().toISOString().slice(0, 10));
+    setStartDate(initial?.recurrenceConfig.startDate || todayLocalISO());
     setEndDate(initial?.recurrenceConfig.endDate || '');
     setOccurrenceLimit(initial?.recurrenceConfig.occurrenceLimit ? String(initial.recurrenceConfig.occurrenceLimit) : '');
     setInterval(initial?.recurrenceConfig.interval || 1);
@@ -260,7 +264,7 @@ export function SeriesForm({
                     ? 'ماهانه بر پایه تقویم جلالی سازمان محاسبه می‌شود؛ روزهای ناموجود به آخر همان ماه محدود می‌شوند.'
                     : recurrence === 'project_based'
                       ? 'پرونده‌های محتوا بر پایه تعداد تعیین‌شده در بازه پروژه یا تاریخ پایان مجموعه توزیع می‌شوند.'
-                      : 'تاریخ‌ها از تاریخ شروع مجموعه و فاصله هفتگی محاسبه می‌شوند؛ نخستین پروندهٔ محتوا «هفته ۱» است و شماره هفته، ترتیبیِ همین مجموعه است نه شماره هفته تقویم سال.'}
+                      : 'تاریخ‌ها از تاریخ شروع مجموعه و فاصله هفتگی محاسبه می‌شوند؛ عنوان هر پروندهٔ محتوا فقط نام مجموعه و کد آن است (بدون شماره هفته).'}
               </div>
             </div>
           )}
@@ -268,12 +272,17 @@ export function SeriesForm({
           {step === 2 && (
             <div className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField label="قالب فرایند" htmlFor="series-template"><Select id="series-template" value={templateId} onChange={event => selectProcessTemplate(event.target.value)}><option value="">بدون قالب</option>{processTemplates.map(template => <option key={template.id} value={template.id}>{template.name} · {contentTypes.find(type => type.id === template.type)?.name || template.type}{template.estimatedDays ? ` — حدود ${template.estimatedDays.toLocaleString('fa-IR')} روز` : ''}</option>)}</Select><p className="text-[10px] leading-5 text-slate-500">انتخاب قالبی از نوع دیگر، نوع محتوای مجموعه را با همان قالب هماهنگ می‌کند.</p></FormField>
+                <div className="space-y-2">
+                  <FormField label="قالب فرایند" htmlFor="series-template"><Select id="series-template" value={templateId} onChange={event => selectProcessTemplate(event.target.value)}><option value="">بدون قالب</option>{processTemplates.map(template => <option key={template.id} value={template.id}>{template.name} · {contentTypes.find(type => type.id === template.type)?.name || template.type}{template.estimatedDays ? ` — حدود ${template.estimatedDays.toLocaleString('fa-IR')} روز` : ''}</option>)}</Select><p className="text-[10px] leading-5 text-slate-500">انتخاب قالبی از نوع دیگر، نوع محتوای مجموعه را با همان قالب هماهنگ می‌کند.</p></FormField>
+                  {templateId && (
+                    <button type="button" onClick={() => { const tmpl = processTemplates.find(t => t.id === templateId); if (tmpl) { setEditingTemplate(tmpl); setIsTemplateEditorOpen(true); } }} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"><Pencil className="h-3.5 w-3.5" />ویرایش قالب انتخاب‌شده</button>
+                  )}
+                </div>
                 <FormField label="موضوع پیش‌فرض" htmlFor="series-topic"><Input id="series-topic" value={topic} onChange={event => setTopic(event.target.value)} /></FormField>
                 <FormField label="هدف رسانه‌ای / پیام کلیدی" htmlFor="series-media-goal"><Input id="series-media-goal" value={mediaGoal} onChange={event => setMediaGoal(event.target.value)} /></FormField>
                 <FormField label="برچسب‌های پیش‌فرض" htmlFor="series-tags"><Input id="series-tags" value={tagsText} onChange={event => setTagsText(event.target.value)} placeholder="تحریریه، خبر" /></FormField>
                 {initial && <FormField label="سطح نمایش نسخه آینده" htmlFor="series-visibility"><Select id="series-visibility" value={visibility} onChange={event => setVisibility(event.target.value as typeof visibility)}><option value="internal">داخلی</option><option value="restricted">محدود</option><option value="public">عمومی</option></Select></FormField>}
-                <FormField label="ناشر پیش‌فرض" htmlFor="series-publisher"><Select id="series-publisher" value={publisherId} onChange={event => setPublisherId(event.target.value)}><option value="">بعداً برای هر محتوا تعیین می‌شود</option>{users.filter(user => user.status === 'active').map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></FormField>
+                <FormField label="ناشر پیش‌فرض" htmlFor="series-publisher"><Select id="series-publisher" value={publisherId} onChange={event => setPublisherId(event.target.value)}><option value="">بعداً برای هر محتوا تعیین می‌شود</option>{users.filter(user => user.status === 'active').map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></FormField>
                 <FormField required label="ساعت انتشار هر پروندهٔ محتوا" htmlFor="series-publication-time"><Input id="series-publication-time" type="time" required value={publicationTime} onChange={event => setPublicationTime(event.target.value)} /><p className="text-[10px] leading-5 text-slate-500">تاریخ انتشار به‌صورت خودکار از تاریخ همان پروندهٔ محتوا ساخته می‌شود؛ ساعت از این تنظیم مجموعه می‌آید.</p></FormField>
                 <div className="sm:col-span-2"><FormField label="کپشن پیش‌فرض" htmlFor="series-caption"><Textarea id="series-caption" rows={3} maxLength={5000} value={publicationCaption} onChange={event => setPublicationCaption(event.target.value)} placeholder="در صورت نیاز، برای هر پروندهٔ محتوا قابل تغییر است." /></FormField></div>
               </div>
@@ -291,8 +300,8 @@ export function SeriesForm({
                   return <li key={key} className="rounded-2xl border border-slate-200 bg-white p-3.5">
                     <div className="mb-3 flex min-w-0 items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xs font-black text-white">{(index + 1).toLocaleString('fa-IR')}</span><div className="min-w-0"><div className="truncate text-xs font-black text-slate-900">{stage.title}</div><div className="mt-1 text-[10px] text-slate-500">{departments.find(item => item.id === stage.departmentId)?.name || stage.departmentName || 'دپارتمان تعیین نشده'}</div></div></div>
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="min-w-0"><span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold text-slate-600"><UserRound className="h-3.5 w-3.5" />مسئول اجرا</span><Select aria-label={`مسئول اجرای مرحله ${index + 1}`} value={assignment.assigneeId} onChange={event => setStageAssignments(previous => ({ ...previous, [key]: { ...assignment, assigneeId: event.target.value } }))}><option value="">بدون مسئول مستقیم</option>{candidates.map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
-                      <label className="min-w-0"><span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold text-slate-600"><Eye className="h-3.5 w-3.5" />ارزیاب مرحله</span><Select disabled={stage.reviewRequired === false} aria-label={`ارزیاب مرحله ${index + 1}`} value={stage.reviewRequired === false ? '' : assignment.reviewerId} onChange={event => setStageAssignments(previous => ({ ...previous, [key]: { ...assignment, reviewerId: event.target.value } }))}><option value="">{stage.reviewRequired === false ? 'این مرحله ارزیابی ندارد' : 'بر پایه سیاست قالب'}</option>{candidates.map(user => <option key={user.id} value={user.id}>{user.name}{user.title ? ` — ${user.title}` : ''}</option>)}</Select></label>
+                      <label className="min-w-0"><span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold text-slate-600"><UserRound className="h-3.5 w-3.5" />مسئول اجرا</span><Select aria-label={`مسئول اجرای مرحله ${index + 1}`} value={assignment.assigneeId} onChange={event => setStageAssignments(previous => ({ ...previous, [key]: { ...assignment, assigneeId: event.target.value } }))}><option value="">بدون مسئول مستقیم</option>{candidates.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>
+                      <label className="min-w-0"><span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold text-slate-600"><Eye className="h-3.5 w-3.5" />ارزیاب مرحله</span><Select disabled={stage.reviewRequired === false} aria-label={`ارزیاب مرحله ${index + 1}`} value={stage.reviewRequired === false ? '' : assignment.reviewerId} onChange={event => setStageAssignments(previous => ({ ...previous, [key]: { ...assignment, reviewerId: event.target.value } }))}><option value="">{stage.reviewRequired === false ? 'این مرحله ارزیابی ندارد' : 'تعیین خودکار در ساخت پرونده'}</option>{candidates.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</Select></label>
                     </div>
                     {!candidates.length && <p className="mt-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-700">برای دپارتمان این مرحله عضو فعالی ثبت نشده است.</p>}
                   </li>;
@@ -308,14 +317,7 @@ export function SeriesForm({
                   return <button key={platform.id} type="button" onClick={() => toggle(platform.id, channels, setChannels)} aria-pressed={checked} style={checked ? { borderColor: color, backgroundColor: background, color } : undefined} className={`flex items-center gap-3 rounded-xl border p-3 text-right transition ${checked ? 'shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200'}`}><span style={checked ? { backgroundColor: color } : undefined} className={`flex h-9 w-9 items-center justify-center rounded-xl ${checked ? 'text-white' : 'bg-slate-100'}`}><Icon className="h-4 w-4" /></span><span className="text-xs font-bold">{platform.name}</span>{checked && <CheckCircle2 style={{ color }} className="mr-auto h-4 w-4" />}</button>;
                 })}</div>
               </fieldset>
-              <fieldset>
-                <legend className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-700"><Link2 className="h-4 w-4" />دارایی‌های مرجع DAM</legend>
-                <div className="max-h-32 overflow-y-auto rounded-xl border border-slate-200 p-2">
-                  <div className="grid gap-2 sm:grid-cols-2">{selectableAssets.map(asset => <label key={asset.id} className="flex cursor-pointer items-center gap-2 rounded-lg p-2 text-[11px] hover:bg-slate-50"><input type="checkbox" checked={assetIds.includes(asset.id)} onChange={() => toggle(asset.id, assetIds, setAssetIds)} /><span className="truncate">{asset.title || asset.fileName}</span></label>)}</div>
-                  {!selectableAssets.length && <p className="p-2 text-[11px] text-slate-400">دارایی قابل دسترسی برای پیوند پیش‌فرض وجود ندارد.</p>}
-                </div>
-              </fieldset>
-              {initial && <FormField required label="دلیل تغییر نسخه آینده" htmlFor="series-change-reason"><Textarea id="series-change-reason" required value={changeReason} onChange={event => setChangeReason(event.target.value)} rows={2} placeholder="مثلاً تغییر تقویم انتشار از پروندهٔ محتوای بعدی" /></FormField>}
+{initial && <FormField required label="دلیل تغییر نسخه آینده" htmlFor="series-change-reason"><Textarea id="series-change-reason" required value={changeReason} onChange={event => setChangeReason(event.target.value)} rows={2} placeholder="مثلاً تغییر تقویم انتشار از پروندهٔ محتوای بعدی" /></FormField>}
               <div className="flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-[11px] leading-5 text-emerald-800"><Eye className="mt-0.5 h-4 w-4 shrink-0" /><span>قالب، پیش‌فرض انتشار و دارایی‌های مرجع به‌صورت snapshot ثبت می‌شوند. ویرایش مجموعه هیچ پروندهٔ محتوای قبلی را بازنویسی نمی‌کند.</span></div>
             </div>
           )}
@@ -326,6 +328,17 @@ export function SeriesForm({
           <Button action={step === 2 ? (initial ? 'save' : 'create') : undefined} type="submit" loading={mutation.isPending} disabled={!validStep()} className="min-h-10 px-4">{step < 2 ? <>مرحله بعد<ChevronLeft className="h-4 w-4" /></> : initial ? 'ثبت نسخه آینده' : 'ایجاد مجموعه'}</Button>
         </div>
       </form>
+      <ProcessTemplateModal
+        isOpen={isTemplateEditorOpen}
+        template={editingTemplate}
+        onClose={() => { setIsTemplateEditorOpen(false); setEditingTemplate(null); }}
+        onSave={async (data) => {
+          if ('id' in data && data.id) {
+            const saved = await updateProcessTemplate(data.id, data);
+            if (!saved) throw new Error('ذخیره تغییرات الگو در سرور تأیید نشد. دوباره تلاش کنید.');
+          }
+        }}
+      />
     </Modal>
   );
 }

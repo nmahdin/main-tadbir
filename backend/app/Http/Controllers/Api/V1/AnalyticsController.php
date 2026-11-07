@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Content;
+use App\Services\ContentDeadlineSweep;
+use App\Support\AutomationThrottle;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\WorkspaceRecord;
@@ -18,6 +20,13 @@ class AnalyticsController extends Controller
     {
         abort_unless($request->user()->hasPermission('reports.view'), 403);
 
+        // گزارش باید همان وضعیت واقعی لحظه را نشان دهد. وضعیت مشتق «تأخیر» از
+        // مهلت مراحل می‌آید؛ بدون این تازه‌سازی، گزارش تا نخستین بازدید فهرست
+        // محتوا کهنه می‌ماند. پردازش محدود (۵۰ پرونده) و تکرارپذیر است.
+        // حداکثر یک بار در دقیقه؛ گزارش‌ها اغلب پشت‌سرهم باز می‌شوند و هر بار
+        // یک پویش کامل لازم نیست.
+        AutomationThrottle::once('content-deadline-sweep', 60, fn () => app(ContentDeadlineSweep::class)->refreshDue(50));
+
         $projects = Project::query()
             ->selectRaw('COUNT(*) as total')
             ->selectRaw("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed")
@@ -31,10 +40,19 @@ class AnalyticsController extends Controller
             ->selectRaw('COUNT(*) as total')
             ->selectRaw("SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) as published")
             ->first();
+        // «تأییدشده» یعنی ایده از دروازهٔ تأیید گذشته است: تأییدشده، در حال
+        // پیاده‌سازی یا خاتمه‌یافته. وضعیت `converted` وجود ندارد و پیش‌تر
+        // نرخ تأیید را همیشه کم می‌شمرد.
         $ideas = WorkspaceRecord::query()
             ->where('kind', WorkspaceRecord::KIND_IDEA)
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN status IN ('approved', 'converted') THEN 1 ELSE 0 END) as approved")
+            ->selectRaw("SUM(CASE WHEN status IN ('approved', 'in_progress', 'implemented', 'completed') THEN 1 ELSE 0 END) as approved")
+            ->first();
+        // جلسات اتاق فکر: تعداد کل و وضعیت واقعی هر جلسه.
+        $meetings = WorkspaceRecord::query()
+            ->where('kind', WorkspaceRecord::KIND_MEETING)
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed")
             ->first();
         $letters = WorkspaceRecord::query()
             ->where('kind', WorkspaceRecord::KIND_LETTER)
@@ -43,8 +61,12 @@ class AnalyticsController extends Controller
             ->first();
 
         $taskStatuses = Task::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
+        // توزیع واقعی محتوا بر پایهٔ وضعیت‌های جریان تولید؛ همان وضعیت‌هایی که سرور تولید می‌کند.
+        $contentStatuses = Content::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
         $contentTypes = Content::query()->selectRaw('type, COUNT(*) as total')->groupBy('type')->pluck('total', 'type');
         $ideaStatuses = WorkspaceRecord::query()->where('kind', WorkspaceRecord::KIND_IDEA)
+            ->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
+        $meetingStatuses = WorkspaceRecord::query()->where('kind', WorkspaceRecord::KIND_MEETING)
             ->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
 
         // One grouped query replaces loading every user and task into the browser.
@@ -104,6 +126,7 @@ class AnalyticsController extends Controller
             'contents' => [
                 'total' => (int) $contents->total,
                 'published' => (int) $contents->published,
+                'byStatus' => $contentStatuses,
                 'publishRate' => $this->rate($contents->published, $contents->total),
                 'byType' => $contentTypes->map(fn ($value) => (int) $value),
             ],
@@ -112,6 +135,11 @@ class AnalyticsController extends Controller
                 'approved' => (int) $ideas->approved,
                 'approvalRate' => $this->rate($ideas->approved, $ideas->total),
                 'byStatus' => $ideaStatuses->map(fn ($value) => (int) $value),
+            ],
+            'meetings' => [
+                'total' => (int) $meetings->total,
+                'completed' => (int) $meetings->completed,
+                'byStatus' => $meetingStatuses->map(fn ($value) => (int) $value),
             ],
             'letters' => ['total' => (int) $letters->total, 'responded' => (int) $letters->responded],
             'departments' => $departments,

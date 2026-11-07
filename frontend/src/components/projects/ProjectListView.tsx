@@ -175,7 +175,7 @@ export const ProjectListView: React.FC<{ projectId: string; filterAssignee?: str
                           onChange={(e) => moveTaskStatus(task.id, e.target.value as TaskStatus)}
                           className={`px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer appearance-none pl-6 pr-2.5 focus:outline-hidden shadow-2xs transition-all ${getStatusColor(task.status)}`}
                         >
-                          <option value="backlog">📋 بک‌لاگ (Backlog)</option>
+                          <option value="backlog">در انتظار بررسی</option>
                           <option value="in_progress">⏳ در حال انجام (In Progress)</option>
                           <option value="review">🔍 در حال بررسی (Review)</option>
                           <option value="completed">✅ تکمیل شده (Done)</option>

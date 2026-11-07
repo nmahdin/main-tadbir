@@ -22,5 +22,5 @@ test('Bale management separates automation and delivery while removing manual pr
   assert.match(settings, /retry_runner_recent/);
   assert.doesNotMatch(settings, /پردازش یک نوبت|ارسال صف/);
   assert.doesNotMatch(account, /دریافت هنوز دستی|بررسی وضعیت اتصال/);
-  assert.match(account, /setInterval\(\(\) => void checkConnection\(\), 3_000\)/);
+  assert.match(account, /setInterval\(\(\) => void checkConnection\(\), 5_000\)/);
 });

@@ -6,6 +6,7 @@ use App\Models\Content;
 use App\Models\Task;
 use App\Models\User;
 use App\Support\Content\StageAdvanceMode;
+use App\Support\OrganizationTime;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -16,6 +17,26 @@ final class ContentReview
     public const STATUSES = ['pending_dependency', 'ready', 'not_started', 'in_progress', 'ready_for_review', 'pending_approval', 'needs_revision', 'revisions_needed', 'approved', 'completed', 'skipped'];
 
     public const WAITING = ['pending_approval', 'ready_for_review'];
+
+    /** برچسب فارسی وضعیت مرحله برای متن تاریخ فعالیت (همان واژگان رابط کاربری). */
+    public const STATUS_LABELS = [
+        'not_started' => 'شروع‌نشده', 'pending_dependency' => 'در انتظار پیش‌نیاز', 'ready' => 'آماده',
+        'in_progress' => 'در حال انجام', 'ready_for_review' => 'در انتظار بررسی', 'pending_approval' => 'در انتظار بررسی',
+        'needs_revision' => 'نیازمند اصلاح', 'revisions_needed' => 'نیازمند اصلاح', 'approved' => 'تأییدشده',
+        'completed' => 'تکمیل‌شده', 'skipped' => 'بدون نیاز / عبور',
+    ];
+
+    /**
+     * وضعیت‌هایی که گردانندهٔ جریان می‌تواند دستی روی یک مرحله بگذارد.
+     *
+     * «تأییدشده» و «در انتظار بررسی» هم در همین فهرست‌اند: درخواست صریح این بود
+     * که این دو وضعیت قفل نباشند و از روی نشان وضعیت مرحله هم قابل تغییر باشند.
+     */
+    public const EDITABLE_STAGE_STATUSES = [
+        'not_started', 'pending_dependency', 'ready', 'in_progress',
+        'ready_for_review', 'pending_approval', 'approved', 'completed',
+        'needs_revision', 'revisions_needed', 'skipped',
+    ];
 
     /** Structural stage fields a generic PATCH may never rewrite. */
     public const STRUCTURAL_FIELDS = ['stageKey', 'order', 'departmentId', 'assigneeId', 'reviewerId', 'approverId',
@@ -88,12 +109,25 @@ final class ContentReview
         return $actor->isAdmin() || $actor->hasPermission('content.workflow.manage');
     }
 
+    /**
+     * May this actor swap the responsible person / reviewer of an existing stage
+     * without a full workflow redesign? Workflow managers already can; the
+     * content-manager role runs the pipeline day to day and is allowed the same
+     * narrow assignment right (but still cannot add/remove stages or change
+     * advance/review policies — those stay behind `content.workflow.manage`).
+     */
+    public function canAssignStagePeople(User $actor): bool
+    {
+        return $this->canConfigureWorkflow($actor) || $actor->role?->key === 'content_manager';
+    }
+
     public function guardGeneric(array $input, ?Content $content, User $actor): void
     {
         if (($input['status'] ?? '') === 'approved' && $content?->status !== 'approved') {
             throw ValidationException::withMessages(['status' => 'تأیید محتوا فقط از بررسی مراحل مجاز است.']);
         }
         $canConfigure = $this->canConfigureWorkflow($actor);
+        $canAssignPeople = $this->canAssignStagePeople($actor);
         if ($content) {
             $hasOpenReview = collect($content->payload['stages'] ?? [])
                 ->contains(fn ($stage) => is_array($stage) && in_array($stage['status'] ?? '', self::WAITING, true));
@@ -112,7 +146,14 @@ final class ContentReview
         foreach ($old as $id => $stage) {
             abort_if(! $canConfigure && ! $incoming->has($id), 403, 'حذف مرحله نیازمند مجوز مدیریت گردش کار است.');
             if (in_array($stage['status'] ?? '', [...self::WAITING, 'approved', 'revisions_needed', 'needs_revision'], true) && ! $incoming->has($id)) {
-                throw ValidationException::withMessages(['stages' => 'مرحلهٔ دارای تصمیم یا بررسی باز را نمی‌توان حذف کرد.']);
+                // مرحلهٔ دارای تصمیم ثبت‌شده تاریخ جریان است و حذف نمی‌شود؛ اما
+                // بررسیِ باز (بدون تصمیم) را مدیر گردش کار می‌تواند حذف کند تا
+                // پس از شروع جریان، ساختار قابل اصلاح بماند.
+                $decided = ! empty($stage['_reviewDecision'])
+                    || in_array($stage['status'] ?? '', ['approved', 'revisions_needed', 'needs_revision'], true);
+                if ($decided || ! $canConfigure) {
+                    throw ValidationException::withMessages(['stages' => 'مرحلهٔ دارای تصمیم یا بررسی باز را نمی‌توان حذف کرد.']);
+                }
             }
             $hasForwardedOutput = collect($stage['outputs'] ?? [])->contains(
                 fn ($output) => is_array($output) && ! empty($output['forwardedToStageId']),
@@ -127,15 +168,34 @@ final class ContentReview
         foreach ($incoming as $id => $stage) {
             $before = $old->get($id, []);
             $this->guardForwardingMetadata(is_array($before) ? $before : [], is_array($stage) ? $stage : []);
-            if ($content && in_array($before['status'] ?? '', self::WAITING, true)) {
+            // جانشینی ارزیاب یک مرحلهٔ در حال بررسی، کار مدیریت گردش کار است
+            // (مثلاً خروج ارزیاب از دپارتمان)؛ برای بقیهٔ کاربران همان ممنوعیت
+            // قبلی برجاست. تسک بررسی هم در `ContentStageTaskSync` به ارزیاب
+            // تازه منتقل می‌شود.
+            if ($content && ! $canConfigure && in_array($before['status'] ?? '', self::WAITING, true)) {
                 foreach (['reviewerId', 'approverId'] as $field) {
-                    abort_if((string) ($stage[$field] ?? '') !== (string) ($before[$field] ?? ''), 403, 'ارزیاب چرخهٔ بررسی باز با ویرایش عمومی تغییر نمی‌کند.');
+                    if ($field === 'reviewerId' && $canAssignPeople) {
+                        continue;
+                    }
+                    abort_if(! $this->sameProtectedValue($stage[$field] ?? null, $before[$field] ?? null), 403, 'ارزیاب چرخهٔ بررسی باز با ویرایش عمومی تغییر نمی‌کند.');
                 }
             }
             if ($content && ! $canConfigure) {
                 abort_unless($old->has($id), 403, 'افزودن مرحله نیازمند مجوز مدیریت گردش کار است.');
                 foreach (self::STRUCTURAL_FIELDS as $field) {
-                    abort_if((string) ($stage[$field] ?? '') !== (string) ($before[$field] ?? ''), 403, 'تغییر ساختار یا مسئول مرحله نیازمند مجوز مدیریت گردش کار است.');
+                    // جانشینی مسئول/ارزیاب همان مرحله کار روزمرهٔ مدیر محتواست؛
+                    // تغییر بقیهٔ ساختار همچنان مجوز مدیریت گردش کار می‌خواهد.
+                    if ($canAssignPeople && in_array($field, ['assigneeId', 'reviewerId'], true)) {
+                        continue;
+                    }
+                    if ($canAssignPeople && $field === 'reviewerStrategy'
+                        && ($stage['reviewerStrategy'] ?? 'stage_reviewer') === 'stage_reviewer'
+                        && (string) ($stage['reviewerId'] ?? '') !== '') {
+                        continue;
+                    }
+                    // مقایسهٔ امن برای فیلدهای ساختاری؛ `dependsOnStageIds`
+                    // آرایه است و تبدیل مستقیم آن به رشته، خطای ۵۰۰ می‌داد.
+                    abort_if(! $this->sameProtectedValue($stage[$field] ?? null, $before[$field] ?? null), 403, 'تغییر ساختار یا مسئول مرحله نیازمند مجوز مدیریت جریان محتواست.');
                 }
             }
             $changed = ($stage['status'] ?? null) !== ($before['status'] ?? null);
@@ -148,15 +208,62 @@ final class ContentReview
                 && ($before['reviewRequired'] ?? true) !== false
                 && in_array($before['status'] ?? '', $reviewOnlyStatuses, true)
                 && in_array($stage['status'] ?? '', ['in_progress', 'completed'], true);
-            if ($changed && ! $normalizingDisabledReview && (in_array($before['status'] ?? '', [...self::WAITING, 'approved'], true) || in_array($stage['status'] ?? '', ['approved', 'revisions_needed', 'needs_revision'], true))) {
+            // تصمیم مرحله (تأیید/رد) فقط از فرمان بررسی همان مرحله می‌آید. اما
+            // دارندهٔ مجوز «مدیریت گردش کار» باید بتواند وضعیت سرگردان را اصلاح
+            // کند — مثلاً ارزیابی‌ای که اشتباه آغاز شده یا مرحلهٔ تأییدشده‌ای که
+            // باید بسته شود — وگرنه پس از شروع جریان، هیچ مسیری برای اصلاح آن
+            // باقی نمی‌ماند. ورود به وضعیت تصمیم برای همه بسته است.
+            $enteringDecision = in_array($stage['status'] ?? '', ['approved', 'revisions_needed', 'needs_revision'], true);
+            $leavingReviewOrDecision = in_array($before['status'] ?? '', [...self::WAITING, 'approved'], true);
+            $blockedStatusChange = $changed && ! $normalizingDisabledReview
+                && ($enteringDecision || ($leavingReviewOrDecision && ! $canConfigure));
+            if ($blockedStatusChange) {
                 throw ValidationException::withMessages(['stages' => 'تأیید یا رد را از فرمان بررسی مرحله انجام دهید.']);
             }
             foreach (['approvedBy', 'approvedAt', 'approvalNotes', 'rejectionReason', '_reviewDecision'] as $field) {
-                if (($stage[$field] ?? null) !== ($before[$field] ?? null)) {
+                if (! $this->sameProtectedValue($stage[$field] ?? null, $before[$field] ?? null)) {
                     throw ValidationException::withMessages(['stages' => 'اطلاعات تصمیم فقط در سرور ثبت می‌شود.']);
                 }
             }
         }
+    }
+
+    /**
+     * مقایسهٔ امن فرادادهٔ حفاظت‌شدهٔ ارجاع و تصمیم.
+     *
+     * مرورگر همان مقدار ذخیره‌شده را برمی‌گرداند، اما همان مقدار می‌تواند در JSON
+     * یک‌بار رشته و بار دیگر عدد باشد (`assetVersionId` را سرور رشته می‌نویسد و
+     * کلاینت عدد می‌فرستد) یا `null` در برابر رشتهٔ خالی. مقایسهٔ سخت‌گیرانه همین
+     * تفاوت نمایشی را «تغییر» می‌دید و ذخیرهٔ جریان محتوا را با ۴۲۲ می‌بست. این
+     * تابع فقط همین تفاوت‌های نمایشی را برابر می‌داند و هیچ مقدار متفاوتی را
+     * یکسان نمی‌بیند؛ پس گارد همان قدرت قبلی را دارد.
+     */
+    private function sameProtectedValue(mixed $left, mixed $right): bool
+    {
+        return $this->canonicalProtectedValue($left) === $this->canonicalProtectedValue($right);
+    }
+
+    private function canonicalProtectedValue(mixed $value): mixed
+    {
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed === '') {
+                return null;
+            }
+
+            return is_numeric($trimmed) ? (float) $trimmed : $trimmed;
+        }
+        if (is_array($value)) {
+            $canonical = [];
+            foreach ($value as $key => $item) {
+                $canonical[(string) $key] = $this->canonicalProtectedValue($item);
+            }
+            ksort($canonical);
+
+            return $canonical;
+        }
+
+        return $value;
     }
 
     private function guardForwardingMetadata(array $before, array $incoming): void
@@ -176,7 +283,7 @@ final class ContentReview
                 $fields = [...$fields, 'name', 'type', 'fileType', 'isRequired', 'value', 'url', 'assetId', 'assetVersionId', 'assetVersionNumber', 'fileName', 'fileSize', 'isDelivered', 'uploadedAt', 'uploadedBy', 'deliveredAt', 'deliveredBy'];
             }
             foreach ($fields as $field) {
-                if (($output[$field] ?? null) !== ($oldOutput[$field] ?? null)) {
+                if (! $this->sameProtectedValue($output[$field] ?? null, $oldOutput[$field] ?? null)) {
                     throw ValidationException::withMessages(['stages' => 'اطلاعات ارجاع خروجی فقط در سرور ثبت می‌شود.']);
                 }
             }
@@ -197,7 +304,7 @@ final class ContentReview
                 $fields = [...$fields, 'title', 'type', 'description', 'isReady', 'contentRef'];
             }
             foreach ($fields as $field) {
-                if (($input[$field] ?? null) !== ($oldInput[$field] ?? null)) {
+                if (! $this->sameProtectedValue($input[$field] ?? null, $oldInput[$field] ?? null)) {
                     throw ValidationException::withMessages(['stages' => 'اطلاعات ورودی ارجاع‌شده فقط در سرور ثبت می‌شود.']);
                 }
             }
@@ -313,6 +420,70 @@ final class ContentReview
         }, 3);
     }
 
+    /**
+     * تغییر دستی وضعیت یک مرحله (فقط دارندگان مجوز مدیریت جریان محتوا).
+     *
+     * برخلاف `guardGeneric`، این مسیر ورود به وضعیت‌های تصمیم و خروج از
+     * «در انتظار بررسی» را مجاز می‌کند؛ چون خودش یک فرمان صریح و ممیزی‌شده است:
+     * یک ردیف در تاریخ فعالیت مرحله و در تاریخ پرونده ثبت می‌شود و تسک‌های
+     * مرحله با وضعیت تازه هم‌تراز می‌شوند.
+     */
+    public function overrideStageStatus(User $actor, Content $content, string $stageId, array $data): Content
+    {
+        return DB::transaction(function () use ($actor, $content, $stageId, $data): Content {
+            $fresh = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
+            $payload = $fresh->payload ?? [];
+            $stages = array_values(is_array($payload['stages'] ?? null) ? $payload['stages'] : []);
+            $index = collect($stages)->search(fn ($item) => is_array($item) && (string) ($item['id'] ?? '') === $stageId);
+            abort_if($index === false, 404, 'این مرحله در جریان این پرونده پیدا نشد.');
+
+            if (isset($data['expectedVersion']) && $data['expectedVersion'] !== '') {
+                abort_unless(hash_equals(self::version($fresh), $data['expectedVersion']), 409, 'اطلاعات پرونده تغییر کرده است؛ دوباره آن را باز کنید.');
+            }
+
+            $status = (string) $data['status'];
+            $before = (string) ($stages[$index]['status'] ?? '');
+            if ($before === $status) {
+                return $fresh;
+            }
+
+            $time = now()->toIso8601String();
+            $event = ['id' => (string) Str::uuid(), 'userId' => (string) $actor->id, 'userName' => $actor->name,
+                'action' => 'تغییر دستی وضعیت مرحله از «'.(self::STATUS_LABELS[$before] ?? $before).'» به «'.(self::STATUS_LABELS[$status] ?? $status).'»',
+                'fromStatus' => $before, 'toStatus' => $status, 'note' => (string) ($data['note'] ?? ''), 'timestamp' => $time];
+            $stages[$index] = [...$stages[$index], 'status' => $status,
+                'activityLog' => [...($stages[$index]['activityLog'] ?? []), $event]];
+            if (in_array($status, ['approved', 'completed'], true)) {
+                $stages[$index]['completedAt'] = app(OrganizationTime::class)->date();
+            } else {
+                // با بازگشت از وضعیت پایانی، مهر «پایان یافته» برداشته می‌شود؛
+                // تاریخچهٔ همین تغییر در activityLog باقی می‌ماند.
+                unset($stages[$index]['completedAt']);
+            }
+            $payload['stages'] = $stages;
+            $payload['history'] = [...($payload['history'] ?? []), $event];
+            $fresh->update(['payload' => $payload]);
+
+            // خروج از وضعیت پایانی، کارِ همان مرحله را هم از «تکمیل‌شده» بیرون
+            // می‌آورد؛ وگرنه کاربر وضعیت مرحله را عوض می‌کرد ولی تسکش همچنان
+            // بسته می‌ماند و دوباره در کارتابل کسی دیده نمی‌شد.
+            if (! in_array($status, ['approved', 'completed', 'skipped'], true)) {
+                Task::where('content_id', $fresh->id)->where('content_stage_id', $stageId)
+                    ->whereIn('kind', ['content_work', 'content_review', 'content_correction'])
+                    ->where('status', 'completed')
+                    ->update(['status' => 'backlog']);
+            }
+            // تسک‌های مرحله با وضعیت تازه هم‌تراز می‌شوند: بستن تسک با تأیید و
+            // بازکردن دوبارهٔ آن با خروج از وضعیت پایانی.
+            app(ContentStageTaskSync::class)->sync($fresh->refresh());
+            app(TaskOperations::class)->updateProjectProgress($fresh->project_id);
+            app(ContentWatchNotifier::class)->meaningful($fresh->refresh(), $actor, 'stage-status:'.$event['id'],
+                'وضعیت مرحله «'.($stages[$index]['title'] ?? '').'» در «'.$fresh->title.'» تغییر کرد.');
+
+            return $fresh->refresh();
+        }, 3);
+    }
+
     public function decide(User $actor, Content $content, string $stageId, array $data): Content
     {
         return DB::transaction(function () use ($actor, $content, $stageId, $data) {
@@ -335,7 +506,7 @@ final class ContentReview
                 $stages[$index]['approvedBy'] = (string) $actor->id;
                 $stages[$index]['approvedAt'] = $time;
                 $stages[$index]['approvalNotes'] = $data['note'] ?? '';
-                $stages[$index]['completedAt'] = today()->toDateString();
+                $stages[$index]['completedAt'] = app(OrganizationTime::class)->date();
                 // Explicit policy: an approval only advances the workflow by
                 // itself when the stage says so. With `forwarded_output` the
                 // next stage stays on pending_dependency until a Reviewer runs

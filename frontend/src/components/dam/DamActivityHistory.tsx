@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { activityLabel } from '../../utils/activityLabels';
 import { Activity } from 'lucide-react';
 import { request } from '../../api/client';
 import { PersianDatePicker } from '../common/PersianDatePicker';
@@ -9,13 +10,6 @@ type DamActivity = {
 };
 
 type Page<T> = { data: T[]; current_page: number; last_page: number; total: number };
-
-const ACTIVITY_LABELS: Record<string, string> = {
-  created: 'ایجاد دارایی', updated: 'ویرایش مشخصات', moved: 'انتقال به پوشه', downloaded: 'دانلود فایل', previewed: 'پیش‌نمایش فایل',
-  attached: 'اتصال به یک بخش', deleted: 'بایگانی', restored: 'بازیابی', version_created: 'ایجاد نسخه',
-  version_restored: 'بازیابی نسخه', status_changed: 'تغییر وضعیت',
-  confidentiality_changed: 'تغییر سطح محرمانگی', ownership_changed: 'تغییر مالک',
-};
 
 const formatDate = (date?: string) => date
   ? new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(date))
@@ -82,7 +76,7 @@ export const DamActivityHistory: React.FC = () => {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-bold text-slate-800">
-                  {ACTIVITY_LABELS[activity.action] || activity.action}{activity.asset?.title ? `: ${activity.asset.title}` : ''}
+                  {activityLabel(activity.action)}{activity.asset?.title ? `: ${activity.asset.title}` : ''}
                 </p>
                 <p className="mt-1 text-[10px] text-slate-500">
                   {activity.actor?.name || 'کاربر سامانه'} <span className="mx-1">•</span>{formatDate(activity.created_at)}

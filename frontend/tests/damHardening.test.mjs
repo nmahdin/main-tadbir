@@ -58,12 +58,20 @@ test('DAM opens a safe side preview with relation badges and append-only version
 });
 
 test('bulk selection and safe duplicate choices remain server-authoritative', async () => {
-  const library = await source('../src/components/dam/DamLibrary.tsx');
+  const [library, composer, controller] = await Promise.all([
+    source('../src/components/dam/DamLibrary.tsx'),
+    source('../src/components/common/AttachmentComposer.tsx'),
+    source('../../backend/app/Http/Controllers/Api/V1/DamAssetController.php'),
+  ]);
   assert.match(library, /\/dam\/library\/bulk\/move/);
   assert.match(library, /\/dam\/library\/bulk\/update/);
   assert.match(library, /\/dam\/library\/bulk\/archive/);
-  for (const label of ['استفاده از فایل موجود', 'ثبت به عنوان نسخه جدید', 'لغو']) assert.match(library, new RegExp(label));
-  assert.match(library, /dam_duplicate_detected/);
+  // سیاست فایل تکراری در مدال «افزودن دارایی جدید» انتخاب و به سرور سپرده می‌شود.
+  for (const label of ['استفاده از فایل موجود', 'ثبت به عنوان نسخه جدید', 'ایجاد دارایی جدا']) assert.match(library, new RegExp(label));
+  assert.match(library, /duplicateAction/);
+  assert.match(composer, /duplicate_action', value\.duplicateAction \|\| 'reuse'/);
+  assert.match(controller, /dam_duplicate_detected/);
+  assert.match(controller, /'allowed_actions' => \['reuse', 'new_version', 'create', 'cancel'\]/);
 });
 
 test('file library and data tables are distinct and asset cells refer to central asset IDs', async () => {

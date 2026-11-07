@@ -4,12 +4,14 @@ import {
   Clock, 
   MapPin, 
   Users, 
+  User,
   FileText, 
   CheckCircle2, 
   CheckSquare, 
   Lightbulb, 
   Trash2, 
   ExternalLink,
+  Paperclip,
   ChevronDown,
   ChevronUp,
   SlidersHorizontal, Pencil, LoaderCircle, Plus, Archive
@@ -18,7 +20,11 @@ import { BaleMeetingReminder } from '../bale/BaleMeetingReminder';
 import { ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Avatar } from '../common/Avatar';
-import { formatPersianDate } from '../../utils/date';
+import { MeetingAttachmentRow } from './MeetingAttachmentRow';
+import { formatPersianDate, todayLocalISO } from '../../utils/date';
+import { meetingIsoDate, readableGap } from '../../utils/meetings';
+import { PersianDatePicker } from '../common/PersianDatePicker';
+import { Collapsible } from '../common/Collapsible';
 
 interface ThinkTankMeetingsTabProps {
   onEditMeeting: (meeting: ThinkTankMeeting) => void;
@@ -54,15 +60,33 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | ThinkTankMeeting['status']>('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<'all' | 'upcoming' | 'past'>('all');
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  /** بازهٔ تاریخ (شمسی در ورودی، میلادیِ نرمال‌شده در مقایسه) و نوع برگزاری. */
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [locationFilter, setLocationFilter] = useState<'all' | ThinkTankMeeting['locationType']>('all');
+  const today = todayLocalISO();
+  // تاریخ جلسه در دادهٔ قدیمی هم شمسی و هم میلادی است؛ مقایسه فقط با کلید
+  // میلادیِ نرمال‌شده انجام می‌شود تا اختلاف قالب، جلسه را از بازه بیرون نیندازد.
+  const isoOf = (value?: string | null) => meetingIsoDate(value);
   const filteredMeetings = thinkTankMeetings.filter(meeting => {
     if (meeting.status === 'archived') return false;
     if (statusFilter !== 'all' && meeting.status !== statusFilter) return false;
-    if (timeFilter === 'upcoming' && meeting.date < today) return false;
-    if (timeFilter === 'past' && meeting.date >= today) return false;
+    if (locationFilter !== 'all' && meeting.locationType !== locationFilter) return false;
+    const iso = isoOf(meeting.date);
+    if (timeFilter === 'upcoming' && (!iso || iso < today)) return false;
+    if (timeFilter === 'past' && (!iso || iso >= today)) return false;
+    if (dateFrom && (!iso || iso < dateFrom)) return false;
+    if (dateTo && (!iso || iso > dateTo)) return false;
     return true;
   });
+  const activeFilterCount = [statusFilter !== 'all', timeFilter !== 'all', locationFilter !== 'all', Boolean(dateFrom), Boolean(dateTo)].filter(Boolean).length;
+  const resetFilters = () => {
+    setStatusFilter('all');
+    setTimeFilter('all');
+    setLocationFilter('all');
+    setDateFrom('');
+    setDateTo('');
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedMeetingId(expandedMeetingId === id ? null : id);
@@ -70,14 +94,21 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3"><button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(value => !value)} className="ui-button ui-button-secondary text-xs"><SlidersHorizontal className="h-4 w-4" />فیلترها</button><span className="text-[11px] font-bold text-slate-500">{filteredMeetings.length.toLocaleString('fa-IR')} جلسه</span></div>
-      {filtersOpen && <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="فیلترهای جلسه‌ها">
+      <div className="flex items-center justify-between gap-3"><button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(value => !value)} className="ui-button ui-button-secondary text-xs"><SlidersHorizontal className="h-4 w-4" />فیلترها{activeFilterCount > 0 && <span className="rounded-full bg-indigo-600 px-1.5 text-[9px] font-black text-white">{activeFilterCount.toLocaleString('fa-IR')}</span>}</button><span className="text-[11px] font-bold text-slate-500">{filteredMeetings.length.toLocaleString('fa-IR')} جلسه</span></div>
+      <Collapsible open={filtersOpen}><section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="فیلترهای جلسه‌ها">
         <div className="mb-3 flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs font-black text-slate-700"><SlidersHorizontal className="h-4 w-4 text-indigo-600" />فیلترهای جلسه‌ها</div><span className="text-[11px] text-slate-500">{filteredMeetings.length.toLocaleString('fa-IR')} جلسه</span></div>
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="text-[11px] font-bold text-slate-600">وضعیت جلسه<select value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)} className="ui-input mt-1.5 text-xs"><option value="all">همه وضعیت‌ها</option><option value="scheduled">برنامه‌ریزی‌شده</option><option value="in_progress">در حال برگزاری</option><option value="completed">برگزار شده</option><option value="cancelled">لغوشده</option></select></label>
           <label className="text-[11px] font-bold text-slate-600">بازه زمانی<select value={timeFilter} onChange={event => setTimeFilter(event.target.value as typeof timeFilter)} className="ui-input mt-1.5 text-xs"><option value="all">همه زمان‌ها</option><option value="upcoming">پیش رو</option><option value="past">گذشته</option></select></label>
+          <label className="text-[11px] font-bold text-slate-600">نوع برگزاری<select value={locationFilter} onChange={event => setLocationFilter(event.target.value as typeof locationFilter)} className="ui-input mt-1.5 text-xs"><option value="all">همه انواع</option><option value="in_person">حضوری</option><option value="online">آنلاین</option><option value="hybrid">ترکیبی (حضوری و آنلاین)</option></select></label>
+          <div className="text-[11px] font-bold text-slate-600">از تاریخ<PersianDatePicker className="mt-1.5" value={dateFrom} onChange={setDateFrom} placeholder="از تاریخ شمسی…" /></div>
+          <div className="text-[11px] font-bold text-slate-600">تا تاریخ<PersianDatePicker className="mt-1.5" value={dateTo} onChange={setDateTo} placeholder="تا تاریخ شمسی…" /></div>
         </div>
-      </section>}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[10px] font-bold text-slate-500">مرتب‌سازی بر پایهٔ تاریخ جلسه است؛ بازهٔ تاریخ، هر دو تاریخ شمسی و میلادیِ ثبت‌شده را می‌گیرد.</p>
+          <button type="button" onClick={resetFilters} disabled={activeFilterCount === 0} className="ui-button ui-button-secondary text-[11px] disabled:opacity-50">پاک کردن فیلترها</button>
+        </div>
+      </section></Collapsible>
 
       {/* Meetings List */}
       <div className="space-y-4">
@@ -119,8 +150,27 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
 
                       <span className="inline-flex items-center gap-1 text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
                         <Clock className="w-3.5 h-3.5" />
-                        {meeting.time} ({meeting.duration})
+                        {meeting.startTime ? `${meeting.startTime} تا ${meeting.endTime || meeting.time}` : meeting.time}
+                        {` (${readableGap(meeting.startTime, meeting.endTime) || meeting.duration})`}
                       </span>
+                      {(meeting.guests || []).length > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                          <User className="w-3.5 h-3.5" />
+                          {(meeting.guests || []).length.toLocaleString('fa-IR')} مهمان
+                        </span>
+                      )}
+
+                      {(meeting.attachments || []).length > 0 && (
+                        <button
+                          type="button"
+                          onClick={event => { event.stopPropagation(); setExpandedMeetingId(meeting.id); }}
+                          className="inline-flex items-center gap-1 rounded bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                          title="پیوست‌های این جلسه"
+                        >
+                          <Paperclip className="w-3.5 h-3.5" />
+                          {(meeting.attachments || []).length.toLocaleString('fa-IR')} ضمیمه
+                        </button>
+                      )}
 
                       {meeting.locationDetails && (/^https?:\/\//i.test(meeting.locationDetails) ? (
                         <a href={meeting.locationDetails} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} className="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded hover:bg-indigo-100">
@@ -197,6 +247,22 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                           })}
                         </div>
                       </div>}
+
+                      {(meeting.guests || []).length > 0 && (
+                        <div>
+                          <span className="font-bold text-slate-600 block mb-1.5">
+                            مهمان‌ها ({(meeting.guests || []).length.toLocaleString('fa-IR')} نفر):
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(meeting.guests || []).map((guest, index) => (
+                              <span key={`${guest}-${index}`} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700">
+                                <User className="h-3 w-3" />
+                                {guest}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {meeting.status === 'completed' && <>
                         <div>
@@ -353,6 +419,21 @@ export const ThinkTankMeetingsTab: React.FC<ThinkTankMeetingsTabProps> = ({
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* پیوست‌های جلسه: همان پیوست‌هایی که در ثبت صورت‌جلسه به جلسه وصل شده‌اند. */}
+                    {(meeting.attachments || []).length > 0 && (
+                      <div className="p-4 bg-white rounded-xl border border-slate-200">
+                        <h4 className="font-bold text-xs text-slate-800 mb-2 flex items-center gap-1.5">
+                          <Paperclip className="w-4 h-4 text-indigo-600" />
+                          پیوست‌های جلسه ({(meeting.attachments || []).length.toLocaleString('fa-IR')} مورد)
+                        </h4>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {(meeting.attachments || []).map(att => (
+                            <MeetingAttachmentRow key={att.id} attachment={att} />
+                          ))}
+                        </div>
                       </div>
                     )}
 

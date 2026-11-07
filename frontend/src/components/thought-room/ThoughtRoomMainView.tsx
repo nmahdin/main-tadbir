@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Calendar, Lightbulb, Plus, SlidersHorizontal } from 'lucide-react';
 import { Idea, Priority, ThinkTankMeeting } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -11,13 +12,25 @@ import { ThinkTankMeetingsTab } from './ThinkTankMeetingsTab';
 import { CreateMeetingModal } from './CreateMeetingModal';
 import { MeetingMinutesModal } from './MeetingMinutesModal';
 import { ModuleErrorBanner } from '../common/Feedback';
+import { readIdeaLink } from '../../utils/taskDeepLink';
 import { Button, Select } from '../common/Primitives';
+import { Collapsible } from '../common/Collapsible';
+import { openIdeaCount, pendingMeetingCount } from '../../utils/meetings';
+import { useSlidingTabs } from '../common/SlidingTabs';
 
 export const ThoughtRoomMainView: React.FC = () => {
-  const { ideas, thinkTankMeetings, departments, ideaCategories, setSelectedIdeaId, hasPermission, meetingModalRequest } = useApp();
+  const { ideas, thinkTankMeetings, departments, ideaCategories, selectedIdeaId, setSelectedIdeaId, hasPermission, meetingModalRequest, notify } = useApp();
   const canViewIdeas = hasPermission('thinktank.view');
   const canViewMeetings = hasPermission('meetings.view');
-  const [activeTab, setActiveTab] = useState<'ideas' | 'meetings'>(canViewIdeas ? 'ideas' : 'meetings');
+  // پیوند مستقیم `?tab=meetings` (مثلاً از کارت «جلسات» در گزارش‌ها) همان تب را
+  // باز می‌کند؛ تب درخواستی فقط وقتی پذیرفته می‌شود که کاربر مجوز دیدنش را داشته باشد.
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'ideas' | 'meetings'>(() => {
+    if (searchParams.get('tab') === 'meetings' && canViewMeetings) return 'meetings';
+    return canViewIdeas ? 'ideas' : 'meetings';
+  });
+  // نشانگر متحرک تب‌ها (دور ۹۵).
+  const sectionTabs = useSlidingTabs(activeTab);
   const [ideaStatusFilter, setIdeaStatusFilter] = useState('active');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
@@ -29,6 +42,8 @@ export const ThoughtRoomMainView: React.FC = () => {
   const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [activeIdeaForDetails, setActiveIdeaForDetails] = useState<Idea | null>(null);
+  // پیوند بات بله با «نظر دادن»: کادر دیدگاه همان ایده باید آمادهٔ تایپ باشد.
+  const [focusIdeaComment, setFocusIdeaComment] = useState(false);
   const [isConvertToProjectOpen, setIsConvertToProjectOpen] = useState(false);
   const [isConvertToTaskOpen, setIsConvertToTaskOpen] = useState(false);
   const [targetIdeaForConversion, setTargetIdeaForConversion] = useState<Idea | null>(null);
@@ -37,6 +52,9 @@ export const ThoughtRoomMainView: React.FC = () => {
   const [activeMeetingForMinutes, setActiveMeetingForMinutes] = useState<ThinkTankMeeting | null>(null);
   const [meetingToEdit, setMeetingToEdit] = useState<ThinkTankMeeting | null>(null);
   const lastMeetingRequest = useRef(0);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const consumedIdeaLink = useRef<string | null>(null);
 
   useEffect(() => {
     if (canViewMeetings && hasPermission('meetings.create') && meetingModalRequest > lastMeetingRequest.current) {
@@ -46,6 +64,47 @@ export const ThoughtRoomMainView: React.FC = () => {
       setIsCreateMeetingOpen(true);
     }
   }, [meetingModalRequest, canViewMeetings]);
+
+  /**
+   * پیوند عمیق ایده در مینی‌اپ بله: `?idea=<id>` و در حالت «نظر دادن»
+   * `&comment=1`. پارامتر پس از مصرف پاک می‌شود تا بستن مودال، آن را دوباره
+   * باز نکند؛ اگر ایده در فهرست نباشد، پیام روشن می‌دهیم.
+   */
+  useEffect(() => {
+    const link = readIdeaLink(location.search);
+    if (!link) return;
+    const signature = `${link.id}:${link.comment ? 'comment' : 'open'}`;
+    if (consumedIdeaLink.current === signature) return;
+    // فهرست ایده‌ها ممکن است هنوز از سرور نرسیده باشد؛ تا آمدنش صبر می‌کنیم.
+    if (!ideas.length) return;
+    consumedIdeaLink.current = signature;
+    const idea = ideas.find(item => item.id === link.id);
+    if (idea) {
+      setActiveIdeaForDetails(idea);
+      setSelectedIdeaId(idea.id);
+      setFocusIdeaComment(link.comment);
+      setIsDetailsModalOpen(true);
+    } else {
+      notify({ type: 'error', title: 'ایده پیدا نشد', message: 'این ایده حذف شده یا در دسترس شما نیست.' });
+    }
+    const params = new URLSearchParams(location.search);
+    params.delete('idea');
+    params.delete('comment');
+    navigate({ pathname: location.pathname, search: params.size ? `?${params}` : '' }, { replace: true });
+  }, [ideas, location.pathname, location.search, navigate, setSelectedIdeaId, notify]);
+
+  /**
+   * انتخاب ایده از مرکز اعلان‌ها: `selectedIdeaId` در سراسر برنامه تنظیم می‌شود
+   * و باید همان ایده را باز کند (پیش‌تر فقط به اتاق فکر سوییچ می‌شد).
+   */
+  useEffect(() => {
+    if (!selectedIdeaId || isDetailsModalOpen || !ideas.length) return;
+    const idea = ideas.find(item => item.id === selectedIdeaId);
+    if (idea) {
+      setActiveIdeaForDetails(idea);
+      setIsDetailsModalOpen(true);
+    }
+  }, [selectedIdeaId, ideas, isDetailsModalOpen]);
 
   const liveMeetingForMinutes = activeMeetingForMinutes
     ? thinkTankMeetings.find(meeting => meeting.id === activeMeetingForMinutes.id) || activeMeetingForMinutes
@@ -67,6 +126,7 @@ export const ThoughtRoomMainView: React.FC = () => {
   const handleOpenDetails = (idea: Idea) => {
     setActiveIdeaForDetails(idea);
     setSelectedIdeaId(idea.id);
+    setFocusIdeaComment(false);
     setIsDetailsModalOpen(true);
   };
   const handleOpenConvertToProject = (idea: Idea) => { setTargetIdeaForConversion(idea); setIsConvertToProjectOpen(true); };
@@ -90,9 +150,10 @@ export const ThoughtRoomMainView: React.FC = () => {
         </div>
       </header>
 
-      <div className="inline-flex max-w-full gap-1 rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="بخش‌های اتاق فکر">
-        {canViewIdeas && <button type="button" role="tab" aria-selected={activeTab === 'ideas'} onClick={() => setActiveTab('ideas')} className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-black ${activeTab === 'ideas' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Lightbulb className="h-3.5 w-3.5" />ایده‌ها<span className={`rounded-full px-1.5 py-0.5 text-[9px] ${activeTab === 'ideas' ? 'bg-white/20' : 'bg-slate-100'}`}>{ideas.length.toLocaleString('fa-IR')}</span></button>}
-        {canViewMeetings && <button type="button" role="tab" aria-selected={activeTab === 'meetings'} onClick={() => setActiveTab('meetings')} className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-black ${activeTab === 'meetings' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Calendar className="h-3.5 w-3.5" />جلسات<span className={`rounded-full px-1.5 py-0.5 text-[9px] ${activeTab === 'meetings' ? 'bg-white/20' : 'bg-slate-100'}`}>{thinkTankMeetings.filter(meeting => meeting.status !== 'archived').length.toLocaleString('fa-IR')}</span></button>}
+      <div ref={sectionTabs.stripRef} className="relative inline-flex max-w-full gap-1 rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="بخش‌های اتاق فکر">
+        {sectionTabs.pill}
+        {canViewIdeas && <button type="button" role="tab" aria-selected={activeTab === 'ideas'} data-tab-active={activeTab === 'ideas'} onClick={() => setActiveTab('ideas')} className={`relative z-10 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-black transition-colors ${activeTab === 'ideas' ? 'text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Lightbulb className="h-3.5 w-3.5" />ایده‌ها<span title="ایده‌های باز و تکمیل‌نشده" className={`rounded-full px-1.5 py-0.5 text-[9px] ${activeTab === 'ideas' ? 'bg-white/20' : 'bg-slate-100'}`}>{openIdeaCount(ideas).toLocaleString('fa-IR')}</span></button>}
+        {canViewMeetings && <button type="button" role="tab" aria-selected={activeTab === 'meetings'} data-tab-active={activeTab === 'meetings'} onClick={() => setActiveTab('meetings')} className={`relative z-10 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-black transition-colors ${activeTab === 'meetings' ? 'text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Calendar className="h-3.5 w-3.5" />جلسات<span title="جلسه‌های برگزارنشده (بدون صورت‌جلسهٔ ثبت‌شده)" className={`rounded-full px-1.5 py-0.5 text-[9px] ${activeTab === 'meetings' ? 'bg-white/20' : 'bg-slate-100'}`}>{pendingMeetingCount(thinkTankMeetings).toLocaleString('fa-IR')}</span></button>}
       </div>
 
       {activeTab === 'ideas' ? <>
@@ -100,7 +161,7 @@ export const ThoughtRoomMainView: React.FC = () => {
           <Button variant="secondary" aria-expanded={ideaFiltersOpen} onClick={() => setIdeaFiltersOpen(value => !value)}><SlidersHorizontal className="h-4 w-4" />فیلترها</Button>
           <span className="text-[11px] font-bold text-slate-500">{filteredIdeas.length.toLocaleString('fa-IR')} ایده</span>
         </div>
-        {ideaFiltersOpen && <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="فیلترهای ایده‌ها">
+        <Collapsible open={ideaFiltersOpen}><section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="فیلترهای ایده‌ها">
           <div className="mb-3 flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs font-black text-slate-700"><SlidersHorizontal className="h-4 w-4 text-indigo-600" />فیلترهای ایده‌ها</div><span className="text-[11px] text-slate-500">{filteredIdeas.length.toLocaleString('fa-IR')} ایده</span></div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <label className="text-[11px] font-bold text-slate-600">وضعیت<Select className="mt-1.5 text-xs" value={ideaStatusFilter} onChange={event => setIdeaStatusFilter(event.target.value)}><option value="active">ایده‌های فعال</option><option value="all">همه ایده‌ها</option><option value="submitted">ثبت‌شده</option><option value="under_review">در حال ارزیابی</option><option value="approved">تأییدشده</option><option value="in_progress">در حال اجرا</option><option value="completed">تکمیل‌شده</option><option value="archived">بایگانی‌شده</option></Select></label>
@@ -109,7 +170,7 @@ export const ThoughtRoomMainView: React.FC = () => {
             <label className="text-[11px] font-bold text-slate-600">دسته‌بندی<Select className="mt-1.5 text-xs" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}><option value="all">همه دسته‌ها</option>{ideaCategories.map(category => <option key={category} value={category}>{category}</option>)}</Select></label>
             <label className="text-[11px] font-bold text-slate-600">برچسب<Select className="mt-1.5 text-xs" value={selectedTag} onChange={event => setSelectedTag(event.target.value)}><option value="all">همه برچسب‌ها</option>{allTags.map(tag => <option key={tag} value={tag}>#{tag}</option>)}</Select></label>
           </div>
-        </section>}
+        </section></Collapsible>
 
         {filteredIdeas.length ? <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">{filteredIdeas.map(idea => <IdeaCard key={idea.id} idea={idea} onOpenDetails={handleOpenDetails} onConvertToProject={handleOpenConvertToProject} onConvertToTask={handleOpenConvertToTask} onEdit={ideaToEdit => { setEditingIdea(ideaToEdit); setIsCreateIdeaOpen(true); }} />)}</div> : <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center"><Lightbulb className="mx-auto h-8 w-8 text-slate-300" /><h2 className="mt-3 text-sm font-black text-slate-800">ایده‌ای مطابق فیلترها نیست</h2><p className="mt-1 text-xs text-slate-500">فیلترها را تغییر دهید یا ایده جدیدی ثبت کنید.</p></div>}
       </> : <ThinkTankMeetingsTab onEditMeeting={meeting => { setMeetingToEdit(meeting); setIsCreateMeetingOpen(true); }} onOpenMinutesModal={handleOpenMinutes} onOpenIdeaDetails={ideaId => { const idea = ideas.find(item => item.id === ideaId); if (idea) handleOpenDetails(idea); }} />}
@@ -130,9 +191,11 @@ export const ThoughtRoomMainView: React.FC = () => {
         <IdeaDetailsModal
           ideaId={activeIdeaForDetails.id}
           isOpen={isDetailsModalOpen}
+          focusComment={focusIdeaComment}
           onClose={() => {
             setIsDetailsModalOpen(false);
             setActiveIdeaForDetails(null);
+            setFocusIdeaComment(false);
             setSelectedIdeaId(null);
           }}
           onOpenConvertToProject={handleOpenConvertToProject}

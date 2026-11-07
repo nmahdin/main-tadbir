@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Bell,
+  BellRing,
   CalendarDays,
   CheckCheck,
   CheckCircle2,
@@ -17,9 +18,10 @@ import {
 } from 'lucide-react';
 import { useNotificationRead, useWorkspacePage } from '../../queries/workspacePages';
 import { notificationDestination } from '../../routing/listQuery';
-import { Button, EmptyState, ErrorState, LoadingState } from '../common/Primitives';
+import { Button, EmptyState, ErrorState } from '../common/Primitives';
+import { ListRowsSkeleton } from '../common/Shimmer';
 import { Pagination } from '../common/WorkspacePatterns';
-import { formatPersianDate } from '../../utils/date';
+import { formatPersianIsoDateTime } from '../../utils/date';
 
 type Category = 'tasks' | 'content' | 'meetings' | 'secretariat' | 'collaboration' | 'system';
 type NotificationRow = {
@@ -40,7 +42,7 @@ type NotificationRow = {
   linkResolutionId?: string;
 };
 
-const labels: Record<string, string> = { assignment: 'تخصیص وظیفه', deadline: 'سررسید', overdue: 'تأخیر', comment: 'دیدگاه', reply: 'پاسخ', status_change: 'تغییر وضعیت', system: 'سیستمی', info: 'اطلاع', mention: 'اشاره' };
+const labels: Record<string, string> = { assignment: 'تخصیص وظیفه', deadline: 'سررسید', overdue: 'تأخیر', reminder: 'یادآوری وظیفه', comment: 'دیدگاه', reply: 'پاسخ', status_change: 'تغییر وضعیت', system: 'سیستمی', info: 'اطلاع', mention: 'اشاره' };
 const categories: { id: '' | Category; label: string; icon: React.ElementType; tone: string }[] = [
   { id: '', label: 'همه', icon: Bell, tone: 'text-slate-600' },
   { id: 'tasks', label: 'وظایف', icon: UserCheck, tone: 'text-indigo-600' },
@@ -64,6 +66,8 @@ const categoryOf = (row: NotificationRow): Category => {
 const visualOf = (row: NotificationRow) => {
   if (row.type === 'overdue') return { icon: AlertTriangle, box: 'bg-rose-50 text-rose-600' };
   if (row.type === 'deadline') return { icon: Clock3, box: 'bg-amber-50 text-amber-600' };
+  // یادآوری دستی مسئول اجرا توسط مدیر پروژه/دپارتمان
+  if (row.type === 'reminder') return { icon: BellRing, box: 'bg-indigo-50 text-indigo-600' };
   return ({
     tasks: { icon: UserCheck, box: 'bg-indigo-50 text-indigo-600' },
     content: { icon: FileText, box: 'bg-violet-50 text-violet-600' },
@@ -103,7 +107,7 @@ export function NotificationInbox() {
     </section>
 
     {mutation.isError && <ErrorState error={mutation.error} />}
-    {query.isPending ? <LoadingState label="در حال دریافت اعلان‌ها…" /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? <div className="rounded-3xl border border-slate-200 bg-white"><EmptyState title="اعلانی در این دسته نیست."><Bell className="mx-auto mb-3 h-10 w-10 text-slate-300" /></EmptyState></div> : <>
+    {query.isPending ? <ListRowsSkeleton rows={5} label="در حال دریافت اعلان‌ها…" /> : query.isError ? <ErrorState error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? <div className="rounded-3xl border border-slate-200 bg-white"><EmptyState title="اعلانی در این دسته نیست."><Bell className="mx-auto mb-3 h-10 w-10 text-slate-300" /></EmptyState></div> : <>
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">{query.data.data.map(row => {
         const target = notificationDestination(row);
         const visual = visualOf(row);
@@ -111,7 +115,7 @@ export function NotificationInbox() {
         const category = categories.find(item => item.id === categoryOf(row));
         return <article key={row.id} className={`flex items-start gap-3.5 p-4 transition-colors sm:p-5 ${row.read ? 'hover:bg-slate-50' : 'bg-indigo-50/35'}`}>
           <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${visual.box}`}><Icon className="h-5 w-5" /></div>
-          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-black text-slate-900">{row.title}</h2>{!row.read && <span className="h-2 w-2 rounded-full bg-indigo-600" />}<span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-500">{category?.label || labels[row.type] || row.type}</span></div><span className="mt-1 inline-block text-[10px] font-bold text-slate-400">{labels[row.type] || row.type}</span></div><time className="text-[10px] text-slate-400">{formatPersianDate(row.timestamp || row.createdAt)}</time></div><p className="mt-2 whitespace-pre-line text-xs leading-6 text-slate-600 sm:text-sm">{row.message}</p><div className="mt-3 flex flex-wrap gap-2">{target && <Link className="ui-button ui-button-secondary !min-h-8 !px-2.5 text-[11px]" to={`${target}?${new URLSearchParams({ returnTo: `/notifications${params.size ? `?${params}` : ''}` })}`}><ExternalLink className="h-3.5 w-3.5" />بازکردن مورد مرتبط</Link>}{!row.read && <Button variant="ghost" className="!min-h-8 !px-2.5 text-[11px]" loading={mutation.isPending && mutation.variables === row.id} disabled={mutation.isPending} onClick={() => mutation.mutate(row.id)}><CheckCircle2 className="h-3.5 w-3.5" />خوانده شد</Button>}</div></div>
+          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-black text-slate-900">{row.title}</h2>{!row.read && <span className="h-2 w-2 rounded-full bg-indigo-600" />}<span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-500">{category?.label || labels[row.type] || row.type}</span></div><span className="mt-1 inline-block text-[10px] font-bold text-slate-400">{labels[row.type] || row.type}</span></div><time className="text-[10px] text-slate-400" dateTime={row.timestamp || row.createdAt}>{formatPersianIsoDateTime(row.timestamp || row.createdAt) || '—'}</time></div><p className="mt-2 whitespace-pre-line text-xs leading-6 text-slate-600 sm:text-sm">{row.message}</p><div className="mt-3 flex flex-wrap gap-2">{target && <Link className="ui-button ui-button-secondary !min-h-9 !px-2.5 text-[11px]" to={`${target}?${new URLSearchParams({ returnTo: `/notifications${params.size ? `?${params}` : ''}` })}`}><ExternalLink className="h-3.5 w-3.5" />بازکردن مورد مرتبط</Link>}{!row.read && <Button variant="ghost" className="!min-h-9 !px-2.5 text-[11px]" loading={mutation.isPending && mutation.variables === row.id} disabled={mutation.isPending} onClick={() => mutation.mutate(row.id)}><CheckCircle2 className="h-3.5 w-3.5" />خوانده شد</Button>}</div></div>
         </article>;
       })}</div>
       <Pagination meta={query.data?.meta} busy={query.isFetching} onPage={nextPage => update('page', String(nextPage))} />

@@ -539,4 +539,59 @@ class DamLibraryTest extends TestCase
         $this->actor(['assets.view']);
         $this->postJson('/api/v1/dam/library', ['title'=>'Denied','body'=>'Some text'])->assertForbidden();
     }
+
+    /** «پیش‌نمایش نسخه‌های قبلی» باید همان محتوای نسخهٔ انتخابی را برگرداند. */
+    public function test_previous_version_is_previewable_and_unknown_version_is_404(): void
+    {
+        Storage::fake('local');
+        $this->actor(['assets.view','assets.upload','assets.preview','assets.create_version']);
+        $id = $this->post('/api/v1/dam/library', [
+            'title'=>'Versioned preview',
+            'file'=>UploadedFile::fake()->createWithContent('first.txt', 'first body'),
+        ])->assertCreated()->json('data.id');
+        $this->post('/api/v1/dam/library/'.$id.'/versions', [
+            'file'=>UploadedFile::fake()->createWithContent('second.txt', 'second body'),
+        ])->assertOk();
+
+        // نسخهٔ جاری (بدون پارامتر) و نسخهٔ تاریخی (شمارهٔ ۱) هر دو قابل پیش‌نمایش‌اند
+        // و هر کدام نام فایل خودش را برمی‌گرداند.
+        $current = $this->get('/api/v1/dam/library/'.$id.'/preview')->assertOk();
+        $this->assertStringContainsString('second.txt', (string) $current->headers->get('Content-Disposition'));
+        $historical = $this->get('/api/v1/dam/library/'.$id.'/preview?version=1')->assertOk();
+        $this->assertStringContainsString('first.txt', (string) $historical->headers->get('Content-Disposition'));
+        $this->assertStringNotContainsString('second.txt', (string) $historical->headers->get('Content-Disposition'));
+
+        $versionId = \App\Models\DamVersion::where('asset_id', $id)->where('version_number', 1)->value('id');
+        $this->get('/api/v1/dam/library/'.$id.'/preview?version='.$versionId)->assertOk();
+
+        $this->get('/api/v1/dam/library/'.$id.'/preview?version=99')->assertNotFound();
+    }
+
+    /** نام نمایشی و نام فایل اصلی هر دو از مودال جزئیات دارایی قابل تغییرند. */
+    public function test_asset_display_name_and_original_filename_are_editable(): void
+    {
+        Storage::fake('local');
+        $this->actor(['assets.view','assets.upload','assets.edit_info','assets.download']);
+        $id = $this->post('/api/v1/dam/library', [
+            'title'=>'Old title',
+            'file'=>UploadedFile::fake()->create('report.pdf', 5, 'application/pdf'),
+        ])->assertCreated()->json('data.id');
+
+        $this->patchJson('/api/v1/dam/library/'.$id, [
+            'title' => 'نام نمایشی تازه',
+            'original_filename' => 'گزارش نهایی',
+        ])->assertOk()
+            ->assertJsonPath('data.title', 'نام نمایشی تازه')
+            // پسوند اصلی حفظ می‌شود تا فایل دانلودی همچنان باز شود.
+            ->assertJsonPath('data.latest_file.original_filename', 'گزارش نهایی.pdf')
+            ->assertJsonCount(1, 'data.versions');
+
+        $this->assertDatabaseHas('dam_activities', ['asset_id'=>$id,'action'=>'renamed']);
+        // فایل روی هاست دست‌نخورده می‌ماند؛ فقط برچسب نام عوض می‌شود.
+        $file = \App\Models\DamAsset::findOrFail($id)->latestFile;
+        Storage::disk('local')->assertExists($file->storage_path);
+        // نام فایل در هدر دانلود هم به همان نام تازه اشاره می‌کند (برای نام غیرلاتین
+        // لاراول نسخهٔ UTF-8 را در `filename*` می‌گذارد، پس متن هدر بررسی نمی‌شود).
+        $this->get('/api/v1/dam/library/'.$id.'/download')->assertOk();
+    }
 }

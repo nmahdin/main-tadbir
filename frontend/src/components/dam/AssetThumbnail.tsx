@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { DigitalAsset, AssetCategory } from '../../types';
+import { SmartImage } from '../common/SmartImage';
+import { damApi } from '../../api/dam';
 import { 
   FileText, 
   Image as ImageIcon, 
@@ -78,20 +80,35 @@ export const AssetThumbnail: React.FC<AssetThumbnailProps> = ({
     full: 'w-full h-44 rounded-t-2xl'
   }[size];
 
+  /*
+   * دور ۸۴: ردیف جدول (۴۰px) و کارت مخزن، نشانی بندانگشتی سبک را می‌گیرند.
+   *
+   * شناسهٔ عددی یعنی دارایی واقعی مخزن؛ برای آن‌ها نسخهٔ کوچکِ کش‌شدهٔ سرور
+   * (`/thumbnail?w=…`) استفاده می‌شود. دارایی‌های نمایشی یا تصویرهای بیرونی
+   * همان نشانی خودشان را نگه می‌دارند تا نمایش نمونه‌ها نشکند.
+   */
+  const numericId = /^\d+$/.test(String(asset.id)) ? String(asset.id) : '';
+  const sizedThumbnail = numericId && asset.category === 'image'
+    ? damApi.library.thumbnailUrl(numericId, size === 'sm' ? 96 : 320)
+    : '';
+  const imageSrc = sizedThumbnail || asset.thumbnailUrl || asset.url;
+
   const hasImagePreview = Boolean(
     !imageError && 
-    (asset.thumbnailUrl || (asset.category === 'image' && asset.url && asset.url !== '#'))
+    (sizedThumbnail || asset.thumbnailUrl || (asset.category === 'image' && asset.url && asset.url !== '#'))
   );
 
   return (
     <div className={`relative overflow-hidden flex items-center justify-center bg-slate-100/90 border border-slate-200/60 shrink-0 ${sizeClasses}`}>
       {hasImagePreview ? (
-        <img
-          src={asset.thumbnailUrl || asset.url}
+        // همان الگوی «مات → واضح» مخزن؛ کادر در حین لود خالی نمی‌ماند.
+        <SmartImage
+          src={imageSrc}
           alt={asset.title}
           referrerPolicy="no-referrer"
           onError={() => setImageError(true)}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className="h-full w-full"
+          imgClassName="transition-transform duration-300 group-hover:scale-105"
         />
       ) : (
         <div className="flex flex-col items-center justify-center p-2 text-center">

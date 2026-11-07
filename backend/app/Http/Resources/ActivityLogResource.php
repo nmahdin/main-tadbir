@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\Activity\ActivityLabels;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,7 +16,8 @@ class ActivityLogResource extends JsonResource
         return [
             'id' => (string) $this->id,
             'userId' => $this->user_id ? (string) $this->user_id : '',
-            'action' => $this->type === 'client_note' ? 'یادداشت کاربر: '.$this->action : $this->action,
+            // کد فنی رویداد هرگز به کاربر نشان داده نمی‌شود؛ برچسب فارسی جانشین آن است.
+            'action' => $this->type === 'client_note' ? 'یادداشت کاربر: '.(string) $this->action : ActivityLabels::action($this->action, $this->type),
             'type' => $this->type ?? 'status_change',
             'timestamp' => $this->created_at?->toIso8601String(),
             'details' => $this->details,

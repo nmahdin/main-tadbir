@@ -42,7 +42,6 @@ import {
   ErrorState,
   FormField,
   Input,
-  LoadingState,
   Select,
   Textarea,
 } from '../common/Primitives';
@@ -52,6 +51,8 @@ import { PriorityPill, ProjectStatusBadge } from '../common/PriorityPill';
 import { DamLibrary } from '../dam/DamLibrary';
 import { CreateIdeaModal } from '../thought-room/CreateIdeaModal';
 import { CreateMeetingModal } from '../thought-room/CreateMeetingModal';
+import { useSlidingTabs } from '../common/SlidingTabs';
+import { DetailPageSkeleton, ListRowsSkeleton } from '../common/Shimmer';
 
 type TabId = 'overview' | 'tasks' | 'contents' | 'series' | 'assets' | 'activities' | 'ideas' | 'meetings' | 'plan';
 type DomainTab = Exclude<TabId, 'overview' | 'plan' | 'assets'>;
@@ -81,9 +82,16 @@ const domainTitles: Record<DomainTab, string> = {
 const domainStatuses: Partial<Record<DomainTab, Array<[string, string]>>> = {
   contents: [['planning', 'برنامه‌ریزی'], ['producing', 'در تولید'], ['reviewing', 'بازبینی'], ['ready_to_publish', 'آماده انتشار'], ['published', 'منتشرشده'], ['archived', 'بایگانی']],
   series: [['active', 'فعال'], ['paused', 'متوقف'], ['archived', 'بایگانی']],
-  tasks: [['backlog', 'صف کار'], ['in_progress', 'در حال انجام'], ['review', 'بازبینی'], ['completed', 'تکمیل‌شده'], ['archived', 'بایگانی']],
-  ideas: [['submitted', 'ثبت‌شده'], ['reviewing', 'در بررسی'], ['approved', 'تأییدشده'], ['converted', 'تبدیل‌شده'], ['rejected', 'ردشده']],
-  meetings: [['scheduled', 'برنامه‌ریزی‌شده'], ['completed', 'برگزارشده'], ['cancelled', 'لغوشده']],
+  tasks: [['backlog', 'در انتظار بررسی'], ['in_progress', 'در حال انجام'], ['review', 'بازبینی'], ['completed', 'تکمیل‌شده'], ['archived', 'بایگانی']],
+  // فهرست وضعیت‌ها باید دقیقاً همان واژگان سرور باشد؛ مقدار ناموجود در دیتابیس
+  // («reviewing»/«converted» در نسخهٔ قبلی) فیلتر را خالی می‌کرد و کاربر فکر
+  // می‌کرد «موارد مرتبط پروژه» بارگذاری نمی‌شود.
+  ideas: [
+    ['draft', 'پیش‌نویس'], ['submitted', 'در انتظار بررسی اولیه'], ['under_review', 'در حال ارزیابی'],
+    ['needs_info', 'نیازمند اطلاعات'], ['approved', 'تأییدشده'], ['in_progress', 'در حال پیاده‌سازی'],
+    ['implemented', 'پیاده‌سازی‌شده'], ['completed', 'خاتمه‌یافته'], ['rejected', 'ردشده'], ['archived', 'بایگانی‌شده'],
+  ],
+  meetings: [['scheduled', 'برنامه‌ریزی‌شده'], ['in_progress', 'در حال برگزاری'], ['completed', 'برگزارشده'], ['cancelled', 'لغوشده'], ['archived', 'بایگانی‌شده']],
 };
 
 const statusLabels: Record<string, string> = {
@@ -101,6 +109,16 @@ const statusLabels: Record<string, string> = {
   open: 'باز',
   closed: 'بسته',
   paused: 'متوقف',
+  scheduled: 'برنامه‌ریزی‌شده',
+  under_review: 'در حال ارزیابی',
+  needs_info: 'نیازمند اطلاعات',
+  implemented: 'پیاده‌سازی‌شده',
+  rejected: 'ردشده',
+  cancelled: 'لغوشده',
+  producing: 'در حال تولید',
+  reviewing: 'در حال بازبینی',
+  ready_to_publish: 'آماده انتشار',
+  planning: 'برنامه‌ریزی',
 };
 
 const statusColors: Record<string, string> = {
@@ -114,6 +132,16 @@ const statusColors: Record<string, string> = {
   paused: 'border-amber-200 bg-amber-50 text-amber-700',
   on_hold: 'border-amber-200 bg-amber-50 text-amber-700',
   archived: 'border-slate-200 bg-slate-100 text-slate-600',
+  scheduled: 'border-sky-200 bg-sky-50 text-sky-700',
+  under_review: 'border-blue-200 bg-blue-50 text-blue-700',
+  needs_info: 'border-amber-200 bg-amber-50 text-amber-700',
+  implemented: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  rejected: 'border-rose-200 bg-rose-50 text-rose-700',
+  cancelled: 'border-slate-200 bg-slate-100 text-slate-600',
+  producing: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+  reviewing: 'border-violet-200 bg-violet-50 text-violet-700',
+  ready_to_publish: 'border-sky-200 bg-sky-50 text-sky-700',
+  planning: 'border-slate-200 bg-slate-50 text-slate-600',
 };
 
 export const ProjectDetailView: React.FC = () => {
@@ -141,6 +169,8 @@ export const ProjectDetailView: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab') as TabId | null;
   const tab: TabId = tabs.some(item => item.id === requestedTab) ? requestedTab! : 'overview';
+  // نشانگر متحرک تب‌ها (دور ۹۵)؛ پیش از بازگشت‌های زودهنگام صدا زده می‌شود.
+  const operationsTabs = useSlidingTabs(tab);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Record<string, string>>({ search: '', status: '' });
   const [archiveConfirmationOpen, setArchiveConfirmationOpen] = useState(false);
@@ -157,19 +187,27 @@ export const ProjectDetailView: React.FC = () => {
     status: filters.status,
   }), [page, filters]);
 
+  /**
+   * فقط پروژه‌ای که روی سرور شناسهٔ عددی دارد می‌تواند «موارد مرتبط» بخواهد.
+   * پیش‌تر فقط خلاصهٔ پروژه این شرط را داشت و تب‌های تسک/محتوا/ایده/جلسه برای
+   * پروژهٔ موقت (`tmp-…`) درخواست ۴۰۴ می‌فرستادند؛ نتیجه همان «موارد مرتبط
+   * پروژه لود نمی‌شود» بود. حالا همهٔ کوئری‌ها یک شرط دارند و پیام روشن هم
+   * نمایش داده می‌شود.
+   */
+  const serverProjectId = Boolean(project && /^\d+$/.test(project.id));
   const summary = useQuery({
     queryKey: ['project-operations', selectedProjectId, 'summary'],
     queryFn: () => projectOperationsApi.summary(selectedProjectId!),
-    enabled: Boolean(project && !/^tmp-/.test(project.id)),
+    enabled: serverProjectId,
   });
-  const tasks = useQuery({ queryKey: ['project-operations', selectedProjectId, 'tasks', commonParams], queryFn: () => projectOperationsApi.tasks(selectedProjectId!, commonParams), enabled: tab === 'tasks' && hasPermission('tasks.view') });
-  const contents = useQuery({ queryKey: ['project-operations', selectedProjectId, 'contents', commonParams], queryFn: () => projectOperationsApi.contents(selectedProjectId!, commonParams), enabled: tab === 'contents' && hasPermission('content.view') });
-  const series = useQuery({ queryKey: ['project-operations', selectedProjectId, 'series', commonParams], queryFn: () => projectOperationsApi.series(selectedProjectId!, commonParams), enabled: tab === 'series' && hasPermission('content.view') });
-  const planSeries = useQuery({ queryKey: ['project-operations', selectedProjectId, 'series-plan'], queryFn: () => projectOperationsApi.series(selectedProjectId!, { per_page: 100 }), enabled: tab === 'plan' && hasPermission('content.view') });
-  const activities = useQuery({ queryKey: ['project-operations', selectedProjectId, 'activities', commonParams], queryFn: () => projectOperationsApi.activities(selectedProjectId!, commonParams), enabled: tab === 'activities' && hasPermission('reports.view') });
-  const ideas = useQuery({ queryKey: ['project-operations', selectedProjectId, 'ideas', commonParams], queryFn: () => projectOperationsApi.ideas(selectedProjectId!, commonParams), enabled: tab === 'ideas' && hasPermission('thinktank.view') });
-  const meetings = useQuery({ queryKey: ['project-operations', selectedProjectId, 'meetings', commonParams], queryFn: () => projectOperationsApi.meetings(selectedProjectId!, commonParams), enabled: tab === 'meetings' && hasPermission('meetings.view') });
-  const plans = useQuery({ queryKey: ['project-plans', selectedProjectId], queryFn: () => projectOperationsApi.plans(selectedProjectId!), enabled: tab === 'plan' && hasPermission('content.view') });
+  const tasks = useQuery({ queryKey: ['project-operations', selectedProjectId, 'tasks', commonParams], queryFn: () => projectOperationsApi.tasks(selectedProjectId!, commonParams), enabled: serverProjectId && tab === 'tasks' && hasPermission('tasks.view') });
+  const contents = useQuery({ queryKey: ['project-operations', selectedProjectId, 'contents', commonParams], queryFn: () => projectOperationsApi.contents(selectedProjectId!, commonParams), enabled: serverProjectId && tab === 'contents' && hasPermission('content.view') });
+  const series = useQuery({ queryKey: ['project-operations', selectedProjectId, 'series', commonParams], queryFn: () => projectOperationsApi.series(selectedProjectId!, commonParams), enabled: serverProjectId && tab === 'series' && hasPermission('content.view') });
+  const planSeries = useQuery({ queryKey: ['project-operations', selectedProjectId, 'series-plan'], queryFn: () => projectOperationsApi.series(selectedProjectId!, { per_page: 100 }), enabled: serverProjectId && tab === 'plan' && hasPermission('content.view') });
+  const activities = useQuery({ queryKey: ['project-operations', selectedProjectId, 'activities', commonParams], queryFn: () => projectOperationsApi.activities(selectedProjectId!, commonParams), enabled: serverProjectId && tab === 'activities' && hasPermission('reports.view') });
+  const ideas = useQuery({ queryKey: ['project-operations', selectedProjectId, 'ideas', commonParams], queryFn: () => projectOperationsApi.ideas(selectedProjectId!, commonParams), enabled: serverProjectId && tab === 'ideas' && hasPermission('thinktank.view') });
+  const meetings = useQuery({ queryKey: ['project-operations', selectedProjectId, 'meetings', commonParams], queryFn: () => projectOperationsApi.meetings(selectedProjectId!, commonParams), enabled: serverProjectId && tab === 'meetings' && hasPermission('meetings.view') });
+  const plans = useQuery({ queryKey: ['project-plans', selectedProjectId], queryFn: () => projectOperationsApi.plans(selectedProjectId!), enabled: serverProjectId && tab === 'plan' && hasPermission('content.view') });
 
   const invalidate = async () => {
     await Promise.all([
@@ -228,42 +266,19 @@ export const ProjectDetailView: React.FC = () => {
 
   return (
     <div dir="rtl" className="mx-auto max-w-7xl space-y-5 p-4 text-right sm:p-6 lg:p-8">
-      <section className="overflow-visible rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
-        <div className="h-1.5 rounded-t-3xl bg-gradient-to-l from-indigo-600 via-violet-500 to-purple-400" />
+      <section className="relative overflow-visible rounded-3xl border border-slate-200/80 bg-white shadow-2xs">
+        {/* نوار بالای کارت همرنگ رنگ اصلی سامانه، دقیقاً مثل صفحهٔ جزئیات محتوا:
+            گرادیان ثابت قبلی با تغییر رنگ سازمانی هم‌رنگ نمی‌شد (دور ۸۹). */}
+        <div aria-hidden className="pointer-events-none absolute inset-x-5 top-0 h-1 rounded-b-full bg-[var(--color-primary)] sm:inset-x-6" data-brand-band="primary" />
         <div className="p-5 sm:p-7">
-          <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-start">
+          {/* سربرگ پروژه با همان عرض کارت: عنوان و عملیات در یک ردیف، سپس چهار کارت اطلاعات هم‌عرض. */}
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-2">
                 <IconButton label="بازگشت به پروژه‌ها" purpose="back" variant="ghost" onClick={() => { setSelectedProjectId(null); setActiveView('projects'); }} className="shrink-0"><ArrowRight className="h-4 w-4" /></IconButton>
                 <h1 className="min-w-0 truncate text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">{project.name}</h1>
               </div>
-              {project.description && <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-600">{project.description}</p>}
-              <div className="mt-5 grid max-w-3xl gap-3 sm:grid-cols-2">
-                <HeaderMeta label="مدیر پروژه">
-                  {manager ? <><Avatar user={manager} size="sm" /><span className="truncate">{manager.name}</span></> : <span>تعیین نشده</span>}
-                </HeaderMeta>
-                <HeaderMeta label="بازه پروژه">
-                  <Calendar className="h-4 w-4 text-indigo-500" />
-                  <span>{formatPersianDate(project.startDate)} تا {formatPersianDate(project.deadline)}</span>
-                </HeaderMeta>
-              </div>
-              <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">
-                <div className="relative">
-                  <button type="button" aria-expanded={membersOpen} onClick={() => setMembersOpen(open => !open)} className="h-full w-full rounded-2xl border border-slate-100 bg-slate-50/70 px-3.5 py-3 text-right hover:border-indigo-200 hover:bg-indigo-50/40">
-                    <p className="mb-1.5 text-[10px] font-bold text-slate-400">اعضای پروژه</p>
-                    <span className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-slate-700">{memberUsers.length ? <><AvatarGroup users={memberUsers} max={4} size="sm" /><span>{memberUsers.length.toLocaleString('fa-IR')} نفر</span></> : <span>بدون عضو</span>}<ChevronDown className={`mr-auto h-3.5 w-3.5 transition-transform ${membersOpen ? 'rotate-180' : ''}`} /></span>
-                  </button>
-                  {membersOpen && <><button type="button" aria-label="بستن فهرست اعضا" onClick={() => setMembersOpen(false)} className="fixed inset-0 z-30 cursor-default" /><div className="absolute right-0 top-full z-[60] mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl"><p className="px-2 py-1 text-[10px] font-black text-slate-400">اعضای پروژه</p>{memberUsers.map(user => <div key={user.id} className="flex items-center gap-2 rounded-xl px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><Avatar user={user} size="xs" /><span className="truncate">{user.name}</span></div>)}{!memberUsers.length && <p className="px-2 py-3 text-xs text-slate-400">عضوی ثبت نشده است.</p>}</div></>}
-                </div>
-                <HeaderMeta label="دسته‌بندی پروژه"><span className="truncate">{project.category || 'بدون دسته‌بندی'}</span></HeaderMeta>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500">
-                <span className="font-bold text-slate-400">جزئیات پروژه</span>
-                <span className="font-bold text-slate-400">اولویت پروژه</span><PriorityPill priority={project.priority} size="sm" />
-                <span className="font-bold text-slate-400">وضعیت پروژه</span><ProjectStatusBadge status={project.status} size="sm" />
-                {project.budget && <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 font-bold">بودجه: {project.budget}</span>}
-                {project.tags?.map(tag => <span key={tag} className="rounded-lg bg-slate-100 px-2 py-1">#{tag}</span>)}
-              </div>
+              {project.description && <p className="mt-2 max-w-4xl text-xs leading-6 text-slate-600">{project.description}</p>}
             </div>
             <div className="relative shrink-0">
               <Button onClick={() => setActionsOpen(open => !open)} aria-expanded={actionsOpen}>عملیات<ChevronDown className={`h-4 w-4 transition-transform ${actionsOpen ? 'rotate-180' : ''}`} /></Button>
@@ -275,11 +290,38 @@ export const ProjectDetailView: React.FC = () => {
                 {hasPermission('meetings.create') && project.status !== 'archived' && <button onClick={() => { setMeetingOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50"><UsersRound className="h-4 w-4" />جلسه جدید</button>}
                 {hasPermission('messaging.view') && <button onClick={() => { openProjectChannel(project.id); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-50"><MessageSquare className="h-4 w-4" />گفت‌وگو</button>}
                 {hasPermission('projects.edit') && <button onClick={() => { openEditProject(project); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50"><Pencil className="h-4 w-4" />ویرایش</button>}
-                {hasPermission('projects.delete') && project.status !== 'archived' && <button onClick={() => { setArchiveConfirmationOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl border-t border-slate-100 px-3 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-50"><Archive className="h-4 w-4" />بایگانی</button>}
+                {hasPermission('projects.delete') && project.status !== 'archived' && <button onClick={() => { setArchiveConfirmationOpen(true); setActionsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl border-t border-slate-100 px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100"><Archive className="h-4 w-4" />بایگانی</button>}
               </div></>}
             </div>
           </div>
-          <div className="mt-6 max-w-3xl border-t border-slate-100 pt-4">
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <HeaderMeta label="مدیر پروژه">
+              {manager ? <><Avatar user={manager} size="sm" /><span className="truncate">{manager.name}</span></> : <span>تعیین نشده</span>}
+            </HeaderMeta>
+            <HeaderMeta label="بازه پروژه">
+              <Calendar className="h-4 w-4 text-indigo-500" />
+              <span>{formatPersianDate(project.startDate)} تا {formatPersianDate(project.deadline)}</span>
+            </HeaderMeta>
+            <div className="relative">
+              <button type="button" aria-expanded={membersOpen} onClick={() => setMembersOpen(open => !open)} className="h-full w-full rounded-2xl border border-slate-100 bg-slate-50/70 px-3.5 py-3 text-right hover:border-indigo-200 hover:bg-indigo-50/40">
+                <p className="mb-1.5 text-[10px] font-bold text-slate-400">اعضای پروژه</p>
+                <span className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-slate-700">{memberUsers.length ? <><AvatarGroup users={memberUsers} max={4} size="sm" /><span>{memberUsers.length.toLocaleString('fa-IR')} نفر</span></> : <span>بدون عضو</span>}<ChevronDown className={`mr-auto h-3.5 w-3.5 transition-transform ${membersOpen ? 'rotate-180' : ''}`} /></span>
+              </button>
+              {membersOpen && <><button type="button" aria-label="بستن فهرست اعضا" onClick={() => setMembersOpen(false)} className="fixed inset-0 z-30 cursor-default" /><div className="absolute right-0 top-full z-[60] mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl"><p className="px-2 py-1 text-[10px] font-black text-slate-400">اعضای پروژه</p>{memberUsers.map(user => <div key={user.id} className="flex items-center gap-2 rounded-xl px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><Avatar user={user} size="xs" /><span className="truncate">{user.name}</span></div>)}{!memberUsers.length && <p className="px-2 py-3 text-xs text-slate-400">عضوی ثبت نشده است.</p>}</div></>}
+            </div>
+            <HeaderMeta label="دسته‌بندی پروژه"><span className="truncate">{project.category || 'بدون دسته‌بندی'}</span></HeaderMeta>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500">
+            <span className="font-bold text-slate-400">جزئیات پروژه</span>
+            <span className="font-bold text-slate-400">اولویت پروژه</span><PriorityPill priority={project.priority} size="sm" />
+            <span className="font-bold text-slate-400">وضعیت پروژه</span><ProjectStatusBadge status={project.status} size="sm" />
+            {project.budget && <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 font-bold">بودجه: {project.budget}</span>}
+            {project.tags?.map(tag => <span key={tag} className="rounded-lg bg-slate-100 px-2 py-1">#{tag}</span>)}
+          </div>
+
+          <div className="mt-6 border-t border-slate-100 pt-4">
             <div className="mb-2 flex items-center justify-between text-[11px] font-bold text-slate-600">
               <span>پیشرفت پروژه</span>
               <span>{(summary.data?.data.progress ?? project.progress).toLocaleString('fa-IR')}٪</span>
@@ -290,14 +332,16 @@ export const ProjectDetailView: React.FC = () => {
       </section>
 
       <nav aria-label="بخش‌های مرکز عملیات پروژه" className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xs">
-        <div className="flex min-w-max gap-1">
+        <div ref={operationsTabs.stripRef} className="relative flex min-w-max gap-1">
+          {operationsTabs.pill}
           {visibleTabs.map(item => (
             <button
               key={item.id}
               onClick={() => switchTab(item.id)}
               aria-current={currentTab === item.id ? 'page' : undefined}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold transition-colors [&>svg]:h-3.5 [&>svg]:w-3.5 ${
-                currentTab === item.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              data-tab-active={currentTab === item.id}
+              className={`relative z-10 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold transition-colors [&>svg]:h-3.5 [&>svg]:w-3.5 ${
+                currentTab === item.id ? 'text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               {item.icon}{item.label}
@@ -305,6 +349,12 @@ export const ProjectDetailView: React.FC = () => {
           ))}
         </div>
       </nav>
+
+      {!serverProjectId && (
+        <p role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-bold leading-6 text-amber-900">
+          این پروژه هنوز روی سرور ثبت نشده است (شناسهٔ موقت). موارد مرتبط — تسک، محتوا، مجموعه، ایده و جلسه — پس از ذخیرهٔ پروژه روی سرور نمایش داده می‌شوند؛ چیزی گم نشده است.
+        </p>
+      )}
 
       {currentTab === 'overview' && <Overview summary={summary} onTab={switchTab} />}
       {currentTab === 'plan' && (
@@ -376,7 +426,8 @@ function HeaderMeta({ label, children }: { label: string; children: React.ReactN
 
 function Overview({ summary, onTab }: { summary: ReturnType<typeof useQuery<any>>; onTab: (tab: TabId) => void }) {
   const { hasPermission } = useApp();
-  if (summary.isLoading) return <LoadingState label="در حال دریافت خلاصه پروژه…" />;
+  // قالب همان صفحه، نه چرخندهٔ وسط‌چین (دور ۹۹).
+  if (summary.isLoading) return <DetailPageSkeleton label="در حال دریافت خلاصه پروژه…" tabs={5} />;
   if (summary.isError) return <ErrorState error={summary.error} onRetry={() => summary.refetch()} title="خلاصه پروژه دریافت نشد." />;
   const data = summary.data?.data;
   const cards = [
@@ -509,7 +560,7 @@ function DomainPanel({
         )}
       </FilterBar>
 
-      {query.isLoading && <LoadingState label="در حال دریافت رکوردها…" />}
+      {query.isLoading && <ListRowsSkeleton rows={5} label="در حال دریافت رکوردها…" />}
       {query.isError && <ErrorState error={query.error} onRetry={() => query.refetch()} title="رکوردهای پروژه دریافت نشد." />}
       {!query.isLoading && !query.isError && (viewMode === 'cards' ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -608,7 +659,7 @@ function ContentPlans({
   const [newMode, setNewMode] = useState(false);
   const canEdit = hasPermission('projects.edit');
 
-  if (loading) return <LoadingState label="در حال دریافت برنامه محتوا…" />;
+  if (loading) return <ListRowsSkeleton rows={4} label="در حال دریافت برنامه محتوا…" />;
   if (error) return <ErrorState error={error} onRetry={onRetry} title="برنامه محتوای پروژه دریافت نشد." />;
 
   return (

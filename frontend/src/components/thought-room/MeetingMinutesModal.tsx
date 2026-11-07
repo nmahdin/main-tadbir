@@ -1,9 +1,13 @@
-import React, { useState, useRef } from 'react';
-import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, Calendar, User, ArrowRight, Paperclip, Download, Loader2, FileUp } from 'lucide-react';
-import { ThinkTankMeeting, MeetingActionItem } from '../../types';
+import React, { useState } from 'react';
+import { X, FileText, CheckCircle2, Plus, Trash2, CheckSquare, User, UserPlus, Paperclip, LoaderCircle, Clock } from 'lucide-react';
+import { ThinkTankMeeting, MeetingActionItem, MeetingAttachment } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { PersianDatePicker } from '../common/PersianDatePicker';
 import { formatPersianDate } from '../../utils/date';
+import { MeetingAttachmentRow } from './MeetingAttachmentRow';
+import { AttachmentComposer, PersistedAttachment, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
+import { useModalExit } from '../common/useModalExit';
+import { addMinutesToClock, clockGapMinutes, durationMinutes, normalizeClock, parseGuests, readableGap } from '../../utils/meetings';
 
 interface MeetingMinutesModalProps {
   meeting: ThinkTankMeeting | null;
@@ -16,9 +20,15 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
   isOpen,
   onClose
 }) => {
-  const { addMeetingMinutes, convertActionItemToTask, users, projects, addMeetingAttachment, removeMeetingAttachment } = useApp();
-  const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const { addMeetingMinutes, convertActionItemToTask, users, projects, appendMeetingAttachments, removeMeetingAttachment, currentUser } = useApp();
+  /**
+   * ضمیمه‌ها با همان قالبِ مشترکِ سامانه (`AttachmentComposer`) ثبت می‌شوند: فایل،
+   * یادداشت متنی، دارایی موجود مخزن و جدول اطلاعات، با پوشهٔ مقصد، پیش‌نمایش و
+   * عنوان دلخواه — دقیقاً همان چیزی که در فرم ساخت جلسه و بقیهٔ فرم‌ها هست.
+   * پیش‌تر این بخش فقط یک دکمهٔ «افزودن فایل» داشت.
+   */
+  const [attachmentDraft, setAttachmentDraft] = useState(createEmptyAttachmentDraft);
+  const [attachmentSaving, setAttachmentSaving] = useState(false);
   const [attachmentError, setAttachmentError] = useState('');
 
   const [minutesSummary, setMinutesSummary] = useState(
@@ -36,6 +46,22 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
     meeting?.presentIds || meeting?.attendeeIds || []
   );
 
+  /**
+   * زمان شروع و پایان واقعی جلسه و نام مهمان‌ها — همان چیزی که در صورت‌جلسه
+   * باید مشخص باشد. مقدار پیش‌فرض از خود جلسه می‌آید (ساعت برنامه‌ریزی‌شده و
+   * مدت آن) تا کاربر فقط تأیید کند.
+   */
+  const [startTime, setStartTime] = useState(
+    normalizeClock(meeting?.startTime) || normalizeClock(meeting?.time) || ''
+  );
+  const [endTime, setEndTime] = useState(
+    normalizeClock(meeting?.endTime)
+      || addMinutesToClock(meeting?.startTime || meeting?.time, durationMinutes(meeting?.duration))
+  );
+  const [guestsText, setGuestsText] = useState((meeting?.guests || []).join('، '));
+  const guestNames = parseGuests(guestsText);
+  const actualDuration = readableGap(startTime, endTime);
+
   const togglePresent = (userId: string) => {
     setPresentIds(prev => prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]);
   };
@@ -43,7 +69,9 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
   const invitedUsers = (meeting?.attendeeIds || []).map(id => users.find(u => u.id === id)).filter(Boolean);
   const absentUsers = invitedUsers.filter(u => u && !presentIds.includes(u.id));
 
-  if (!isOpen || !meeting) return null;
+    // انیمیشن خروج: تا پایان محو‌شدن، مدال در صفحه می‌ماند.
+  const presence = useModalExit(isOpen, onClose);
+  if (!presence.visible) return null;
 
   const handleAddDecision = () => {
     setDecisions([...decisions, '']);
@@ -85,24 +113,57 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
-    setSaving(true); setSaveError('');
+    // زمان جلسه بخشی از صورت‌جلسه است: بدون شروع/پایان معتبر ثبت نمی‌شود.
+    if (!startTime || !endTime) { setSaveError('ساعت شروع و پایان جلسه را وارد کنید.'); return; }
+    if (clockGapMinutes(startTime, endTime) <= 0) { setSaveError('ساعت پایان باید بعد از ساعت شروع باشد.'); return; }
+    setSaving(true); setSaveError(''); setAttachmentError('');
     try {
-    await addMeetingMinutes(
-      meeting.id,
-      minutesSummary.trim(),
-      decisions.filter(d => d.trim()),
-      actionItems.filter(a => a.title.trim()),
-      presentIds
-    );
-    onClose();
+      await addMeetingMinutes(
+        meeting.id,
+        minutesSummary.trim(),
+        decisions.filter(d => d.trim()),
+        actionItems.filter(a => a.title.trim()),
+        presentIds,
+        { startTime, endTime, guests: guestNames }
+      );
+      // ضمیمه‌ها با همان مسیر مشترکِ سامانه در مخزن ثبت و به همین جلسه وصل می‌شوند.
+      // اگر ثبت ضمیمه نیمه‌کاره بماند، صورت‌جلسه از دست نمی‌رود و پیش‌نویس
+      // ضمیمه‌ها در همین فرم می‌ماند تا با یک تلاش دوباره کامل شود.
+      if (attachmentDraftCount(attachmentDraft) > 0) {
+        setAttachmentSaving(true);
+        try {
+          const references = await persistAttachmentDraft(attachmentDraft, { meetingId: meeting.id }, meeting.title);
+          const uploadedAt = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date());
+          const metadata: MeetingAttachment[] = references.map((attachment: PersistedAttachment, index) => ({
+            id: `matt-${attachment.assetId}-${Date.now()}-${index}`,
+            name: attachment.name,
+            size: attachment.size === null ? '—' : attachment.size > 1024 * 1024 ? `${(attachment.size / (1024 * 1024)).toFixed(1)} مگابایت` : `${Math.max(1, Math.round(attachment.size / 1024))} کیلوبایت`,
+            url: attachment.previewUrl,
+            uploadedBy: currentUser.id,
+            uploadedAt,
+            assetId: attachment.assetId,
+            assetType: attachment.type,
+            rowIds: attachment.rowIds,
+          }));
+          await appendMeetingAttachments(meeting.id, metadata);
+          setAttachmentDraft(createEmptyAttachmentDraft());
+        } catch (error) {
+          console.error('Saving meeting attachments failed.', error);
+          setAttachmentError('صورت‌جلسه ثبت شد، اما ثبت ضمیمه‌ها کامل نشد. موارد باقی‌مانده در همین فرم هستند؛ دوباره «نهایی‌سازی و ثبت صورت‌جلسه» را بزنید.');
+          return;
+        } finally {
+          setAttachmentSaving(false);
+        }
+      }
+      presence.requestClose();
     } catch (error) { setSaveError(error instanceof Error ? error.message : 'صورت‌جلسه ذخیره نشد'); }
     finally { setSaving(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div data-state={presence.state} className="ui-modal-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div 
-        className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
+        data-state={presence.state} className="ui-modal-panel bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] "
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-5 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
@@ -117,7 +178,7 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={presence.requestClose}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10"
           >
             <X className="w-5 h-5" />
@@ -125,6 +186,59 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
         </div>
 
         <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 flex-1">
+          {/* زمان واقعی جلسه و مهمان‌ها */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <h4 className="mb-2.5 flex items-center gap-1.5 text-xs font-bold text-slate-800">
+              <Clock className="h-4 w-4 text-indigo-600" />
+              زمان برگزاری جلسه
+            </h4>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="text-[11px] font-bold text-slate-600">
+                ساعت شروع
+                <input
+                  required
+                  type="time"
+                  dir="ltr"
+                  value={startTime}
+                  onChange={event => setStartTime(normalizeClock(event.target.value) || event.target.value)}
+                  className="ui-input mt-1.5 text-xs"
+                />
+              </label>
+              <label className="text-[11px] font-bold text-slate-600">
+                ساعت پایان
+                <input
+                  required
+                  type="time"
+                  dir="ltr"
+                  value={endTime}
+                  onChange={event => setEndTime(normalizeClock(event.target.value) || event.target.value)}
+                  className="ui-input mt-1.5 text-xs"
+                />
+              </label>
+            </div>
+            <p className="mt-2 text-[11px] font-bold text-slate-500">
+              {actualDuration ? `مدت واقعی جلسه: ${actualDuration}` : 'ساعت پایان را بعد از ساعت شروع وارد کنید.'}
+            </p>
+
+            <label className="mt-3 block text-[11px] font-bold text-slate-600">
+              <span className="inline-flex items-center gap-1"><UserPlus className="h-3.5 w-3.5 text-indigo-600" />حضور افراد مهمان (نام‌ها را با ویرگول جدا کنید)</span>
+              <input
+                type="text"
+                value={guestsText}
+                onChange={event => setGuestsText(event.target.value)}
+                placeholder="مثال: دکتر احمدی، خانم کریمی"
+                className="ui-input mt-1.5 text-xs"
+              />
+            </label>
+            {guestNames.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {guestNames.map((guest, index) => (
+                  <span key={`${guest}-${index}`} className="rounded-full border border-indigo-200 bg-white px-2 py-0.5 text-[10px] font-bold text-indigo-800">{guest}</span>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Minutes Summary */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -302,88 +416,46 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
             )}
           </div>
 
-          {/* Meeting Attachments */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <div className="flex items-center justify-between mb-2.5">
-              <div>
-                <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <Paperclip className="w-4 h-4 text-indigo-600" />
-                  فایل‌های پیوست جلسه ({(meeting.attachments || []).length})
-                </h4>
-                <p className="text-[11px] text-slate-500">دستور جلسه، ارائه‌ها و مستندات مرتبط؛ در مخزن مرکزی ذخیره می‌شوند.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => attachmentInputRef.current?.click()}
-                disabled={uploadingAttachment}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
-              >
-                {uploadingAttachment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileUp className="w-3.5 h-3.5" />}
-                {uploadingAttachment ? 'در حال آپلود...' : 'افزودن فایل'}
-              </button>
-              <input
-                ref={attachmentInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={async (e) => {
-                  const files = Array.from(e.target.files || []);
-                  if (files.length === 0) return;
-                  setAttachmentError('');
-                  setUploadingAttachment(true);
-                  try {
-                    for (const file of files) {
-                      await addMeetingAttachment(meeting.id, file);
-                    }
-                  } catch {
-                    setAttachmentError('آپلود فایل ناموفق بود؛ دوباره تلاش کنید.');
-                  } finally {
-                    setUploadingAttachment(false);
-                    if (attachmentInputRef.current) attachmentInputRef.current.value = '';
-                  }
-                }}
-              />
+          {/* Meeting Attachments — همان قالب مشترک ضمیمه‌های سامانه */}
+          <AttachmentComposer
+            value={attachmentDraft}
+            onChange={setAttachmentDraft}
+            disabled={saving || attachmentSaving}
+            title="ضمیمه‌های صورت‌جلسه"
+            defaultFolderLabel={`جلسات / ${meeting.title} / فایل`}
+          />
+
+          {attachmentError && (
+            <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-bold leading-6 text-amber-900">
+              {attachmentError}
+            </p>
+          )}
+
+          {/* پیوست‌های ثبت‌شدهٔ همین جلسه */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                <Paperclip className="w-4 h-4 text-indigo-600" />
+                پیوست‌های ثبت‌شدهٔ جلسه ({(meeting.attachments || []).length})
+              </h4>
+              {attachmentDraftCount(attachmentDraft) > 0 && (
+                <span className="rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-indigo-700">
+                  {attachmentDraftCount(attachmentDraft).toLocaleString('fa-IR')} مورد تازه در انتظار ثبت
+                </span>
+              )}
             </div>
-
-            {attachmentError && (
-              <p className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2 mb-2">
-                {attachmentError}
-              </p>
-            )}
-
+            <p className="mt-1 text-[11px] text-slate-500">با ثبت صورت‌جلسه، موارد بالا به همین فهرست اضافه می‌شوند و لینک پایدار مخزن را می‌گیرند.</p>
             {(meeting.attachments || []).length === 0 ? (
-              <p className="text-[11px] text-slate-400 text-center py-3">هنوز فایلی برای این جلسه ثبت نشده است.</p>
+              <p className="py-3 text-center text-[11px] text-slate-400">هنوز پیوستی برای این جلسه ثبت نشده است.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="mt-2.5 space-y-2">
                 {(meeting.attachments || []).map((att) => (
-                  <div key={att.id} className="flex items-center gap-2.5 p-2.5 bg-white rounded-lg border border-slate-200">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                      <FileText className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-slate-800 truncate" title={att.name}>{att.name}</p>
-                      <p className="text-[10px] text-slate-500">{att.size}{att.uploadedAt ? ` • ${att.uploadedAt}` : ''}</p>
-                    </div>
-                    {att.url && (
-                      <a
-                        href={att.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                        title="دانلود / مشاهده"
-                      >
-                        <Download className="w-4 h-4" />
-                      </a>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => removeMeetingAttachment(meeting.id, att.id)}
-                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
-                      title="حذف پیوست"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <MeetingAttachmentRow
+                    key={att.id}
+                    attachment={att}
+                    onRemove={() => removeMeetingAttachment(meeting.id, att.id)}
+                    className="bg-slate-50/60"
+                  />
                 ))}
               </div>
             )}
@@ -394,16 +466,16 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({
           <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
             <button data-button-action="cancel"
               type="button"
-              onClick={onClose}
-              className="ui-form-action px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
+              onClick={presence.requestClose}
+              className="ui-form-action px-4 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100"
             >
               انصراف
             </button>
             <button data-button-action="save"
-              type="submit" disabled={saving || uploadingAttachment}
-              className="ui-form-action px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md flex items-center gap-1.5"
+              type="submit" disabled={saving || attachmentSaving}
+              className="ui-form-action px-5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md flex items-center gap-1.5"
             >
-              <CheckCircle2 className="w-4 h-4" />
+              {saving ? <LoaderCircle className="w-4 h-4 animate-spin" aria-hidden /> : <CheckCircle2 className="w-4 h-4" aria-hidden />}
               <span>{saving ? 'در حال ذخیره…' : 'نهایی‌سازی و ثبت صورتجلسه'}</span>
             </button>
           </div>

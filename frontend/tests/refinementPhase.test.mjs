@@ -18,7 +18,7 @@ test('near-due task links survive URL parsing and reach the server filter', asyn
   assert.deepEqual(parseListQuery('?due=near', 'tasks'), { due: 'near' });
   assert.deepEqual(parseListQuery('?due=near', 'projects'), {});
   const controller = await source('../../backend/app/Http/Controllers/Api/V1/TaskController.php');
-  assert.match(controller, /\$due === 'near'[\s\S]*addDays\(5\)/);
+  assert.match(controller, /\$due === 'near'[\s\S]*addDays\(7\)/);
 });
 
 test('idea details expose and advance the custom workflow', async () => {
@@ -78,10 +78,19 @@ test('task, project and text-asset refinements remain wired', async () => {
   assert.match(detail, /آخرین تغییر:/);
   assert.match(project, /overflow-visible/);
   assert.match(project, /جزئیات پروژه/);
-  assert.match(actions, /bottom-full/);
+  // قالب‌های دانلود متن از داخل کارت بیرون می‌آیند و روی کل صفحه نمایش داده می‌شوند
+  assert.match(actions, /createPortal\(/);
+  assert.match(actions, /position: 'fixed'/);
+  assert.doesNotMatch(actions, /bottom-full/);
   assert.match(actions, /aria-label="مشاهده متن"/);
   assert.match(downloads, /embeddedVazirmatn/);
   assert.match(downloads, /@font-face\{font-family:'Vazirmatn Download'/);
-  assert.match(downloads, /font-family:'Vazirmatn Download','Vazirmatn Variable',Vazirmatn,Vazir/);
-  assert.match(downloads, /26px \"Vazirmatn Variable\", Vazirmatn, Vazir/);
+  // دور ۷۰: قلم انتخابی کاربر (وزیرمتن/Tahoma/Arial) باید در فایل دانلودی هم
+  // همان باشد؛ سند Word قلم غالب متن را می‌گیرد و PDF هر قطعه را با سبک خودش
+  // (قلم، اندازه، ضخامت، رنگ) رندر می‌کند.
+  assert.match(downloads, /const FONT_STACKS: Record<string, string> = \{/);
+  assert.match(downloads, /vazirmatn: '\"Vazirmatn Variable\", Vazirmatn, Vazir, Tahoma, sans-serif'/);
+  assert.match(downloads, /tahoma: 'Tahoma/);
+  assert.match(downloads, /context\.font = fontOf\(segment\.style\)/);
+  assert.match(downloads, /wordFamilyName\(dominantFamily\(buildBlocks\(richTextHtml\)\)\)/);
 });

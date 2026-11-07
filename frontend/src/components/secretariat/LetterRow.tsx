@@ -184,7 +184,7 @@ export const LetterRow: React.FC<LetterRowProps> = ({
           {letter.status !== 'archived' && (
             <button
               onClick={() => onOpenArchive(letter)}
-              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+              className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
               title="بایگانی در پرونده اسناد"
             >
               <Archive className="w-4 h-4" />

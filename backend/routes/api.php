@@ -14,7 +14,9 @@ use App\Http\Controllers\Api\V1\ChatRealtimeController;
 use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\ContentController;
 use App\Http\Controllers\Api\V1\ContentSeriesController;
+use App\Http\Controllers\Api\V1\ContentStageStatusController;
 use App\Http\Controllers\Api\V1\ContentWatchController;
+use App\Http\Controllers\Api\V1\AdminMaintenanceController;
 use App\Http\Controllers\Api\V1\DamAssetController;
 use App\Http\Controllers\Api\V1\DamDataTableController;
 use App\Http\Controllers\Api\V1\DamTaxonomyController;
@@ -25,8 +27,10 @@ use App\Http\Controllers\Api\V1\GlobalSearchController;
 use App\Http\Controllers\Api\V1\GoogleWorkspaceController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\IntegrityController;
+use App\Http\Controllers\Api\V1\MaintenanceController;
 use App\Http\Controllers\Api\V1\NotificationInboxController;
 use App\Http\Controllers\Api\V1\ProjectContentPlanController;
+use App\Http\Controllers\Api\V1\PublicMediaController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ProjectOperationsController;
 use App\Http\Controllers\Api\V1\ProjectTemplateController;
@@ -34,6 +38,7 @@ use App\Http\Controllers\Api\V1\RestoreController;
 use App\Http\Controllers\Api\V1\RoleController;
 use App\Http\Controllers\Api\V1\SystemSettingController;
 use App\Http\Controllers\Api\V1\TaskController;
+use App\Http\Controllers\Api\V1\TaskReminderController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\WorkspaceRecordController;
 use App\Http\Middleware\EnsureDepartmentStructure;
@@ -57,6 +62,19 @@ Route::prefix('v1')->group(function (): void {
     Route::post('bot/bale/webhook/{secret}', [BaleTransportController::class, 'receive'])->where('secret', '[a-f0-9]{64}')->middleware('throttle:120,1');
     Route::post('bot/bale/tick', [BaleTransportController::class, 'tick'])->middleware('throttle:30,1');
 
+    /*
+    | تعمیر بدون SSH: پشتیبان‌گیری، انتقال فایل‌ها به ریشهٔ بیرون از نرم‌افزار و
+    | تازه‌سازی وضعیت مشتق محتوا. در نبودِ TADBIR_MAINTENANCE_SECRET این مسیرها
+    | ۴۰۴ می‌دهند و هیچ داده‌ای برنمی‌گردانند؛ بازگردانی دیتابیس عمداً فقط در CLI
+    | (`php artisan tadbir:restore`) انجام می‌شود.
+    */
+    Route::prefix('maintenance')->middleware('throttle:20,1,maintenance')->group(function (): void {
+        Route::get('status', [MaintenanceController::class, 'status']);
+        Route::post('backup', [MaintenanceController::class, 'backup']);
+        Route::post('files-relocate', [MaintenanceController::class, 'relocate']);
+        Route::post('refresh-status', [MaintenanceController::class, 'refreshStatus']);
+    });
+
     // بررسی سلامت بدون نیاز به احراز هویت
     // سلامت عمومی و بدون نشست است؛ فراخوانی از صفحهٔ وضعیت یا پنل نباید فایل/ردیف نشست بسازد.
     Route::get('health', [HealthController::class, 'api'])
@@ -65,6 +83,16 @@ Route::prefix('v1')->group(function (): void {
     Route::get('health/db', [HealthController::class, 'db'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->name('api.v1.health.db');
+    // رسانهٔ عمومی (عکس پروفایل، لوگو، فاوآیکون): بدون نشست و بدون وابستگی به
+    // لینک نمادین storage، روی همان میزبان API سرو می‌شود.
+    Route::get('media/{path}', [PublicMediaController::class, 'show'])
+        ->where('path', '.*')
+        ->middleware('throttle:240,1')
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->name('api.v1.media');
+    Route::get('public/favicon', [SystemSettingController::class, 'publicFavicon'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->name('api.v1.public.favicon');
     Route::get('public/identity', [SystemSettingController::class, 'publicIdentity'])
         ->middleware('throttle:60,1')
         ->name('api.v1.public.identity');
@@ -104,7 +132,10 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:20,1,auth-token')
         ->name('api.v1.auth.token');
 
-    Route::middleware(['auth:sanctum', 'active-account', EnsureDepartmentStructure::class])->group(function (): void {
+    // `maintenance-mode` پس از احراز هویت و بررسی حساب اجرا می‌شود: در حالت
+    // تعمیر فقط نقش «مدیریت کل سیستم» از API استفاده می‌کند و بقیه با ۵۰۳ و کد
+    // `maintenance_mode` به صفحهٔ تعمیر هدایت می‌شوند.
+    Route::middleware(['auth:sanctum', 'active-account', 'maintenance-mode', EnsureDepartmentStructure::class])->group(function (): void {
         Route::prefix('bale')->middleware('throttle:30,1')->group(function (): void {
             $settings = BaleSettingsController::class;
             Route::middleware('permission:settings.manage')->group(function () use ($settings): void {
@@ -174,6 +205,11 @@ Route::prefix('v1')->group(function (): void {
         Route::post('activity-logs', [ActivityLogController::class, 'store'])->name('api.v1.activity-logs.store');
 
         Route::get('settings', [SystemSettingController::class, 'index'])->name('api.v1.settings.index');
+        // بارگذاری لوگو/فاوآیکون پیش از ذخیرهٔ تنظیمات `general` انجام می‌شود.
+        Route::post('settings/branding/{kind}', [SystemSettingController::class, 'branding'])
+            ->middleware('permission:settings.manage')
+            ->whereIn('kind', ['logo', 'favicon'])
+            ->name('api.v1.settings.branding');
         Route::get('settings/{key}', [SystemSettingController::class, 'show'])->name('api.v1.settings.show');
         Route::match(['put', 'patch'], 'settings/{key}', [SystemSettingController::class, 'update'])->name('api.v1.settings.update');
 
@@ -206,6 +242,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('dam/library/bulk/move', [DamAssetController::class, 'bulkMove']);
         Route::post('dam/library/bulk/update', [DamAssetController::class, 'bulkUpdate']);
         Route::post('dam/library/bulk/archive', [DamAssetController::class, 'bulkArchive']);
+        // دانلود گروهی: دارایی‌های انتخاب‌شده در یک فایل زیپِ جریانی.
+        Route::post('dam/library/bulk/download', [DamAssetController::class, 'bulkDownload']);
         Route::get('dam/library', [DamAssetController::class, 'index']);
         Route::post('dam/library', [DamAssetController::class, 'store']);
         Route::get('dam/library/{asset}', [DamAssetController::class, 'show']);
@@ -214,6 +252,9 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('dam/library/{asset}', [DamAssetController::class, 'destroy']);
         Route::post('dam/library/{asset}/restore', [DamAssetController::class, 'restore']);
         Route::get('dam/library/{asset}/preview', [DamAssetController::class, 'preview']);
+        // بندانگشتی سبک (دور ۸۴): کارت‌ها و ردیف‌ها به‌جای فایل اصلی، نسخهٔ
+        // کوچک و کش‌شده را می‌گیرند؛ حجم مصرفی فهرست مخزن تا یک‌دهم کم می‌شود.
+        Route::get('dam/library/{asset}/thumbnail', [DamAssetController::class, 'thumbnail']);
         Route::get('dam/library/{asset}/download', [DamAssetController::class, 'download']);
         Route::post('dam/library/{asset}/temporary-link', [DamAssetController::class, 'temporaryLink'])->middleware('throttle:30,1');
         Route::post('dam/library/{asset}/versions', [DamAssetController::class, 'revise']);
@@ -223,10 +264,14 @@ Route::prefix('v1')->group(function (): void {
         Route::post('dam/library/{asset}/google-workspace/pull', [GoogleWorkspaceController::class, 'pullAsset'])->middleware('throttle:10,1,google-workspace-write');
         Route::delete('dam/library/{asset}/google-workspace', [GoogleWorkspaceController::class, 'disconnectAsset'])->middleware('throttle:10,1,google-workspace-write');
         Route::delete('dam/library/{asset}/tasks/{task}', [DamAssetController::class, 'detachTask'])->whereNumber('task');
+        // انتقال دارایی موجود به پوشهٔ پیش‌فرضِ زمینه (محتوا/ایده/جلسه/وظیفه).
+        Route::post('dam/library/{asset}/context-folder', [DamAssetController::class, 'contextFolder'])->middleware('throttle:60,1,dam-context-folder');
         Route::post('dam/library/{asset}/relations', [DamAssetController::class, 'attach']);
         Route::delete('dam/library/{asset}/relations/{relation}', [DamAssetController::class, 'detach'])->whereNumber('relation');
 
         Route::post('notifications/read-all', [NotificationInboxController::class, 'readAll'])->middleware('throttle:10,1,notification-read-all');
+        // تصویر زندهٔ اعلان‌ها برای تب تنظیمات: دسته‌بندی رسمی، شمار واقعی، وضعیت بله و سیاست سازمانی.
+        Route::get('notifications/overview', [NotificationInboxController::class, 'overview'])->middleware('throttle:60,1,notification-overview');
         Route::post('chat/conversations/{conversation}/attachments', [ChatAttachmentController::class, 'store'])->whereNumber('conversation')->middleware('throttle:30,1,chat-attachment');
         Route::get('chat/conversations/{conversation}/attachments/{token}', [ChatAttachmentController::class, 'show'])->whereNumber('conversation')->whereUuid('token');
         Route::get('chat/conversations/{conversation}/realtime', [ChatRealtimeController::class, 'status'])->whereNumber('conversation')->middleware('throttle:120,1');
@@ -292,6 +337,9 @@ Route::prefix('v1')->group(function (): void {
         Route::post('contents/{content}/stages/{stage}/outputs/{output}/forward', [ApprovalController::class, 'forwardOutput'])
             ->middleware('throttle:30,1,content-output-forward');
         Route::post('contents/{content}/stages/{stage}/decision', [ApprovalController::class, 'decide'])->middleware('permission:content.approve');
+        // تغییر دستی وضعیت مرحله از روی نشان وضعیت در صفحهٔ جزئیات محتوا؛
+        // «تأییدشده» و «در انتظار بررسی» هم از همین مسیر قابل تغییرند.
+        Route::post('contents/{content}/stages/{stage}/status', ContentStageStatusController::class);
         Route::get('contents', [ContentController::class, 'index']);
         Route::post('contents', [ContentController::class, 'store'])->middleware('permission:content.create');
         Route::post('contents/{content}/publish', [ContentController::class, 'publish'])->middleware('permission:content.publish');
@@ -307,11 +355,41 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('contents/{content}/force', [ContentController::class, 'forceDestroy'])->middleware('permission:content.force_delete');
         Route::delete('tasks/{task}/attachments/{attachment}', [TaskController::class, 'removeAttachment'])->whereNumber('attachment')->middleware('permission:tasks.view');
         Route::post('tasks/{task}/comments', [TaskController::class, 'comment'])->middleware(['permission:tasks.view', 'throttle:30,1,task-comment']);
+        // یادآوری مسئول اجرا: اعلان سامانه + ارسال بله در صورت اتصال حساب کاربر.
+        Route::post('tasks/{task}/reminder', TaskReminderController::class)
+            ->middleware(['permission:tasks.view', 'permission:tasks.edit', 'throttle:10,1,task-reminder'])
+            ->name('api.v1.tasks.reminder');
         Route::get('tasks', [TaskController::class, 'index'])->middleware('permission:tasks.view')->name('api.v1.tasks.index');
         Route::post('tasks', [TaskController::class, 'store'])->middleware('permission:tasks.create')->name('api.v1.tasks.store');
         Route::get('tasks/{task}', [TaskController::class, 'show'])->middleware('permission:tasks.view')->name('api.v1.tasks.show');
         Route::match(['put', 'patch'], 'tasks/{task}', [TaskController::class, 'update'])->middleware('permission:tasks.view')->name('api.v1.tasks.update');
         Route::delete('tasks/{task}', [TaskController::class, 'destroy'])->middleware('permission:tasks.delete')->name('api.v1.tasks.destroy');
+        /*
+        | نگهداری از داخل پنل (بدون نیاز به SSH): پشتیبان‌گیری پایگاه‌داده، دانلود،
+        | بارگذاری، بازگردانی و تغییر محل ذخیرهٔ فایل‌ها. دسترسی محدود به مجوز
+        | `settings.manage` است و بازگردانی افزون بر آن به تأیید نام دقیق فایل نیاز
+        | دارد؛ پیش از هر بازگردانی یک پشتیبان ایمنی از وضعیت فعلی ساخته می‌شود.
+        */
+        Route::prefix('maintenance')->middleware('permission:settings.manage')->group(function (): void {
+            Route::get('overview', [AdminMaintenanceController::class, 'overview'])->middleware('throttle:30,1,admin-maintenance');
+            Route::post('database-backups', [AdminMaintenanceController::class, 'createBackup'])->middleware('throttle:6,1,admin-maintenance-write');
+            Route::post('database-backups/upload', [AdminMaintenanceController::class, 'uploadBackup'])->middleware('throttle:6,1,admin-maintenance-write');
+            Route::get('database-backups/{file}/download', [AdminMaintenanceController::class, 'downloadBackup'])
+                ->where('file', '[A-Za-z0-9._-]+')->middleware('throttle:30,1,admin-maintenance');
+            Route::delete('database-backups/{file}', [AdminMaintenanceController::class, 'deleteBackup'])
+                ->where('file', '[A-Za-z0-9._-]+')->middleware('throttle:20,1,admin-maintenance');
+            Route::post('database-backups/{file}/restore', [AdminMaintenanceController::class, 'restoreBackup'])
+                ->where('file', '[A-Za-z0-9._-]+')->middleware('throttle:3,1,admin-maintenance-restore');
+            Route::put('storage', [AdminMaintenanceController::class, 'updateStorage'])->middleware('throttle:10,1,admin-maintenance-write');
+            Route::post('storage/relocate', [AdminMaintenanceController::class, 'relocateStorage'])->middleware('throttle:60,1,admin-maintenance');
+            // به‌روزرسانی خودکار به‌صورت دستی (هاست بدون cron): وضعیت تأخیر،
+            // یادآوری‌های سرسید‌شده و صف ارسال بله.
+            Route::post('automation', [AdminMaintenanceController::class, 'runAutomation'])->middleware('throttle:10,1,admin-maintenance-sync');
+            // ایندکس‌های عملکرد برای هاستی که `php artisan migrate` ندارد.
+            // idempotent است و فقط ساختار جست‌وجو می‌سازد، نه داده.
+            Route::post('indexes', [AdminMaintenanceController::class, 'applyIndexes'])->middleware('throttle:6,1,admin-maintenance-write');
+        });
+
         Route::get('users/directory', [UserController::class, 'directory'])->name('api.v1.users.directory');
         Route::post('users/{user}/avatar', [UserController::class, 'avatar'])->name('api.v1.users.avatar');
         Route::get('users', [UserController::class, 'index'])->middleware('permission:users.view');

@@ -34,9 +34,30 @@ final class Automations
         return SystemSetting::where('key', self::KEY)->first()?->value ?? ['revision' => 0, 'rules' => []];
     }
 
+    /**
+     * نرمال‌سازی یکسانِ محرک و متنِ ورودی.
+     *
+     * قاعده با همین تابع ذخیره و با همین تابع تطبیق داده می‌شود، پس هر تغییری
+     * دوطرفه است: نویسه‌های نامرئی (نیم‌فاصله، جهت‌دهنده‌ها، BOM و کشیده) حذف
+     * می‌شوند، ارقام عربی/فارسی به لاتین برمی‌گردند و نامِ ربات از فرمان
+     * برداشته می‌شود؛ پیش‌تر «/revayat@my_bot» یا متنی که نیم‌فاصلهٔ متفاوت
+     * داشت هیچ‌وقت با قاعده تطبیق نمی‌خورد و بات بی‌پاسخ می‌ماند.
+     */
     public function normalize(string $text): string
     {
-        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', strtr($text, ['ي' => 'ی', 'ك' => 'ک']))));
+        $text = trim($text);
+        if (str_starts_with($text, '/')) {
+            // «/revayat@tadbir_bot» همان «/revayat» است.
+            $text = preg_replace('~^(/[^\s@]+)@\S+~u', '$1', $text) ?? $text;
+        }
+        $text = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}\x{FEFF}\x{0640}\x{200C}]/u', '', $text) ?? $text;
+        $text = strtr($text, [
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            'ي' => 'ی', 'ك' => 'ک',
+        ]);
+
+        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $text)));
     }
 
     public function save(User $actor, array $input): void
@@ -53,7 +74,8 @@ final class Automations
             'rules.*.action' => ['required', Rule::in(self::ACTIONS)],
             'rules.*.response' => ['nullable', 'string', 'max:3000'],
             'rules.*.table_id' => ['nullable', 'integer', 'min:1'],
-            'rules.*.department_id' => ['nullable', 'integer', 'min:1'],
+            // سازگاری عقب‌رو: دپارتمان دیگر بخشی از قاعده نیست و نادیده گرفته می‌شود.
+            'rules.*.department_id' => ['nullable', 'integer', 'min:0'],
         ])->validate();
         $data['revision'] = (int) $data['revision'];
         $seen = [];
@@ -73,15 +95,18 @@ final class Automations
             if ($rule['action'] === 'table_row') {
                 app(OperationsSchema::class)->require('assets');
                 $table = DamDataTable::find($rule['table_id'] ?? 0);
-                if (! $table || ! $table->departments()->where('departments.id', $rule['department_id'] ?? 0)->where('departments.status', 'active')->exists()) {
-                    throw ValidationException::withMessages(["rules.$i.table_id" => 'جدول و دپارتمان فعالِ متصل به آن را انتخاب کنید.']);
+                if (! $table) {
+                    throw ValidationException::withMessages(["rules.$i.table_id" => 'جدول مقصد را انتخاب کنید.']);
                 }
+                // ستون‌ها همین‌جا اعتبارسنجی می‌شوند تا قاعدهٔ ناقص ذخیره نشود.
                 app(DamTableRows::class)->schema($table);
             }
             // Drop settings irrelevant to the action instead of retaining stale targets.
+            // دپارتمان از قاعده حذف شده است؛ دسترسی هنگام اجرا با مجوز خودِ کاربر
+            // و `DamTableAccess::canEdit` (شامل عضویت دپارتمان) سنجیده می‌شود.
             $rule = [...$rule, 'response' => $rule['action'] === 'reply' ? $rule['response'] : null,
                 'table_id' => $rule['action'] === 'table_row' ? (int) $rule['table_id'] : null,
-                'department_id' => $rule['action'] === 'table_row' ? (int) $rule['department_id'] : null];
+                'department_id' => null];
         }
         unset($rule);
         DB::transaction(function () use ($actor, $data): void {
@@ -93,13 +118,18 @@ final class Automations
 
     public function match(string $text, User $user, BaleUserLink $link, ?BaleConversation $session): ?array
     {
-        // Form answers are never reinterpreted as exact-text triggers or commands.
-        if (MenuNavigation::drafting($session)) {
+        // پاسخِ فرم یا انتخابِ داخلِ جریان هیچ‌گاه به‌عنوان محرکِ متنی تفسیر
+        // نمی‌شود؛ وگرنه یک کلمهٔ معمولی وسطِ کار، قاعده را اجرا می‌کرد و فرم را
+        // (با حذفِ نشست) از بین می‌برد.
+        if (MenuNavigation::active($session)) {
             return null;
         }
         $trigger = $this->normalize($text);
         foreach ($this->read()['rules'] as $rule) {
-            if ($rule['enabled'] && $rule['trigger'] === $trigger) {
+            // محرکِ ذخیره‌شده هم دوباره نرمال می‌شود: قاعده‌هایی که پیش از این
+            // نرمال‌سازی (با نیم‌فاصله یا ارقام فارسی) ذخیره شده‌اند، همچنان
+            // تطبیق می‌خورند.
+            if ($rule['enabled'] && $this->normalize((string) $rule['trigger']) === $trigger) {
                 $rateKey = 'bale-rule:'.$link->id;
                 abort_if(RateLimiter::tooManyAttempts($rateKey, 20), 429, 'تعداد درخواست‌ها زیاد است؛ یک دقیقه بعد دوباره تلاش کنید.');
                 RateLimiter::hit($rateKey, 60);
@@ -119,8 +149,14 @@ final class Automations
         $permissions = app(UserPermissionGate::class);
         if ($rule['action'] === 'table_row') {
             $permissions->authorizeAny($user, 'assets.view');
-            $table = DamDataTable::find($rule['table_id']);
-            abort_unless($table && app(DamTableAccess::class)->botAllowed($user, $table, $rule['department_id']), 403);
+            $table = DamDataTable::find($rule['table_id'] ?? 0);
+            $departmentId = isset($rule['department_id']) && (int) $rule['department_id'] > 0 ? (int) $rule['department_id'] : null;
+            // قاعدهٔ تازه دپارتمان ندارد: همان کاربر بات باید مجوز ویرایش جدول را
+            // داشته باشد (canEdit خودش عضویت دپارتمان‌های جدول را می‌سنجد).
+            $allowed = $table && ($departmentId === null
+                ? ($user->isActive() && app(DamTableAccess::class)->canEdit($user, $table))
+                : app(DamTableAccess::class)->botAllowed($user, $table, $departmentId));
+            abort_unless($allowed, 403);
         } elseif (in_array($rule['action'], ['asset_text', 'asset_file'], true)) {
             $permissions->authorizeAll($user, ['assets.view', 'assets.upload']);
         } else {
@@ -138,7 +174,9 @@ final class Automations
     public function action(array $rule): string
     {
         return match ($rule['action']) {
-            'table_row' => 'departmentform:'.$rule['department_id'].':'.$rule['table_id'],
+            'table_row' => empty($rule['department_id'])
+                ? 'tableform:'.$rule['table_id']
+                : 'departmentform:'.$rule['department_id'].':'.$rule['table_id'],
             'asset_text' => 'assettext:0', 'asset_file' => 'assetfile:0', 'reply' => 'automation_reply',
             default => $rule['action'],
         };

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { request } from '../../api/client';
+import { useSlidingTabs } from '../common/SlidingTabs';
 import { formatPersianDate } from '../../utils/date';
 import { useApp } from '../../context/AppContext';
 import { ContentStatusBadge } from '../../utils/statusBadges';
@@ -56,6 +57,8 @@ export const ArchiveView: React.FC = () => {
   } = useApp();
   const visibleTabs = TABS.filter(tab => hasPermission(tab.permission));
   const [activeTab, setActiveTab] = useState<ArchiveTab>(() => visibleTabs[0]?.id ?? 'contents');
+  // نشانگر متحرک تب‌ها (دور ۹۵)؛ رنگ این نوار خاکستری تیره است.
+  const archiveTabs = useSlidingTabs(activeTab, 'slate');
   const [archivedAssets, setArchivedAssets] = useState<ArchivedAsset[]>([]);
   const [deletingKey, setDeletingKey] = useState('');
   const firstVisibleTab = visibleTabs[0]?.id;
@@ -121,15 +124,17 @@ export const ArchiveView: React.FC = () => {
 
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap p-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xs w-fit">
+      <div ref={archiveTabs.stripRef} className="relative flex items-center gap-2 flex-wrap p-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xs w-fit">
+        {archiveTabs.pill}
         {visibleTabs.map(tab => (
           <button
             key={tab.id}
             type="button"
+            data-tab-active={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`relative z-10 px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === tab.id
-                ? 'bg-slate-700 text-white shadow-md'
+                ? 'text-white'
                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
             }`}
           >

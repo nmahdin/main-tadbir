@@ -2,8 +2,10 @@ import { SessionChangedError } from '../api/errors';
 import { useConfirmedCommand } from '../queries/useConfirmedCommand';
 import { needsServerWrite, rememberServerRecords, snapshotSession } from '../queries/serverSnapshots';
 import { readDamEntryLink } from '../utils/damEntryLink';
+import { normalizeProcessTemplates, normalizeProcessTemplate } from '../utils/contentProcessTemplates';
 import { canUsePermission } from '../utils/permissions';
 import { request } from '../api/client';
+import { subscribeConnection } from '../utils/connectionState';
 import { followTaskLink, readTaskLink } from '../utils/taskDeepLink';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
@@ -17,11 +19,11 @@ import {
 } from '../types';
 import { SYSTEM_PERMISSIONS } from '../config/permissions';
 import { runtime } from '../config/runtime';
-import { parseApiError } from '../api/errors';
+import { apiErrorMessage, isConnectionFailure, loginErrorMessage, parseApiError } from '../api/errors';
 import { useAuth } from './AuthContext';
 import { useUI } from './UIContext';
 import { useServerState } from '../queries/useServerState';
-import { queryClient, fetchWorkspace } from '../queries/queryClient';
+import { queryClient, fetchWorkspace, invalidateWorkspaceModules } from '../queries/queryClient';
 import type { PublicationSettings, PublicationTaskInput } from '../api/contents';
 import { withPublicationConflictRefresh } from '../utils/publicationCommand';
 import { ApiError, activityLogsApi, archiveDossiersApi, authApi, chatApi, commentsApi, contentsApi, damApi, departmentsApi, ideasApi, notificationsApi, projectTemplatesApi, projectsApi, rolesApi, secretariatLettersApi, secretariatResolutionsApi, settingsApi, SystemSettingKey, tasksApi, thinkTankMeetingsApi, usersApi } from '../api';
@@ -37,7 +39,7 @@ interface AppContextType {
   workflows: Workflow[];
   contents: Content[];
   publishingContentIds: string[];
-  publishContentNow: (id: string, expectedVersion?: string) => Promise<boolean>;
+  publishContentNow: (id: string, expectedVersion?: string, publishAt?: { date?: string; time?: string }) => Promise<boolean>;
   unpublishContent: (id: string) => Promise<boolean>;
   scheduleContentPublication: (id: string, data: Omit<PublicationSettings, 'expectedVersion'>) => Promise<Content>;
   createPublicationTask: (id: string, data: PublicationTaskInput) => Promise<Task>;
@@ -105,6 +107,12 @@ interface AppContextType {
   openEditRole: (role: SystemRole) => void;
   isTemplatesModalOpen: boolean;
   setIsTemplatesModalOpen: (open: boolean) => void;
+  /** مدال سراسری «ایده جدید» — باز شدن بدون ترک صفحهٔ جاری. */
+  isCreateIdeaOpen: boolean;
+  setIsCreateIdeaOpen: (open: boolean) => void;
+  /** مدال سراسری «جلسه جدید» — باز شدن بدون ترک صفحهٔ جاری. */
+  isCreateMeetingOpen: boolean;
+  setIsCreateMeetingOpen: (open: boolean) => void;
   isTemplateEditorOpen: boolean;
   setIsTemplateEditorOpen: (open: boolean) => void;
   isAuthModalOpen: boolean;
@@ -141,6 +149,8 @@ interface AppContextType {
   notify: (toast: { type?: 'success' | 'error' | 'info'; title: string; message?: string; detail?: string; dedupeKey?: string }) => void;
   dismissToast: (toastId: string) => void;
   notifyApiError: (scope: string, error: unknown, title: string) => void;
+  /** خطای آخرین فرمان ناموفق یک کلید (مثل `contents:12`)؛ پیام دقیق سرور برای فرم‌ها. */
+  lastMutationError: (key: string) => unknown;
 
   // Dynamic system settings (تنظیمات پویای سامانه)
   generalSettings: GeneralSettings;
@@ -161,7 +171,7 @@ interface AppContextType {
   setContentStatuses: React.Dispatch<React.SetStateAction<ContentStatusSetting[]>>;
   settingsSaveState: 'idle' | 'saving' | 'saved' | 'error';
   settingsSaveError: string | null;
-  saveSettingsNow: () => Promise<boolean>;
+  saveSettingsNow: (force?: boolean) => Promise<boolean>;
 
   // Auth Operations
   registerUser: (data: { name: string; username: string; phone?: string; password?: string; department?: string; title?: string }) => Promise<{ success: boolean; user?: User; message?: string; error?: string }>;
@@ -214,10 +224,23 @@ interface AppContextType {
   deleteContentComment: (contentId: string, commentId: string) => Promise<boolean>;
   addContentAttachment: (contentId: string, file: { name: string; size: string; type?: string; url?: string }) => Promise<boolean>;
   deleteContentAttachment: (contentId: string, attachmentId: string) => Promise<boolean>;
-  assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; deadline?: string }) => Promise<boolean>;
+  assignStageResponsibility: (contentId: string, stageId: string, data: { assigneeId?: string; assigneeRole?: string; reviewerId?: string; approverId?: string; reviewerStrategy?: ContentStage['reviewerStrategy']; deadline?: string }) => Promise<boolean>;
   updateStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string, reportText?: string) => Promise<boolean>;
-  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }) => Promise<boolean>;
+  addStageDeliverable: (contentId: string, stageId: string, outputId: string, data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string; renameTitle?: string; dataTableId?: string; dataTableName?: string; rowIds?: string[]; rowLabels?: string[] }) => Promise<boolean>;
   removeStageDeliverable: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
+  /**
+   * تغییر «نام نمایشی» یک خروجی مرحله، بدون دست‌زدن به فایل، متن یا تاریخ
+   * تحویل. فقط فیلد `name` همان خروجی عوض می‌شود و یک ردیف در تاریخ فعالیت
+   * مرحله ثبت می‌گردد.
+   */
+  renameStageOutput: (contentId: string, stageId: string, outputId: string, name: string) => Promise<boolean>;
+  /**
+   * تغییر دستی وضعیت یک مرحله (نشان وضعیت در جریان محتوا).
+   *
+   * از مسیر اختصاصی سرور می‌رود تا وضعیت‌های «تأییدشده» و «در انتظار بررسی» هم
+   * قابل تغییر باشند و تسک‌های همان مرحله هم‌زمان هم‌تراز شوند.
+   */
+  setStageStatus: (contentId: string, stageId: string, status: ContentStageStatus, note?: string) => Promise<boolean>;
   forwardStageOutput: (contentId: string, stageId: string, outputId: string) => Promise<boolean>;
   approveStage: (contentId: string, stageId: string, note?: string) => Promise<boolean>;
   rejectStage: (contentId: string, stageId: string, reason: string, correctionAssigneeId?: string) => Promise<boolean>;
@@ -247,8 +270,8 @@ interface AppContextType {
   inviteMember: (memberData: Omit<User, 'id' | 'activeProjectsCount' | 'completedTasksCount' | 'workloadPercentage'>) => User;
 
   // Notification Operations
-  markNotificationAsRead: (id: string) => void;
-  markAllNotificationsAsRead: () => void;
+  markNotificationAsRead: (id: string) => Promise<void>;
+  markAllNotificationsAsRead: () => Promise<void>;
   clearNotification: (id: string) => void;
   sendNotification: (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => void;
 
@@ -372,7 +395,7 @@ interface AppContextType {
   updateThinkTankMeeting: (meetingId: string, updates: Partial<ThinkTankMeeting>) => Promise<ThinkTankMeeting>;
   createMeetingGoogleMeet: (meetingId: string) => Promise<ThinkTankMeeting>;
   deleteThinkTankMeeting: (meetingId: string) => Promise<boolean>;
-  addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => Promise<void>;
+  addMeetingMinutes: (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[], timing?: { startTime?: string; endTime?: string; guests?: string[] }) => Promise<void>;
   addMeetingAttachment: (meetingId: string, file: File, folderId?: string) => Promise<void>;
   appendMeetingAttachments: (meetingId: string, attachments: MeetingAttachment[]) => Promise<void>;
   removeMeetingAttachment: (meetingId: string, attachmentId: string) => void;
@@ -538,6 +561,16 @@ export interface ModuleError {
   detail?: string;
 }
 
+/** Reuse a validated last-known palette while the authoritative server settings load. */
+const cachedBrandColor = (key: string, fallback: string): string => {
+  try {
+    const value = window.localStorage.getItem(key);
+    return /^#[0-9a-f]{6}$/i.test(value || '') ? value! : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 /** مقادیر پیش‌فرض تنظیمات پویا؛ پیش از اولین دریافت از سرور استفاده می‌شوند. */
 const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   orgName: 'سامانه سازمانی تدبیر',
@@ -546,7 +579,10 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   timezone: 'Asia/Tehran',
   calendar: 'jalali',
   loginDescription: '',
-  themeColor: '#4f46e5',
+  themeColor: cachedBrandColor('tadbir:theme-color', '#4f46e5'),
+  secondaryColor: cachedBrandColor('tadbir:theme-secondary', '#0ea5e9'),
+  logoUrl: '',
+  faviconUrl: '',
   secretariatEnabled: true,
 };
 
@@ -596,7 +632,7 @@ const DEFAULT_TASK_PRIORITIES: TaskPrioritySetting[] = [
 ];
 
 const DEFAULT_TASK_STATUSES: TaskStatusSetting[] = [
-  { id: 'backlog', label: 'در صف بررسی', color: '#94a3b8', order: 1 },
+  { id: 'backlog', label: 'در انتظار بررسی', color: '#94a3b8', order: 1 },
   { id: 'in_progress', label: 'در حال انجام', color: '#3b82f6', order: 2 },
   { id: 'review', label: 'در حال بررسی', color: '#8b5cf6', order: 3 },
   { id: 'completed', label: 'تکمیل‌شده', color: '#10b981', order: 4 },
@@ -626,7 +662,9 @@ const DEFAULT_CONTENT_STATUSES: ContentStatusSetting[] = [
   { id: 'producing', label: 'در حال تولید', color: '#f59e0b', order: 3 },
   { id: 'reviewing', label: 'در انتظار بازبینی', color: '#a855f7', order: 4 },
   { id: 'revising', label: 'نیازمند اصلاح', color: '#f43f5e', order: 5 },
-  { id: 'approving', label: 'در انتظار تأیید', color: '#6366f1', order: 6 },
+  // «تأخیر» وضعیتی مشتق است: سرور آن را از مهلت واقعی مراحل می‌سازد و
+  // کاربر نمی‌تواند دستی انتخابش کند؛ نشانگر آن در جزئیات محتوا می‌آید.
+  { id: 'delayed', label: 'در تأخیر', color: '#7c3aed', order: 6 },
   { id: 'approved', label: 'تأییدشده', color: '#10b981', order: 7 },
   { id: 'ready_to_publish', label: 'آماده انتشار', color: '#14b8a6', order: 8 },
   { id: 'published', label: 'منتشرشده', color: '#22c55e', order: 9 },
@@ -722,12 +760,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [assets, setAssets] = useServerState<DigitalAsset[]>('assets', []);
 
-  const { damSubView, setDamSubView, currentFolderId, setCurrentFolderId, previewAssetId, setPreviewAssetId, detailAssetId, setDetailAssetId, versionModalAssetId, setVersionModalAssetId, shareTargetAssetId, setShareTargetAssetId, shareTargetFolderId, setShareTargetFolderId, isUploadAssetOpen, setIsUploadAssetOpen, isEditAssetOpen, setIsEditAssetOpen, assetToEdit, setAssetToEdit, isCreateFolderOpen, setIsCreateFolderOpen, isEditFolderOpen, setIsEditFolderOpen, folderToEdit, setFolderToEdit, selectedMemberId, setSelectedMemberId, selectedTemplateId, setSelectedTemplateId, selectedUserId, setSelectedUserId, userProfileId, setUserProfileId, searchQuery, setSearchQuery, isSearchOpen, setIsSearchOpen, isCreateTaskOpen, setIsCreateTaskOpen, isCreateProjectOpen, setIsCreateProjectOpen, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId, isEditProjectOpen, setIsEditProjectOpen, projectToEdit, setProjectToEdit, meetingModalRequest, setMeetingModalRequest, isCreateUserOpen, setIsCreateUserOpen, isEditUserOpen, setIsEditUserOpen, userToEdit, setUserToEdit, isCreateRoleOpen, setIsCreateRoleOpen, isEditRoleOpen, setIsEditRoleOpen, roleToEdit, setRoleToEdit, isTemplatesModalOpen, setIsTemplatesModalOpen, isTemplateEditorOpen, setIsTemplateEditorOpen, isAuthModalOpen, setIsAuthModalOpen, authNotice, setAuthNotice, requestMeetingModal, activeView, setActiveView, selectedContentId, setSelectedContentId, selectedProjectId, setSelectedProjectId, selectedTaskId, setSelectedTaskId } = useUI();
+  const { isCreateIdeaOpen, setIsCreateIdeaOpen, isCreateMeetingOpen, setIsCreateMeetingOpen, damSubView, setDamSubView, currentFolderId, setCurrentFolderId, previewAssetId, setPreviewAssetId, detailAssetId, setDetailAssetId, versionModalAssetId, setVersionModalAssetId, shareTargetAssetId, setShareTargetAssetId, shareTargetFolderId, setShareTargetFolderId, isUploadAssetOpen, setIsUploadAssetOpen, isEditAssetOpen, setIsEditAssetOpen, assetToEdit, setAssetToEdit, isCreateFolderOpen, setIsCreateFolderOpen, isEditFolderOpen, setIsEditFolderOpen, folderToEdit, setFolderToEdit, selectedMemberId, setSelectedMemberId, selectedTemplateId, setSelectedTemplateId, selectedUserId, setSelectedUserId, userProfileId, setUserProfileId, searchQuery, setSearchQuery, isSearchOpen, setIsSearchOpen, isCreateTaskOpen, setIsCreateTaskOpen, isCreateProjectOpen, setIsCreateProjectOpen, isCreateContentOpen, setIsCreateContentOpen, contentCreateProjectId, setContentCreateProjectId, isEditProjectOpen, setIsEditProjectOpen, projectToEdit, setProjectToEdit, meetingModalRequest, setMeetingModalRequest, contentSeriesModalRequest, setContentSeriesModalRequest, isCreateUserOpen, setIsCreateUserOpen, isEditUserOpen, setIsEditUserOpen, userToEdit, setUserToEdit, isCreateRoleOpen, setIsCreateRoleOpen, isEditRoleOpen, setIsEditRoleOpen, roleToEdit, setRoleToEdit, isTemplatesModalOpen, setIsTemplatesModalOpen, isTemplateEditorOpen, setIsTemplateEditorOpen, isAuthModalOpen, setIsAuthModalOpen, authNotice, setAuthNotice, requestMeetingModal, requestContentSeriesModal, activeView, setActiveView, selectedContentId, setSelectedContentId, selectedProjectId, setSelectedProjectId, selectedTaskId, setSelectedTaskId } = useUI();
   const pendingProjectCreates = useRef(new Map<string, Promise<Project>>());
   const pendingTaskCreates = useRef(new Map<string, Promise<Task>>());
   const workspaceLoadedRef = useRef(false);
   const settingsBaseline = useRef<Record<string, string> | null>(null);
   const settingsSaveQueue = useRef<Promise<boolean>>(Promise.resolve(true));
+  /**
+   * کلیدهایی که ذخیره‌شان فقط به‌خاطر قطعی شبکه ناموفق شد.
+   *
+   * این‌ها «تنظیم خراب» نیستند؛ با برگشتن اتصال خودکار دوباره فرستاده می‌شوند.
+   * پیش‌تر همین حالت باعث می‌شد کاربر پیام «ذخیرهٔ تنظیمات ناموفق بود» را
+   * همراهِ نوار قطعی اینترنت ببیند و فکر کند تنظیماتش خراب است.
+   */
+  const pendingSettingsKeys = useRef<Set<string>>(new Set());
+  /**
+   * آخرین مقدارهایی که سرور صریحاً رد کرده است.
+   *
+   * تا وقتی مقدار عوض نشود، دوباره فرستاده نمی‌شوند؛ وگرنه یک مقدار نامعتبر
+   * (مثلاً یک الگوی فرایند با فیلد اضافه) در هر چرخهٔ ذخیره‌سازی خودکار
+   * دوباره و دوباره تلاش می‌کرد و پیام خطا مدام برمی‌گشت.
+   */
+  const rejectedSettingsPayloads = useRef<Map<string, string>>(new Map());
   const lastSyncSource = useRef<Record<string, unknown>>({});
 
   // ── وضعیت بارگذاری فضای کاری، خطاهای ماژول‌ها و توست‌های بازخورد ──
@@ -755,7 +809,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let active = true;
     void settingsApi.publicIdentity()
       .then(response => {
-        if (active) setGeneralSettings(previous => ({ ...previous, ...response.data }));
+        const { maintenance: _maintenanceState, ...identity } = response.data;
+        if (!active) return;
+        setGeneralSettings(previous => ({ ...previous, ...identity }));
+        // The public login page does not mount MainLayout, so it must also
+        // reconcile its favicon and palette independently of workspace loading.
+        const primary = identity.themeColor;
+        const secondary = identity.secondaryColor;
+        if (/^#[0-9a-f]{6}$/i.test(primary || '')) {
+          document.documentElement.style.setProperty('--color-primary', primary);
+          document.documentElement.style.setProperty('--color-primary-hover', `color-mix(in srgb, ${primary} 85%, black)`);
+        }
+        if (/^#[0-9a-f]{6}$/i.test(secondary || '')) {
+          document.documentElement.style.setProperty('--brand-secondary', secondary!);
+          document.documentElement.style.setProperty('--color-secondary', secondary!);
+        }
+        try {
+          if (primary) window.localStorage.setItem('tadbir:theme-color', primary);
+          if (secondary) window.localStorage.setItem('tadbir:theme-secondary', secondary);
+          if (identity.logoUrl) window.localStorage.setItem('tadbir:brand-logo', identity.logoUrl);
+          else window.localStorage.removeItem('tadbir:brand-logo');
+          // The browser handles the fixed favicon URL independently of this identity response.
+        } catch { /* storage may be disabled */ }
       })
       .catch(() => { /* خطای اتصال مستقل در AuthContext نمایش داده می‌شود. */ });
     return () => { active = false; };
@@ -789,12 +864,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const notifyApiError = (scope: string, error: unknown, title: string) => {
     if (error instanceof SessionChangedError) return;
     const { status, message, requestId } = parseApiError(error);
+    // دلیل دقیق سرور (۴۲۲/۴۰۳) جای پیام عمومی را می‌گیرد؛ وگرنه کاربر فقط
+    // «اطلاعات واردشده معتبر نیست» می‌دید و راهی برای اصلاح نداشت.
+    const detail = apiErrorMessage(error, message);
+    // نامِ فنیِ فیلدهای ردشده در خطِ جزئیات می‌آید تا پشتیبانی بتواند دقیقاً
+    // همان ورودی را پیدا کند (پیام فارسیِ خودِ فیلد در متن اصلی نمایش داده شده).
+    const fields = error instanceof ApiError && status === 422 ? Object.keys(error.errors || {}) : [];
     notify({
       type: 'error',
       title,
-      message,
-      detail: [status !== undefined ? `HTTP ${status}` : '', requestId ? `کد پیگیری ${requestId}` : ''].filter(Boolean).join(' • ') || undefined,
-      dedupeKey: `${scope}:${status ?? 'x'}:${message}`,
+      message: detail,
+      detail: [
+        status !== undefined ? `HTTP ${status}` : '',
+        fields.length ? `فیلد: ${fields.slice(0, 4).join('، ')}` : '',
+        requestId ? `کد پیگیری ${requestId}` : '',
+      ].filter(Boolean).join(' • ') || undefined,
+      dedupeKey: `${scope}:${status ?? 'x'}:${detail}`,
     });
   };
 
@@ -919,14 +1004,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           key,
           JSON.stringify(key === 'google_meet' && value && typeof value === 'object'
             ? persistableGoogleMeetSettings({ ...DEFAULT_GOOGLE_MEET_SETTINGS, ...(value as Partial<GoogleMeetSettings>) })
-            : value),
+            // الگوهای فرایند همان‌جا برای رابط کاربری نرمال می‌شوند (فیلدهای
+            // خالی، ترتیب مرحله‌ها، شناسهٔ چک‌لیست). اگر خط مبنا مقدار خامِ سرور
+            // بماند، نسخهٔ نرمال‌شده همیشه «تغییرکرده» به نظر می‌رسد و در هر
+            // نشست بدون هیچ ویرایشی دوباره فرستاده می‌شود — همان چیزی که پیام
+            // «کلیدهای دارای خطا: process_templates» را تکرار می‌کرد.
+            : key === 'process_templates'
+              ? normalizeProcessTemplates(value)
+              : value),
         ]),
       );
       if (Array.isArray(settingsData.content_types)) setContentTypes(settingsData.content_types as { id: string; name: string }[]);
       if (Array.isArray(settingsData.target_audiences)) setTargetAudiences((settingsData.target_audiences as unknown[]).filter((value): value is string => typeof value === 'string'));
       if (Array.isArray(settingsData.categories)) setCategories(settingsData.categories as string[]);
       if (Array.isArray(settingsData.idea_categories)) setIdeaCategories((settingsData.idea_categories as unknown[]).filter((value): value is string => typeof value === 'string'));
-      if (Array.isArray(settingsData.process_templates)) setProcessTemplates(settingsData.process_templates as ContentProcessTemplate[]);
+      // الگوهای قدیمی می‌توانند فیلدهای null داشته باشند؛ نرمال‌سازی همین‌جا از
+      // خطای «trim روی null» در ویرایشگر الگو جلوگیری می‌کند.
+      if (Array.isArray(settingsData.process_templates)) setProcessTemplates(normalizeProcessTemplates(settingsData.process_templates));
       if (Array.isArray(settingsData.publishing_platforms)) setPublishingPlatforms(settingsData.publishing_platforms as PublishingPlatform[]);
       if (Array.isArray(settingsData.workflows)) setWorkflows(settingsData.workflows as Workflow[]);
 
@@ -993,6 +1087,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let cancelled = false;
     workspaceLoadedRef.current = false;
     settingsBaseline.current = null;
+    // صف تلاش‌ها و مقدارهای ردشده به نشست قبل تعلق داشتند؛ با نشست تازه پاک می‌شوند.
+    pendingSettingsKeys.current.clear();
+    rejectedSettingsPayloads.current.clear();
     setIsReloadingWorkspace(false);
     if (!isLoggedIn || runtime.demoMode) {
       setIsWorkspaceLoading(false); setIsAuthModalOpen(!isLoggedIn); setModuleErrors({});
@@ -1137,7 +1234,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateProcessTemplate = async (templateId: string, updates: Partial<ContentProcessTemplate>): Promise<ContentProcessTemplate | null> => {
     const existing = processTemplates.find(t => t.id === templateId);
     if (!existing) return null;
-    const next = processTemplates.map(t => t.id === templateId ? { ...t, ...updates } : t);
+    // نتیجهٔ ادغام هم نرمال می‌شود تا مقدارهای null از سرور به ورودی‌ها نرسد.
+    const next = processTemplates.map(t => t.id === templateId
+      ? normalizeProcessTemplate({ ...t, ...updates })
+      : t);
     if (runtime.demoMode) {
       setProcessTemplates(next);
       return next.find(t => t.id === templateId) ?? null;
@@ -1219,22 +1319,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       settingsBaseline.current = Object.fromEntries(settingValues.map(([key, value]) => [key, JSON.stringify(value)]));
       return true;
     }
+    /** کلیدهایی که سرور صریحاً رد کرد (۴xx/۵xx): تنظیم نامعتبر است، نه شبکه. */
     const failures: string[] = [];
+    /** کلیدهایی که فقط به‌خاطر قطعی شبکه نرسیدند؛ با برگشتن اتصال دوباره می‌روند. */
+    const networkFailures: string[] = [];
     const writableSettings = settingValues.filter(([key, value]) => {
-      if (onlyDirty && settingsBaseline.current?.[key] === JSON.stringify(value)) return false;
+      const serialized = JSON.stringify(value);
+      if (onlyDirty && settingsBaseline.current?.[key] === serialized) return false;
+      // مقداری که سرور قبلاً رد کرده، تا تغییر نکرده دوباره فرستاده نمی‌شود.
+      if (rejectedSettingsPayloads.current.get(key) === serialized) return false;
       if (currentUser.role === 'admin' || hasPermission('settings.manage')) return true;
       return ['process_templates', 'workflows'].includes(key) && (hasPermission('content.edit'));
     });
     await Promise.all(writableSettings.map(async ([key, value]) => {
+      const serialized = JSON.stringify(value);
       try {
         await settingsApi.update(key, value);
-        settingsBaseline.current = { ...settingsBaseline.current, [key]: JSON.stringify(value) };
+        settingsBaseline.current = { ...settingsBaseline.current, [key]: serialized };
+        rejectedSettingsPayloads.current.delete(key);
+        pendingSettingsKeys.current.delete(key);
         queryClient.setQueryData(['workspace', currentUser.id, 'settings'], (old: object) => ({ ...old, [key]: value }));
       } catch (error) {
-        failures.push(key);
+        // «نرسیدن» با «نپذیرفتن» فرق دارد: خطای شبکه یک وضعیت گذراست و پیام
+        // تنظیمات نباید برایش نشان داده شود (نوار قطعی اتصال همان را می‌گوید)؛
+        // ولی پاسخ ۴xx یعنی خودِ مقدار مشکل دارد و کاربر باید بداند.
+        const offline = isConnectionFailure(error);
+        if (offline) {
+          networkFailures.push(key);
+          pendingSettingsKeys.current.add(key);
+        } else {
+          failures.push(key);
+          rejectedSettingsPayloads.current.set(key, serialized);
+        }
         console.error(`Synchronizing "${key}" setting failed.`, error);
       }
     }));
+
+    if (networkFailures.length > 0 && failures.length === 0) {
+      // فقط شبکه: وضعیت خنثی می‌ماند و با برگشتن اتصال خودکار تلاش می‌شود.
+      setSettingsSaveState('idle');
+      setSettingsSaveError('تغییرات محلی ذخیره شد؛ برای ارسال به سرور به اینترنت نیاز است.');
+      return false;
+    }
 
     if (failures.length === 0) {
       setSettingsSaveError(null);
@@ -1244,18 +1370,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setSettingsSaveState('error');
-    setSettingsSaveError(`ذخیره کلیدهای ${failures.join('، ')} ناموفق بود — دسترسی یا اتصال را بررسی کنید.`);
+    setSettingsSaveError(`سرور این تنظیمات را نپذیرفت: ${failures.join('، ')} — مقدارها را بررسی کنید؛ تلاش دوباره تا تغییر مقدار تکرار نمی‌شود.`);
     notify({
       type: 'error',
       title: 'ذخیره تنظیمات ناموفق بود',
       message: `کلیدهای دارای خطا: ${failures.join('، ')}`,
+      detail: 'این خطا از قطعی اینترنت نیست؛ مقدار این کلیدها را سرور نپذیرفت. پس از اصلاح، خودکار ذخیره می‌شود.',
       dedupeKey: 'settings-sync-failed',
     });
     return false;
   };
 
-  /** ذخیره فوری تنظیمات (دکمه «ذخیره تغییرات» در نمای تنظیمات). */
-  const saveSettingsNow = (): Promise<boolean> => {
+  /**
+   * ذخیره فوری تنظیمات (دکمه «ذخیره تغییرات» در نمای تنظیمات).
+   *
+   * `force` یعنی خواست صریح کاربر؛ در این حالت مقداری که سرور قبلاً رد کرده هم
+   * دوباره فرستاده می‌شود (مثلاً پس از اصلاح دستی همان مقدار در جای دیگر).
+   */
+  const saveSettingsNow = (force = false): Promise<boolean> => {
+    if (force) rejectedSettingsPayloads.current.clear();
     const operation = settingsSaveQueue.current.catch(() => false).then(async () => {
       if (!isLoggedIn || !workspaceLoadedRef.current) return false;
       setSettingsSaveState('saving');
@@ -1270,6 +1403,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     settingsSaveQueue.current = operation;
     return operation;
   };
+
+  /**
+   * ارسال دوبارهٔ کلیدهایی که فقط به‌خاطر قطعی شبکه ناموفق شدند.
+   *
+   * بدون این، یک قطعی کوتاه اینترنت باعث می‌شد تنظیمات در صف بماند و کاربر یا
+   * پیام خطای گمراه‌کننده ببیند یا مجبور شود دستی «ذخیره تغییرات» را بزند.
+   */
+  const saveSettingsNowRef = useRef(saveSettingsNow);
+  saveSettingsNowRef.current = saveSettingsNow;
+  useEffect(() => {
+    if (!isLoggedIn || runtime.demoMode) return;
+    return subscribeConnection(offline => {
+      if (offline || pendingSettingsKeys.current.size === 0) return;
+      void saveSettingsNowRef.current();
+    });
+  }, [isLoggedIn, setSettingsSaveState]);
 
   // Persist organization settings shortly after editing; the dirty baseline keeps
   // unchanged collections off the wire and the explicit save button remains available.
@@ -1452,7 +1601,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateContent = async (contentId: string, updates: Partial<Content>): Promise<boolean> => {
     if (runtime.demoMode) { setContents(prev => prev.map(row => row.id === contentId ? {...row,...updates} : row)); return true; }
-    return !!await confirmed.run(`contents:${contentId}`, () => contentsApi.update(contentId, {...updates,...(updates.stages ? {reviewVersion:contents.find(row=>row.id===contentId)?.reviewVersion} : {})}), acceptContent);
+    // مهر نسخه: اگر فراخوان نسخهٔ مرجع را خودش فرستاده باشد، همان معتبر است؛
+    // در غیر این صورت نسخهٔ رکورد از فهرست خوانده می‌شود (رفتار قبلی).
+    return !!await confirmed.run(`contents:${contentId}`, () => contentsApi.update(contentId, {...updates,...(updates.stages && !updates.reviewVersion ? {reviewVersion:contents.find(row=>row.id===contentId)?.reviewVersion} : {})}), acceptContent);
   };
 
   const deleteContent = async (contentId: string): Promise<boolean> => {
@@ -1560,7 +1711,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const assignStageResponsibility = (contentId:string,stageId:string,data:{assigneeId?:string;assigneeRole?:string;reviewerId?:string;approverId?:string;deadline?:string}) =>
+  const assignStageResponsibility = (contentId:string,stageId:string,data:{assigneeId?:string;assigneeRole?:string;reviewerId?:string;approverId?:string;reviewerStrategy?:ContentStage['reviewerStrategy'];deadline?:string}) =>
     applyContentChange(contentId,rows=>rows.map(content=>({...content,stages:(content.stages||[]).map(stage=>stage.id===stageId?{...stage,...data}:stage)})));
 
   const updateStageStatus = (contentId:string,stageId:string,status:ContentStageStatus,note?:string,reportText?:string) =>
@@ -1570,7 +1721,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     contentId: string, 
     stageId: string, 
     outputId: string, 
-    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; title?: string }
+    data: { fileName?: string; fileSize?: string; value?: string; fileType?: string; url?: string; assetId?: string; assetVersionId?: string; assetVersionNumber?: number; title?: string; renameTitle?: string; dataTableId?: string; dataTableName?: string; rowIds?: string[]; rowLabels?: string[] }
   ) => {
     const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
 
@@ -1586,6 +1737,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           found = true;
           return {
             ...out,
+            // ویرایش عنوان خروجی متن؛ نام خروجی همان عنوانی است که در فهرست
+            // خروجی‌های مرحله و کارت‌ها خوانده می‌شود. `renameTitle` فقط از
+            // مسیر «ویرایش متن خروجی» می‌آید تا افزودن متن به خروجی قبلی،
+            // بی‌آنکه کاربر بخواهد، نامش را عوض نکند.
+            ...(data.renameTitle ? { name: data.renameTitle } : {}),
             isDelivered: true,
             deliveredAt: nowStr,
             deliveredBy: currentUser.id,
@@ -1594,14 +1750,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             value: data.value !== undefined ? data.value : out.value,
             fileType: data.fileType || out.fileType,
             url: data.url || out.url,
-            assetId: data.assetId || out.assetId
+            assetId: data.assetId || out.assetId,
+            // نسخهٔ دارایی بخشی از قرارداد پیوند است؛ سرور هم همان را
+            // اعتبارسنجی می‌کند و نسخهٔ «آخرین» را حدس نمی‌زند.
+            assetVersionId: data.assetVersionId ? String(data.assetVersionId) : out.assetVersionId,
+            assetVersionNumber: data.assetVersionNumber ?? out.assetVersionNumber,
+            // پیوند «خروجی = ردیف جدول اطلاعات»؛ اگر این بار چیزی نفرستاده
+            // شود، پیوند قبلی دست‌نخورده می‌ماند.
+            dataTableId: data.dataTableId || out.dataTableId,
+            dataTableName: data.dataTableName || out.dataTableName,
+            rowIds: data.rowIds?.length ? data.rowIds : out.rowIds,
+            rowLabels: data.rowLabels?.length ? data.rowLabels : out.rowLabels
           };
         });
         
         if (!found) {
           updatedOutputs.push({
             id: outputId || `out-${Date.now()}`,
-            name: data.title || data.fileName || 'خروجی جدید',
+            name: data.title || data.renameTitle || data.fileName || 'خروجی جدید',
             type: data.fileName ? 'file' : data.url ? 'link' : 'text',
             isRequired: false,
             isDelivered: true,
@@ -1612,7 +1778,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             value: data.value,
             fileType: data.fileType,
             url: data.url,
-            assetId: data.assetId
+            assetId: data.assetId,
+            assetVersionId: data.assetVersionId ? String(data.assetVersionId) : undefined,
+            assetVersionNumber: data.assetVersionNumber,
+            dataTableId: data.dataTableId,
+            dataTableName: data.dataTableName,
+            rowIds: data.rowIds,
+            rowLabels: data.rowLabels
           });
         }
 
@@ -1642,6 +1814,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   
+  const setStageStatus = async (contentId: string, stageId: string, status: ContentStageStatus, note?: string): Promise<boolean> => {
+    if (runtime.demoMode) return updateStageStatus(contentId, stageId, status, note);
+    const current = contents.find(content => content.id === contentId);
+    try {
+      const { data } = await contentsApi.stageStatus(contentId, stageId, status, current?.reviewVersion);
+      setContents(rows => rows.map(row => row.id === contentId ? data : row));
+      void queryClient.invalidateQueries({ queryKey: ['pages'] });
+      return true;
+    } catch (error) {
+      notifyApiError('content:stage-status', error, 'تغییر وضعیت مرحله انجام نشد');
+      return false;
+    }
+  };
+
+  const renameStageOutput = (contentId: string, stageId: string, outputId: string, name: string) => {
+    const title = name.trim().slice(0, 255);
+    if (!title) return Promise.resolve(false);
+    const nowStr = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
+    return applyContentChange(contentId, prev => prev.map(c => {
+      if (c.id !== contentId) return c;
+      const updatedStages = (c.stages || []).map(stg => {
+        if (stg.id !== stageId) return stg;
+        let previous = '';
+        const outputs = stg.outputs.map(out => {
+          if (out.id !== outputId) return out;
+          previous = out.name || '';
+          return { ...out, name: title };
+        });
+        if (previous === title) return stg;
+        return {
+          ...stg,
+          outputs,
+          activityLog: [
+            ...(stg.activityLog || []),
+            { id: `act-${Date.now()}`, userId: currentUser.id, userName: currentUser.name,
+              action: `نام نمایشی خروجی از «${previous || 'بدون عنوان'}» به «${title}» تغییر کرد`, timestamp: nowStr },
+          ],
+        };
+      });
+      return { ...c, stages: updatedStages };
+    }));
+  };
+
   const removeStageDeliverable = (contentId: string, stageId: string, outputId: string) => {
     return applyContentChange(contentId, prev => prev.map(c => {
       if (c.id !== contentId) return c;
@@ -1761,13 +1976,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error) { notifyApiError('publication-settings', error, 'برنامهٔ انتشار ذخیره نشد'); }
   };
 
-  const runPublicationCommand = async (contentId: string, action: 'publish' | 'unpublish', expectedVersion?: string): Promise<boolean> => {
+  const runPublicationCommand = async (contentId: string, action: 'publish' | 'unpublish', expectedVersion?: string, publishAt?: { date?: string; time?: string }): Promise<boolean> => {
     if (publicationInFlight.current.has(contentId)) return false;
     publicationInFlight.current.add(contentId);
     setPublishingContentIds([...publicationInFlight.current]);
     try {
       const response = await withPublicationConflictRefresh(
-        async () => contentsApi[action](contentId, expectedVersion || await publicationVersion(contentId)),
+        // تاریخ/ساعتِ انتخاب‌شده فقط برای «ثبت انتشار» معنا دارد؛ لغو انتشار همان
+        // فرمان قبلی است.
+        async () => contentsApi[action](contentId, expectedVersion || await publicationVersion(contentId), action === 'publish' ? publishAt : undefined),
         () => refreshPublicationContent(contentId),
       );
       setContents(prev => prev.map(c => c.id === contentId ? response.data.content : c));
@@ -1786,7 +2003,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const publishContentNow = (contentId: string, expectedVersion?: string): Promise<boolean> => runPublicationCommand(contentId, 'publish', expectedVersion);
+  /**
+   * ثبت انتشار با تاریخ/ساعت دلخواه.
+   *
+   * `publishAt` اختیاری است؛ اگر نیاید، سرور همان «همین حالا» را با ساعت سازمان
+   * ثبت می‌کند (رفتار پیشین). فرم انتشار همیشه مقدار پیش‌فرض «همین حالا» را
+   * نشان می‌دهد تا کاربر لازم نباشد چیزی تایپ کند.
+   */
+  const publishContentNow = (contentId: string, expectedVersion?: string, publishAt?: { date?: string; time?: string }): Promise<boolean> => runPublicationCommand(contentId, 'publish', expectedVersion, publishAt);
   const unpublishContent = (contentId: string): Promise<boolean> => runPublicationCommand(contentId, 'unpublish');
 
   const addContentComment = async (contentId: string, text: string, replyToId?: string): Promise<boolean> => {
@@ -1968,10 +2192,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const fieldErrors = error.errors
         ? Object.values(error.errors).flat().filter(Boolean)
         : [];
-      const parts = [...fieldErrors];
-      if (error.message && !/\(4\d\d\)|\(5\d\d\)|validation|Validation/.test(error.message)) {
-        parts.unshift(error.message);
-      }
+      const specific = apiErrorMessage(error, '');
+      const parts = specific ? [specific, ...fieldErrors] : [...fieldErrors];
       const unique = [...new Set(parts)].slice(0, 4);
       if (unique.length > 0) return unique.join(' • ');
       if (error.status === 403) return 'شما اجازه انجام این عملیات را ندارید.';
@@ -2301,7 +2523,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: response.message || 'ورود با موفقیت انجام شد.',
       };
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'ارتباط با سرور برای ورود ناموفق بود.';
+      // متن خطا در یک جا سازمان‌دهی می‌شود: اعتبارنامهٔ نادرست، قفل موقت با
+      // ثانیهٔ دقیق، حساب مسدود/غیرفعال و خطای شبکه هر کدام جملهٔ خود را دارند.
+      const message = loginErrorMessage(error);
       return { success: false, message, error: message };
     }
   };
@@ -3847,6 +4071,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         url: assetId ? damApi.library.previewUrl(assetId) : '',
         uploadedBy: currentUser.id,
         uploadedAt,
+        assetId: assetId ? Number(assetId) : undefined,
+        assetType: 'file' as const,
       };
       setIdeas(prev => prev.map(item => {
         if (item.id !== ideaId) return item;
@@ -4086,7 +4312,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const response = await thinkTankMeetingsApi.create(newMeeting);
     setThinkTankMeetings(prev => [response.data, ...prev]);
-    void notificationsApi.list().then(r => setNotifications(r.data)).catch(() => undefined);
+    // به‌جای دانلود دوبارهٔ ۲۰۰ اعلان، همان کوئری‌های اعلان (زنگ هدر و مرکز
+    // اعلان‌ها) با تعداد کم تازه می‌شوند؛ پاسخ کوچک‌تر و بدون دادهٔ بی‌استفاده.
+    void invalidateWorkspaceModules(currentUser.id, ['notifications']);
     return response.data;
   };
 
@@ -4144,6 +4372,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         url: assetId ? damApi.library.previewUrl(assetId) : '',
         uploadedBy: currentUser.id,
         uploadedAt,
+        assetId: assetId ? Number(assetId) : undefined,
+        assetType: 'file' as const,
       };
       await appendMeetingAttachments(meetingId, [attachment]);
     } catch (error) {
@@ -4167,12 +4397,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const addMeetingMinutes = async (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[]) => {
+  const addMeetingMinutes = async (meetingId: string, minutes: string, decisions: string[], actionItems?: MeetingActionItem[], presentIds?: string[], timing?: { startTime?: string; endTime?: string; guests?: string[] }) => {
     const meeting = thinkTankMeetings.find(m => m.id === meetingId);
     await updateThinkTankMeeting(meetingId, {
       status: 'completed', minutesSummary: minutes, decisions,
       actionItems: actionItems || meeting?.actionItems || [],
       presentIds: presentIds ?? meeting?.presentIds ?? [],
+      // ساعت شروع/پایان و مهمان‌ها بخشی از صورت‌جلسه‌اند؛ اگر ثبت نشوند، مقدار
+      // قبلی جلسه دست‌نخورده می‌ماند.
+      ...(timing?.startTime ? { startTime: timing.startTime } : {}),
+      ...(timing?.endTime ? { endTime: timing.endTime } : {}),
+      ...(timing?.guests ? { guests: timing.guests } : {}),
     });
     notify({ type: 'success', title: 'صورت‌جلسه ذخیره شد' });
   };
@@ -4182,7 +4417,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const { task, meeting } = response.data;
     setTasks(prev => [task, ...prev.filter(t => t.id !== task.id)]);
     setThinkTankMeetings(prev => prev.map(m => m.id === meetingId ? meeting : m));
-    void notificationsApi.list().then(r => setNotifications(r.data)).catch(() => undefined);
+    // به‌جای دانلود دوبارهٔ ۲۰۰ اعلان، همان کوئری‌های اعلان (زنگ هدر و مرکز
+    // اعلان‌ها) با تعداد کم تازه می‌شوند؛ پاسخ کوچک‌تر و بدون دادهٔ بی‌استفاده.
+    void invalidateWorkspaceModules(currentUser.id, ['notifications']);
     return task;
   };
 
@@ -4729,8 +4966,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         projectToEdit,
         setProjectToEdit,
         openEditProject,
+        isCreateIdeaOpen,
+        setIsCreateIdeaOpen,
+        isCreateMeetingOpen,
+        setIsCreateMeetingOpen,
         meetingModalRequest,
         requestMeetingModal,
+        requestContentSeriesModal,
         isCreateUserOpen,
         setIsCreateUserOpen,
         isEditUserOpen,
@@ -4776,6 +5018,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         notify,
         dismissToast,
         notifyApiError,
+        lastMutationError: confirmed.lastError,
         generalSettings,
         setGeneralSettings,
         notificationSettings,
@@ -4843,6 +5086,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateStageStatus,
         addStageDeliverable,
         removeStageDeliverable,
+        renameStageOutput,
+        setStageStatus,
         forwardStageOutput,
         approveStage,
         rejectStage,

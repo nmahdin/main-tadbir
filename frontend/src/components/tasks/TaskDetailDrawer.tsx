@@ -8,11 +8,14 @@ import { useApp } from '../../context/AppContext';
 import type { Task, TaskStatus } from '../../types';
 import { useTask } from '../../queries/resources';
 import { formatToJalaliFull, formatToJalaliNumber, toPersianDigits } from '../../utils/jalali';
+import { deadlineDaysLabel, deadlineState } from '../../utils/date';
+import { DEADLINE_CHIP_TONES, DEADLINE_ICON_TONES, deadlineToneTier } from '../../utils/deadlineTones';
 import { Avatar } from '../common/Avatar';
 import { PriorityPill } from '../common/PriorityPill';
-import { Button, ErrorState, LoadingState, Modal } from '../common/Primitives';
-import { TaskAssetsSection } from './TaskAssetsSection';
+import { Button, ErrorState, Modal } from '../common/Primitives';
+import { ListRowsSkeleton } from '../common/Shimmer';
 import { EditTaskModal } from './EditTaskModal';
+import { Collapsible } from '../common/Collapsible';
 
 function DetailItem({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
@@ -53,7 +56,7 @@ export const TaskDetailDrawer: React.FC = () => {
   if (!isLoggedIn || !selectedTaskId) return null;
   const task = (hasTaskDetails(localTask) ? localTask : undefined) || (hasTaskDetails(taskQuery.data) ? taskQuery.data : undefined);
   const close = () => setSelectedTaskId(null);
-  if (!task) return <Modal open onClose={close} title="جزئیات وظیفه">{taskQuery.isError ? <ErrorState error={taskQuery.error} onRetry={() => void taskQuery.refetch()} /> : <LoadingState label="در حال دریافت جزئیات وظیفه…" />}</Modal>;
+  if (!task) return <Modal open onClose={close} title="جزئیات وظیفه">{taskQuery.isError ? <ErrorState error={taskQuery.error} onRetry={() => void taskQuery.refetch()} /> : <ListRowsSkeleton rows={4} label="در حال دریافت جزئیات وظیفه…" />}</Modal>;
 
   const busy = pendingMutationKeys.includes(`tasks:${task.id}`);
   const reviewTask = task.kind === 'content_review';
@@ -72,6 +75,17 @@ export const TaskDetailDrawer: React.FC = () => {
   const completedSubtasks = task.subtasks.filter(item => item.completed).length;
   const progress = task.subtasks.length ? Math.round((completedSubtasks / task.subtasks.length) * 100) : 0;
   const activeStatus = taskStatuses.find(item => item.id === task.status);
+  /**
+   * مهلت انجام: رنگ از فاصلهٔ واقعی تا امروز می‌آید و زمان باقی‌مانده هم نوشته
+   * می‌شود. وظیفه‌های تعیین‌تکلیف‌شده (تکمیل/بایگانی/لغو) رنگ خنثی می‌گیرند تا
+   * کار تمام‌شده هشدار بی‌دلیل نشان ندهد.
+   */
+  const deadlineInfo = task.deadline ? deadlineState(task.deadline) : null;
+  const deadlineSettled = ['completed', 'archived', 'cancelled'].includes(String(task.status || ''));
+  const deadlineTone = deadlineToneTier(deadlineInfo?.tier, deadlineSettled);
+  const deadlineRemaining = deadlineInfo
+    ? (deadlineSettled ? 'این وظیفه تعیین تکلیف شده است.' : deadlineDaysLabel(deadlineInfo))
+    : '';
 
   if (editing) return <EditTaskModal task={task} onClose={() => setEditing(false)} />;
 
@@ -106,7 +120,7 @@ export const TaskDetailDrawer: React.FC = () => {
     const own = comment.userId === currentUser.id;
     return <div key={comment.id} className={depth > 0 ? 'mr-5 border-r-2 border-indigo-100 pr-3 sm:mr-8' : ''}>
       <article className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5">
-        <div className="flex flex-wrap items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><Avatar user={author} size="xs" /><span className="truncate text-xs font-black text-slate-800">{comment.userName || author?.name || 'کاربر'}</span>{author?.title?.trim() && <span className="truncate text-[10px] text-slate-400">{author.title}</span>}</div><time dateTime={comment.timestamp} className="shrink-0 font-sans text-[10px] font-medium text-slate-500">{formatCommentDate(comment.timestamp)}</time></div>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><Avatar user={author} size="xs" /><span className="truncate text-xs font-black text-slate-800">{comment.userName || author?.name || 'کاربر'}</span></div><time dateTime={comment.timestamp} className="shrink-0 font-sans text-[10px] font-medium text-slate-500">{formatCommentDate(comment.timestamp)}</time></div>
         <p className="mt-2 whitespace-pre-wrap pr-7 text-xs leading-6 text-slate-700">{comment.text}</p>
         <div className="mt-2 flex items-center justify-end gap-1 border-t border-slate-200/70 pt-2">
           {depth < 3 && <button type="button" onClick={() => { setReplyToId(comment.id); setEditingCommentId(null); setNewCommentText(''); }} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50"><Reply className="h-3.5 w-3.5" />پاسخ</button>}
@@ -148,7 +162,15 @@ export const TaskDetailDrawer: React.FC = () => {
           <DetailItem icon={<UserRound className="h-3.5 w-3.5" />} label="مسئول انجام"><div className="flex items-center gap-2"><Avatar user={assignee} size="xs" /><span className="truncate">{assignee?.name || 'تعیین نشده'}</span></div></DetailItem>
           <DetailItem icon={<FolderKanban className="h-3.5 w-3.5" />} label="پروژه مرتبط">{task.projectId ? <button type="button" onClick={() => { setSelectedProjectId(task.projectId!); close(); setActiveView('project-detail'); }} className="flex w-full items-center justify-between gap-2 text-right text-indigo-700 hover:underline"><span className="truncate">{project?.name || `پروژه شماره ${toPersianDigits(task.projectId)}`}</span><span aria-hidden>←</span></button> : <span className="text-slate-500">وظیفه مستقل</span>}</DetailItem>
           <DetailItem icon={<FileText className="h-3.5 w-3.5" />} label="محتوای مرتبط">{task.contentId ? <button type="button" disabled={!hasPermission('content.view')} onClick={() => { setSelectedContentId(task.contentId!); close(); setActiveView('content-detail'); }} className="flex w-full items-center justify-between gap-2 text-right text-indigo-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-500 disabled:no-underline"><span className="truncate">{relatedContent?.title || `محتوا شماره ${toPersianDigits(task.contentId)}`}</span><span aria-hidden>←</span></button> : <span className="text-slate-500">بدون محتوای مرتبط</span>}</DetailItem>
-          <DetailItem icon={<CalendarDays className="h-3.5 w-3.5" />} label="مهلت انجام"><span lang="fa" dir="rtl">{task.deadline ? formatToJalaliFull(task.deadline) : 'بدون مهلت'}</span></DetailItem>
+          <DetailItem icon={<CalendarDays className={`h-3.5 w-3.5 ${DEADLINE_ICON_TONES[deadlineTone]}`} />} label="مهلت انجام">
+            {task.deadline ? <div className="space-y-2">
+              <span lang="fa" dir="rtl" className="block">{formatToJalaliFull(task.deadline)}</span>
+              {deadlineRemaining && <span className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-500">زمان باقی‌مانده:</span>
+                <span lang="fa" dir="rtl" className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-[11px] font-bold ${DEADLINE_CHIP_TONES[deadlineTone]}`} title="رنگ مهلت بر پایهٔ فاصلهٔ واقعی تا امروز"><Clock3 className="h-3.5 w-3.5" />{deadlineRemaining}</span>
+              </span>}
+            </div> : <span className="text-slate-500">بدون مهلت</span>}
+          </DetailItem>
           <DetailItem icon={<Clock3 className="h-3.5 w-3.5" />} label="برآورد زمان">{toPersianDigits(task.estimatedHours)} ساعت</DetailItem>
           <DetailItem icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="وضعیت اجرایی">
             {canStatus ? (reviewTask ? <button type="button" onClick={() => void moveTaskStatus(task.id, 'completed')} className="min-h-11 w-full rounded-xl px-4 text-sm font-black text-white shadow-sm" style={{ backgroundColor: activeStatus?.color || '#4f46e5' }}>تأیید و تکمیل</button> : <select value={task.status} onChange={event => void moveTaskStatus(task.id, event.target.value as TaskStatus)} className="h-11 w-full rounded-xl border-0 px-3 text-sm font-black text-white shadow-sm outline-none" style={{ backgroundColor: activeStatus?.color || '#4f46e5' }}>{[...taskStatuses].sort((a,b) => a.order-b.order).map(item => <option key={item.id} value={item.id} className="bg-white text-slate-900">{item.label}</option>)}</select>) : <span className="inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-black text-white shadow-sm" style={{ backgroundColor: activeStatus?.color || '#64748b' }}>{activeStatus?.label || task.status}</span>}
@@ -162,19 +184,22 @@ export const TaskDetailDrawer: React.FC = () => {
           <form onSubmit={submitSubtask} className="mt-4 flex gap-2 border-t border-slate-100 pt-4"><input value={newSubtaskText} onChange={event => setNewSubtaskText(event.target.value)} disabled={!canChecklist} placeholder="عنوان مورد جدید…" className="ui-input flex-1" /><Button type="submit" variant="secondary" disabled={!canChecklist || !newSubtaskText.trim()}>افزودن</Button></form>
         </section>}
 
-        {hasPermission('assets.view') && <TaskAssetsSection key={task.id} task={task} />}
+        {/* پیوست‌ها/دارایی‌های وظیفه در این پنجره نمایش داده نمی‌شوند (دور ۸۷):
+            ثبت و مدیریت فایل از مسیر مخزن و از «خروجی‌های مرحله» انجام می‌شود،
+            نه از جزئیات وظیفه. فرم ویرایش وظیفه دست‌نخورده می‌ماند. */}
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        {false && <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
           <div className="mb-4 flex items-center gap-2"><MessageSquare className="h-4 w-4 text-indigo-600" /><h4 className="text-xs font-black text-slate-900">دیدگاه‌ها و هماهنگی‌ها</h4><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{toPersianDigits(task.comments.length)}</span></div>
           <div className="space-y-3">{roots.map(comment => renderComment(comment))}</div>
           {task.comments.length === 0 && <p className="py-3 text-center text-xs text-slate-400">هنوز دیدگاهی ثبت نشده است.</p>}
           <form onSubmit={submitComment} className="mt-4 border-t border-slate-100 pt-4">
             {(replyToId || editingCommentId) && <div className="mb-2 flex items-center justify-between rounded-xl bg-indigo-50 px-3 py-2 text-[10px] font-bold text-indigo-700"><span>{editingCommentId ? 'ویرایش دیدگاه خودتان' : `پاسخ به دیدگاه ${toPersianDigits(replyToId || '')}`}</span><button type="button" onClick={() => { setReplyToId(null); setEditingCommentId(null); setNewCommentText(''); }} aria-label="لغو" className="rounded-lg p-1 hover:bg-white"><X className="h-3.5 w-3.5" /></button></div>}
             <div className="flex gap-2"><input value={newCommentText} disabled={busy || commentSubmitting} onChange={event => setNewCommentText(event.target.value)} placeholder={commentSubmitting ? 'در حال ارسال دیدگاه…' : editingCommentId ? 'متن ویرایش‌شده…' : replyToId ? 'پاسخ خود را بنویسید…' : `ارسال دیدگاه به عنوان ${currentUser.name}…`} className="comment-composer ui-input flex-1" /><Button type="submit" loading={commentSubmitting} disabled={!newCommentText.trim() || busy}>{!commentSubmitting && (editingCommentId ? <Save className="h-4 w-4" /> : <Send className="h-4 w-4 rotate-180" />)}{editingCommentId ? 'ذخیره' : 'ارسال'}</Button></div>
+            <p className="mt-2 text-[10px] font-bold text-slate-400">دیدگاه وظیفه به صاحب وظیفه گزارش می‌شود؛ برای اشارهٔ مستقیم به یک همکار، نام کامل او را بعد از @ بنویسید (مثال: @علی رضایی) تا اعلان اشاره فقط برای همان کاربر ثبت شود.</p>
           </form>
-        </section>
+        </section>}
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        {false && <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
           <button type="button" aria-expanded={historyOpen} onClick={() => setHistoryOpen(open => !open)} className="flex w-full items-center gap-2 text-right">
             <History className="h-4 w-4 text-slate-500" />
             <h4 className="text-xs font-black text-slate-800">تاریخچه فعالیت</h4>
@@ -182,8 +207,8 @@ export const TaskDetailDrawer: React.FC = () => {
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{toPersianDigits(task.activityHistory.length)}</span>
             <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${historyOpen ? 'rotate-180' : ''}`} />
           </button>
-          {historyOpen && <div className="mt-3 border-t border-slate-100 pt-2"><div className="divide-y divide-slate-100">{task.activityHistory.slice(0, 8).map(activity => <div key={activity.id} className="flex items-start justify-between gap-4 py-2.5 text-[11px]"><span className="leading-6 text-slate-600"><strong className="text-slate-800">{users.find(user => user.id === activity.userId)?.name || 'سیستم'}:</strong> {activity.action}</span><time className="shrink-0 text-slate-400">{formatToJalaliNumber(activity.timestamp)}</time></div>)}</div>{task.activityHistory.length === 0 && <p className="py-3 text-center text-xs text-slate-400">تاریخچه‌ای ثبت نشده است.</p>}</div>}
-        </section>
+          <Collapsible open={historyOpen} innerClassName="mt-3 border-t border-slate-100 pt-2"><div className="divide-y divide-slate-100">{task.activityHistory.slice(0, 8).map(activity => <div key={activity.id} className="flex items-start justify-between gap-4 py-2.5 text-[11px]"><span className="leading-6 text-slate-600"><strong className="text-slate-800">{users.find(user => user.id === activity.userId)?.name || 'سیستم'}:</strong> {activity.action}</span><time className="shrink-0 text-slate-400">{formatToJalaliNumber(activity.timestamp)}</time></div>)}</div>{task.activityHistory.length === 0 && <p className="py-3 text-center text-xs text-slate-400">تاریخچه‌ای ثبت نشده است.</p>}</Collapsible>
+        </section>}
       </div>
     </div>
   </Modal>;
