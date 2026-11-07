@@ -10,6 +10,19 @@ jobs:
     timeout-minutes: 8
     permissions:
       pull-requests: write
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - name: Configure PHP
@@ -34,21 +47,11 @@ jobs:
           DB_DATABASE: postgres
           DB_USERNAME: postgres
           DB_PASSWORD: postgres
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: 5432
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: |
           set +e
-          php artisan migrate:fresh --force --no-interaction > mig.out 2>&1
-          (sudo service postgresql start 2>&1) | tail -2
-          until pg_isready -h 127.0.0.1 -p 5432 -U postgres >/dev/null 2>&1; do sleep 1; done
-          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -c 'create database test_db;' 2>/dev/null
-          php artisan migrate:fresh --force --no-interaction --database=pgsql > mig2.out 2>&1
           php artisan test --parallel --recreate-databases --env=testing > ut.out 2>&1
           echo "ec=$?" >> $GITHUB_OUTPUT
       - name: Post
@@ -57,9 +60,8 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const mig = fs.readFileSync('backend/mig2.out','utf8');
             const out = fs.readFileSync('backend/ut.out','utf8');
-            const body = '## PHPUnit failures\n\nmig:\n```\n' + mig.slice(-8000) + '\n```\n\nut:\n```\n' + out.slice(-30000) + '\n```';
+            const body = '## PHPUnit failures\n\n```\n' + out.slice(-30000) + '\n```';
             await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
       - name: Fail
         if: always()
