@@ -143,7 +143,8 @@ test('اسکلت‌های تازه همان قالب محتوای مقصد را 
   assert.match(shimmer, /Array\.from\(\{ length: tabs \}\)/);
 
   // هر چهار اسکلت با نقش «وضعیت» معرفی می‌شوند و تصویرشان از صفحه‌خوان پنهان است.
-  const tail = shimmer.slice(shimmer.indexOf('ListRowsSkeleton'));
+  // فقط چهار اسکلت این دور؛ اسکلت تقویم در دور بعد اضافه شد.
+  const tail = shimmer.slice(shimmer.indexOf('ListRowsSkeleton'), shimmer.indexOf('CalendarSkeleton'));
   assert.equal(tail.match(/role="status" aria-live="polite" aria-busy="true"/g)?.length, 4);
   assert.equal(tail.match(/<div aria-hidden="true"/g)?.length, 4);
 });

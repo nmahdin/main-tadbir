@@ -12,12 +12,15 @@ import { UIProvider } from './context/UIContext';
 import { ProtectedRoute } from './routing/ProtectedRoute';
 import { RouteEntity } from './routing/RouteEntity';
 import { PageTitle } from './routing/PageTitle';
+import { viewSkeleton } from './routing/viewFallbacks';
 import { readContentLink, readIdeaLink, readTaskLink } from './utils/taskDeepLink';
 import { preloadGlobalSearch } from './routing/lazyOverlays';
 import { runtime } from './config/runtime';
 import { installModalExitLayer } from './utils/modalExitLayer';
 import { ConnectionBanner } from './components/common/ConnectionBanner';
-import { LoadingState, ErrorState } from './components/common/Primitives';
+// `LoadingState` فقط برای گیت ورود (بررسی نشست) مانده است؛ صفحه‌های داخل
+// سامانه اسکلت هم‌شکل خودشان را دارند.
+import { ErrorState, LoadingState } from './components/common/Primitives';
 import { MaintenanceScreen } from './components/maintenance/MaintenanceScreen';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
@@ -263,8 +266,11 @@ const MainLayout: React.FC = () => {
         <main tabIndex={-1} className={`flex-1 overflow-y-auto overflow-x-hidden focus:outline-hidden ${activeView === 'messages' ? 'p-0' : 'p-2 sm:p-3'}`}>
           {/* مرز خطای هر نما: کرش یک بخش، کل سامانه را از کار نمی‌اندازد.
               کلید ریست شامل مسیر هم هست تا رفتن به پروندهٔ دیگر، دوباره تلاش کند. */}
-          <ErrorBoundary resetKey={`${activeView}:${location.pathname}`}><React.Suspense fallback={<WorkspaceLoader label="در حال بارگذاری صفحه…" />}>
-            <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? <LoadingState /> : renderActiveView()}</RouteEntity>
+          <ErrorBoundary resetKey={`${activeView}:${location.pathname}`}>
+            {/* اسکلت هم‌شکل همان نما (دور ۱۰۰): تا دانلود کد صفحه، چرخندهٔ
+                تمام‌صفحه دیده نمی‌شود. */}
+            <React.Suspense fallback={viewSkeleton(activeView)}>
+            <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? viewSkeleton(activeView) : renderActiveView()}</RouteEntity>
             <PageTransitionReady view={activeView} onReady={finishPageTransition} />
           </React.Suspense></ErrorBoundary>
         </main>

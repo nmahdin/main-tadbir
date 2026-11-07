@@ -354,3 +354,53 @@ export const DetailPageSkeleton: React.FC<{ label?: string; tabs?: number }> = (
     </div>
   </div>
 );
+
+/**
+ * اسکلت تقویم (دور ۱۰۰): همان نوار ابزار بازه، همان نوار هفت‌روزهٔ روزهای هفته و
+ * همان شبکهٔ هفت‌ستونی تقویم ماهانه — با همان `gap-1.5`، همان سلول‌های
+ * `rounded-2xl` و همان ارتفاع، تا با آمدن دادهٔ واقعی هیچ روزی جابه‌جا نشود.
+ */
+export const CalendarSkeleton: React.FC<{ label?: string; weeks?: number; className?: string }> = ({
+  label = 'در حال آماده‌سازی تقویم…',
+  weeks = 5,
+  className = '',
+}) => (
+  <div role="status" aria-live="polite" aria-busy="true" className={`space-y-2 ${className}`}>
+    <span className="sr-only">{label}</span>
+    <div aria-hidden="true" className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <SkeletonBlock className="h-8 w-8 rounded-xl" />
+          <SkeletonBlock className="h-8 w-24 rounded-xl" />
+          <SkeletonBlock className="h-8 w-8 rounded-xl" />
+        </div>
+        <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white p-1">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <SkeletonBlock key={index} className="h-7 w-14 rounded-xl" />
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-1.5">
+        {['شنبه', 'یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'].map(day => (
+          <div key={day} className="truncate py-1 text-center text-[10px] font-bold text-slate-400 sm:text-xs">{day}</div>
+        ))}
+      </div>
+      {/* همان پوشش اسکرول افقی تقویم واقعی؛ روی موبایل شبکه فشرده نمی‌شود. */}
+      <div className="-mx-1 overflow-x-auto px-1 pb-1">
+      <div className="grid min-w-[52rem] grid-cols-7 gap-1.5">
+        {Array.from({ length: weeks * 7 }).map((_, index) => (
+          <div key={index} className="flex min-h-[128px] flex-col rounded-2xl bg-white p-2 ring-1 ring-inset ring-slate-100 sm:min-h-[156px]">
+            <SkeletonBlock className="h-5 w-7 rounded-lg" />
+            <div className="mt-1.5 min-w-0 flex-1 space-y-1">
+              {/* الگوی رویدادها پایدار است (بر اساس اندیس، نه تصادفی). */}
+              {index % 3 === 0 && <SkeletonBlock className="h-4 w-full rounded-md" />}
+              {index % 4 === 1 && <SkeletonBlock className="h-4 w-4/5 rounded-md" />}
+              {index % 5 === 2 && <SkeletonBlock className="h-4 w-3/5 rounded-md" />}
+            </div>
+          </div>
+        ))}
+      </div>
+      </div>
+    </div>
+  </div>
+);

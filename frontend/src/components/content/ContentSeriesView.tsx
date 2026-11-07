@@ -27,7 +27,7 @@ import { SeriesCalendar } from './SeriesCalendar';
 import { seriesCalendarEntries } from '../../utils/seriesCalendar';
 import { CALENDAR_WEEKDAYS } from '../calendar/CalendarViews';
 import { useSlidingTabs } from '../common/SlidingTabs';
-import { DetailPageSkeleton, ListRowsSkeleton, ReportSkeleton } from '../common/Shimmer';
+import { CalendarSkeleton, DetailPageSkeleton, ListRowsSkeleton } from '../common/Shimmer';
 
 const weekdayOf = (iso?: string): string => {
   if (!iso) return '';
@@ -529,7 +529,7 @@ export const ContentSeriesView: React.FC = () => {
 
         {tab === 'schedule' && (
           <Panel icon={CalendarClock} title="تقویم آینده" subtitle="محاسبه قطعی سمت سرور و بر پایه تقویم سازمان است.">
-            {schedule.isLoading && <ReportSkeleton label="در حال محاسبه تقویم…" />}
+            {schedule.isLoading && <CalendarSkeleton label="در حال محاسبه تقویم…" />}
             {schedule.isError && <ErrorState error={schedule.error} onRetry={() => schedule.refetch()} />}
             {(plannedPeriods.length > 0 || createdInCalendar > 0) && <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
               <SeriesCalendar

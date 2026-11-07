@@ -12,6 +12,7 @@ import {
 } from '../calendar/CalendarViews';
 import { formatPersianDate, formatPersianTime } from '../../utils/date';
 import { CalendarDayModal } from '../calendar/CalendarDayModal';
+import { CalendarSkeleton } from '../common/Shimmer';
 import { sortCalendarEventsByTime } from '../../utils/calendarTone';
 import {
   groupSeriesCalendarEntries,
@@ -177,7 +178,8 @@ export const SeriesCalendar: React.FC<SeriesCalendarProps> = ({
       </p>
 
       {loading
-        ? <p className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-xs font-bold text-slate-500">در حال محاسبهٔ روزهای مجموعه‌ها…</p>
+        /* اسکلت هم‌شکل شبکهٔ تقویم، نه متن «در حال …» (دور ۱۰۰). */
+        ? <CalendarSkeleton label="در حال محاسبهٔ روزهای مجموعه‌ها…" />
         : <CalendarGrid
             days={days}
             mode={rangeMode}

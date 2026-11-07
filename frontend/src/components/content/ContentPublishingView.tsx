@@ -15,7 +15,6 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
-  Plus,
   Filter,
   Globe,
   Instagram,
@@ -188,17 +187,6 @@ export const ContentPublishingView: React.FC = () => {
           >
             مدیریت و تولید محتوا
           </button>
-          <button
-            data-button-action="create"
-            onClick={() => {
-              const firstReady = contents.find(c => c.status === 'ready_to_publish' || c.publishInfo?.status === 'ready');
-              if (firstReady) openScheduleModal(firstReady);
-            }}
-            className="ui-form-action min-h-8 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-200 transition-all flex items-center gap-2 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>زمان‌بندی انتشار جدید</span>
-          </button>
         </div>
       </div>
 
@@ -366,7 +354,7 @@ export const ContentPublishingView: React.FC = () => {
               <Share2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <h3 className="text-base font-bold text-slate-800">محتوایی در این فیلتر یافت نشد</h3>
               <p className="text-xs text-slate-500 mt-1">
-                برای تنظیم زمان‌بندی انتشار از دکمه «زمان‌بندی انتشار جدید» استفاده کنید.
+                برای تعیین زمان انتشار، از تقویم انتشار یا دکمهٔ «تنظیمات» هر محتوا استفاده کنید.
               </p>
             </div>
           ) : (
