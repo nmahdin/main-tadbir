@@ -379,6 +379,15 @@ Route::prefix('v1')->group(function (): void {
         // account; specific billing permissions are NOT required to read
         // catalog). Administration lives under /platform/billing above.
         Route::get('billing/catalog', [\App\Http\Controllers\Api\V1\BillingCatalogController::class, 'index'])->name('api.v1.billing.catalog');
+
+        // C5-M2-S3 owner-scoped quotes (personal quotes require an active
+        // personal workspace; organization quotes require organization.billing.manage).
+        // Idempotent creation via Idempotency-Key header.
+        Route::get('billing/quotes', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'indexForPersonal'])->name('api.v1.billing.quotes.personal.index');
+        Route::post('billing/quotes/personal', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'createForPersonal'])->name('api.v1.billing.quotes.personal.create');
+        Route::get('billing/quotes/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'indexForOrganization'])->name('api.v1.billing.quotes.org.index');
+        Route::post('billing/quotes/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'createForOrganization'])->name('api.v1.billing.quotes.org.create');
+        Route::get('billing/quotes/{quote}', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'show'])->name('api.v1.billing.quotes.show')->whereNumber('quote');
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
         // UX-02-3-FINAL: bulk status reuses the single-record service per task.
         Route::post('tasks/bulk-status', [TaskController::class, 'bulkStatus'])->middleware('permission:tasks.view')->name('api.v1.tasks.bulk-status');
