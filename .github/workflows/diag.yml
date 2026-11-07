@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      contents: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
@@ -20,6 +21,19 @@ jobs:
       - name: Install
         working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Pint fix
+        working-directory: backend
+        run: php vendor/bin/pint app/Core app/Http/Controllers app/Console/Commands tests/Feature/Core/BillingQuoteTest.php
+      - name: Push pint
+        run: |
+          git config user.name "arena-agent"
+          git config user.email "arena@example.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            # don't commit vendor drift
+            git commit -m "style(c5-m2-s3-audit): pint"
+            git push
+          fi
       - name: PHPUnit filter
         id: ut
         working-directory: backend
@@ -44,3 +58,6 @@ jobs:
             let out='';
             try{out=fs.readFileSync('backend/ut.out','utf8')}catch(e){out='no ut.out'}
             await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body:'## diag\n\n```\n'+out.slice(-15000)+'\n```'});
+      - name: Fail
+        if: always()
+        run: exit ${{ steps.ut.outputs.ec }}
