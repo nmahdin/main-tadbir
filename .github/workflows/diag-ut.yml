@@ -1,4 +1,4 @@
-name: PHPUnit verbose (ephemeral)
+name: PHPUnit errors only (ephemeral)
 on:
   pull_request:
   push:
@@ -22,7 +22,7 @@ jobs:
       - name: Install
         working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: PHPUnit verbose
+      - name: PHPUnit errors only
         id: ut
         working-directory: backend
         env:
@@ -35,7 +35,7 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           set +e
-          php vendor/bin/phpunit --colors=always --testdox > ut.out 2>&1
+          php vendor/bin/phpunit --colors=never > ut.out 2>&1
           echo "ec=$?" >> $GITHUB_OUTPUT
       - name: Post
         if: always() && github.event_name == 'pull_request'
@@ -44,7 +44,17 @@ jobs:
           script: |
             const fs = require('fs');
             const out = fs.readFileSync('backend/ut.out','utf8');
-            const body = '## PHPUnit failures (canonical sqlite)\n\n```\n' + out.slice(-40000) + '\n```';
+            // Print summary and error sections only
+            const lines = out.split('\n');
+            const errLines = [];
+            let capture = false;
+            for (const l of lines) {
+              if (/^There (was|were)/.test(l) || /^ERRORS!/.test(l) || /^FAILURES!/.test(l)) { errLines.push(l); capture=true; continue; }
+              if (/^E /.test(l) || /^\d+\) /.test(l)) { errLines.push(l); capture=true; continue; }
+              if (capture && l.trim().length > 0) { errLines.push(l); }
+              if (capture && /^$/.test(l) && errLines.length > 0 && errLines[errLines.length-1] !== '') { errLines.push(l); }
+            }
+            const body = '## PHPUnit errors\n\n```\n' + errLines.slice(-300).join('\n').slice(-30000) + '\n\n---full tail---\n' + out.slice(-8000) + '\n```';
             await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
       - name: Fail
         if: always()
