@@ -15,7 +15,7 @@ function menu(env:LabEnvironment):Section[]{
  const nav=env==='organization'?ORGANIZATION_NAV:PLATFORM_NAV;
  return [{key:'management',title:env==='organization'?'مدیریت سازمان':'مدیریت پلتفرم',items:nav.map(x=>({key:x.key,title:x.title,icon:x.icon}))}];
 }
-export function OceanShellPlayground({initialEnv='workspace',initialWidth=1440}: {initialEnv?:LabEnvironment;initialWidth?:LabDevice}){
+export function OceanShellPlayground({initialEnv='workspace',initialWidth=1440,hideControls=false}: {initialEnv?:LabEnvironment;initialWidth?:LabDevice;hideControls?:boolean}){
  const [env,setEnv]=useState<LabEnvironment>(initialEnv);
  const [width,setWidth]=useState<LabDevice>(initialWidth);
  const [collapsed,setCollapsed]=useState(defaultCollapsed(initialWidth));
@@ -90,13 +90,13 @@ export function OceanShellPlayground({initialEnv='workspace',initialWidth=1440}:
   </aside>;
  }
  return <section className="odl-shell" aria-label="پوستهٔ تعاملی Ocean" data-lab="shell">
-  <div className="odl-controls">
+  {!hideControls&&<div className="odl-controls">
    <label>محیط نمونه<select aria-label="محیط نمونه" value={env} onChange={e=>chooseEnvironment(e.target.value as LabEnvironment)}>
     {LAB_ENVS.map(v=><option key={v.value} value={v.value}>{v.label}</option>)}</select></label>
    <div className="odl-width-controls" role="group" aria-label="عرض پیش‌نمایش">
     {LAB_WIDTHS.map(v=><button key={v} aria-pressed={width===v} onClick={()=>chooseWidth(v)}>{v}px</button>)}
    </div><span className="odl-fine-print">داده‌های ساختگی · بدون اتصال به API</span>
-  </div>
+  </div>}
   <div className="odl-frame-scroll"><div className="odl-frame" style={{width}} data-width={width}>
    <div className="odl-app">
     {!mobile&&aside(false)}
