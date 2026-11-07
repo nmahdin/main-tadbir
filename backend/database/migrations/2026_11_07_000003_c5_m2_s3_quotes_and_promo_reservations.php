@@ -22,8 +22,6 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0');
-
         Schema::create('core_billing_quotes', function (Blueprint $table) {
             $table->bigIncrements('id');
             // Owner pair — exactly one of (organization_id, personal_workspace_id).
@@ -93,15 +91,11 @@ return new class extends Migration
             $table->index(['owner_key', 'promo_id', 'state'], 'billing_reservations_owner_promo_idx');
         });
 
-        // CHECK constraints (MySQL/MariaDB; portable via raw statement; silently
-        // ignored by engines that do not enforce CHECK, but SQLite in-memory
-        // tests and the MySQL/MariaDB migration gates will catch violations).
-        // Owner pair XOR; period domain; status domain; amounts non-negative;
-        // reservation state domain.
-        DB::statement('ALTER TABLE core_billing_quotes ADD CONSTRAINT billing_quotes_owner_xor CHECK (
-            (organization_id IS NOT NULL AND personal_workspace_id IS NULL) OR
-            (organization_id IS NULL AND personal_workspace_id IS NOT NULL)
-        )');
+        // CHECK constraints (MySQL/MariaDB; portable via raw statement).
+        // Owner XOR is enforced at the application layer (mirrors
+        // CoreSubscription::booted()) — MySQL refuses CHECK on columns
+        // referenced by SET NULL / CASCADE foreign keys (error 3823), so
+        // we do not express it as a CHECK here.
         DB::statement('ALTER TABLE core_billing_quotes ADD CONSTRAINT billing_quotes_period_valid CHECK (
             period IN (\'monthly\', \'quarterly\', \'annual\')
         )');
@@ -116,8 +110,6 @@ return new class extends Migration
         DB::statement('ALTER TABLE core_billing_promo_reservations ADD CONSTRAINT billing_reservations_state_valid CHECK (
             state IN (\'reserved\', \'released\', \'expired\', \'redeemed\')
         )');
-
-        DB::statement('SET FOREIGN_KEY_CHECKS=1');
     }
 
     public function down(): void

@@ -76,6 +76,20 @@ class CoreBillingQuote extends Model
         'created_by_user_id',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (self $quote): void {
+            $hasOrganization = $quote->organization_id !== null;
+            $hasWorkspace = $quote->personal_workspace_id !== null;
+            if ($hasOrganization === $hasWorkspace) {
+                throw new BillingDomainException(
+                    'quote_owner_invalid',
+                    'A quote requires exactly one owner: an organization or a personal workspace.',
+                );
+            }
+        });
+    }
+
     protected function casts(): array
     {
         return [
