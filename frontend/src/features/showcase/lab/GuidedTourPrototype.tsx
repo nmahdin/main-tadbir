@@ -21,7 +21,7 @@ export function TourStepPopover({step,state,total,missing,onAction}:{step?:TourS
   aria-label="راهنمای گام‌به‌گام آزمایشی" className="odl-tour-panel" onKeyDown={event=>{
    if(event.key==='Escape'){event.preventDefault();onAction({type:'SKIP'});}
    if(event.key==='Tab'){
-    const elements=Array.from(popup.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')??[]);
+    const elements=Array.from(popup.current?.querySelectorAll('button:not(:disabled)')??[]) as HTMLButtonElement[];
     if(!elements.length)return;
     if(event.shiftKey&&document.activeElement===elements[0]){event.preventDefault();elements[elements.length-1].focus();}
     else if(!event.shiftKey&&document.activeElement===elements[elements.length-1]){event.preventDefault();elements[0].focus();}
@@ -75,7 +75,7 @@ export function GuidedTourPrototype(){
   return ()=>{window.removeEventListener('resize',measure);node?.removeEventListener('scroll',measure,true);};
  },[environment,width,state.phase,state.index,step]);
  const active=state.phase!=='idle';
- const visibleIds=typeof document==='undefined'?[]:Array.from(stage.current?.querySelectorAll<HTMLElement>('[data-tour-id]')??[])
+ const visibleIds=typeof document==='undefined'?[]:(Array.from(stage.current?.querySelectorAll('[data-tour-id]')??[]) as HTMLElement[])
   .filter(el=>el.getClientRects().length).map(el=>el.dataset.tourId??'');
  return <section className="odl-tour-prototype" aria-label="تور معرفی نمایشی">
   <div className="odl-controls">
@@ -88,10 +88,10 @@ export function GuidedTourPrototype(){
   </div>
   {!valid&&<p role="alert">تعریف تور معتبر نیست؛ اجرا غیرفعال شد.</p>}
   <div ref={stage} className="odl-tour-stage">
-   <OceanShellPlayground key={environment+'-'+width} initialEnv={environment} initialWidth={width} hideControls/>
+   <div key={environment+'-'+width}><OceanShellPlayground initialEnv={environment} initialWidth={width} hideControls/></div>
    {active&&<div className="odl-tour-layer">
     <TourSpotlight rect={state.phase==='active'&&!missingTarget(visibleIds,step.targetId)?spot:null}/>
-    <TourStepPopover key={state.phase+'-'+state.index} state={state} step={step} total={manifest.steps.length}
+    <TourStepPopover state={state} step={step} total={manifest.steps.length}
      missing={missing} onAction={dispatch}/>
    </div>}
   </div>
