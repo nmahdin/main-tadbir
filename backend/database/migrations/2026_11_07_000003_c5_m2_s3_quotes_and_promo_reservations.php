@@ -25,7 +25,7 @@ return new class extends Migration
         Schema::create('core_billing_quotes', function (Blueprint $table) {
             $table->bigIncrements('id');
             // Owner pair — exactly one of (organization_id, personal_workspace_id).
-            $table->string('owner_key', 80)->charset('ascii')->collation('ascii_bin');
+            $table->string('owner_key', 80);
             $table->unsignedBigInteger('organization_id')->nullable();
             $table->unsignedBigInteger('personal_workspace_id')->nullable();
             // Target plan/price (immutable snapshot; FKs RESTRICT so the
@@ -33,7 +33,7 @@ return new class extends Migration
             // references them).
             $table->unsignedBigInteger('plan_version_id');
             $table->unsignedBigInteger('price_id');
-            $table->string('period', 10)->charset('ascii')->collation('ascii_bin'); // monthly|quarterly|annual
+            $table->string('period', 10); // monthly|quarterly|annual
             // Money snapshot (integer Toman; never recomputed after create).
             $table->bigInteger('subtotal_toman');
             $table->bigInteger('discount_toman');
@@ -47,12 +47,12 @@ return new class extends Migration
             $table->unsignedBigInteger('tax_rule_id')->nullable();
             $table->unsignedInteger('tax_rate_basis_points')->nullable();
             // Lifecycle.
-            $table->string('status', 20)->charset('ascii')->collation('ascii_bin')->default('open'); // open|expired|superseded|converted
+            $table->string('status', 20)->default('open'); // open|expired|superseded|converted
             $table->dateTime('expires_at');
             $table->dateTime('converted_at')->nullable();
             $table->unsignedBigInteger('superseded_by_quote_id')->nullable();
             // Idempotency: single quote per idempotency key (unique).
-            $table->string('idempotency_key', 80)->charset('ascii')->collation('ascii_bin')->unique();
+            $table->string('idempotency_key', 80)->unique();
             // Audit.
             $table->unsignedBigInteger('created_by_user_id')->nullable();
             $table->timestamps();
@@ -76,11 +76,11 @@ return new class extends Migration
             $table->bigIncrements('id');
             $table->unsignedBigInteger('quote_id');
             $table->unsignedBigInteger('promo_id');
-            $table->string('owner_key', 80)->charset('ascii')->collation('ascii_bin');
-            $table->string('state', 16)->charset('ascii')->collation('ascii_bin'); // reserved|released|expired|redeemed
+            $table->string('owner_key', 80);
+            $table->string('state', 16); // reserved|released|expired|redeemed
             $table->dateTime('released_at')->nullable();
             // Idempotency: same quote+promo always resolves to same reservation row.
-            $table->string('idempotency_key', 80)->charset('ascii')->collation('ascii_bin')->unique();
+            $table->string('idempotency_key', 80)->unique();
             $table->timestamps();
 
             $table->foreign('quote_id')->references('id')->on('core_billing_quotes')->cascadeOnDelete();
