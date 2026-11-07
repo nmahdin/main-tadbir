@@ -312,15 +312,26 @@ class BillingQuoteTest extends TestCase
         $v1 = $this->publishedVersion('pers', CorePlan::AUDIENCE_PERSONAL, ['monthly' => 500_000]);
         $svc = app(QuoteService::class);
         $q = $svc->create($this->actor, $this->personalOwner($this->actor), $v1, 'monthly', null, 'ki')['quote'];
+        $subtotalAtCreation = (int) $q->subtotal_toman;
+        $totalAtCreation = (int) $q->total_toman;
+        $priceIdAtCreation = (int) $q->price_id;
 
-        // Simulate future price publication by creating a new price row and
-        // pointing it (supersession). Existing quote amounts unchanged.
+        // Simulate future price change by publishing a new draft
+        // version with a higher monthly price. The existing quote
+        // remains anchored to its original price row and monetary
+        // amounts do not change.
+        $prov = app(PlanProvisioner::class);
+        $prov->createDraftVersion('pers', 2);
+        $v2 = CorePlanVersion::where('version', 2)->firstOrFail();
         $publisher = app(PlanPricePublisher::class);
-        $publisher->createDraftPrice($v1, 'monthly', 600_000, $this->actor);
-        $publisher->publishPrices($v1, ['monthly' => 600_000], $this->actor);
+        $publisher->createDraftPrice($v2, 'monthly', 600_000, $this->actor);
+        $publisher->publishPrices($v2, ['monthly' => 600_000], $this->actor);
+        $prov->publish('pers', 2);
+
         $q->refresh();
-        $this->assertSame(500_000, (int) $q->subtotal_toman);
-        $this->assertSame(500_000, (int) $q->total_toman);
+        $this->assertSame($subtotalAtCreation, (int) $q->subtotal_toman);
+        $this->assertSame($totalAtCreation, (int) $q->total_toman);
+        $this->assertSame($priceIdAtCreation, (int) $q->price_id);
         $this->assertSame(500_000, (int) $q->price->amount_toman, 'Quote must still reference the original price row.');
     }
 

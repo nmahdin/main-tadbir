@@ -107,26 +107,39 @@ final class QuoteService
             $subtotal = (int) $price->amount_toman;
             $this->assertAmountWithinBounds($subtotal);
 
-            // First supersede any existing open quote for the same
-            // (owner, plan version) so its promo reservation is
-            // released before we count open capacity below. Pass 0
-            // as the successor placeholder; we'll stamp the real
-            // new-quote id after insert.
-            $this->supersedeOpenQuotesForOwnerVersion($ownerKey, $lockedVersion->id, 0, $at);
+            // Find the prior open quote (if any) for (owner, version)
+            // so we count capacity without its reservation — it will
+            // be superseded (and its reservation released) atomically
+            // after we insert the new quote.
+            $priorOpen = CoreBillingQuote::query()
+                ->where('owner_key', $ownerKey)
+                ->where('plan_version_id', $lockedVersion->id)
+                ->where('status', CoreBillingQuote::STATUS_OPEN)
+                ->lockForUpdate()
+                ->first();
+            $priorReservationId = null;
+            if ($priorOpen !== null) {
+                $priorReservationId = (int) ($priorOpen->reservations()
+                    ->where('state', CorePromoReservation::STATE_RESERVED)
+                    ->value('id') ?? 0);
+                if ($priorReservationId === 0) {
+                    $priorReservationId = null;
+                }
+            }
 
             // Promo evaluation under promo row lock (if provided).
             $promo = null;
             $discount = 0;
             $reservationIdem = 'quote:'.$idempotencyKey;
-            $ownerRedeemedPlusReserved = $this->countOwnerRedemptionsAndReservations($ownerKey, $promoCode, null);
+            $ownerRedeemedPlusReserved = $this->countOwnerRedemptionsAndReservations($ownerKey, $promoCode, null, $priorReservationId);
             if ($promoCode !== null && $promoCode !== '') {
                 $promo = $this->promos->findByCode($promoCode);
                 if ($promo === null) {
                     throw new BillingDomainException('promo_not_found', 'Promotion code is not recognized.');
                 }
                 $promo = CorePromotion::query()->lockForUpdate()->find($promo->id);
-                $openReservations = $this->countOpenReservationsForPromo($promo->id);
-                $ownerRedeemedPlusReserved = $this->countOwnerRedemptionsAndReservations($ownerKey, null, $promo->id);
+                $openReservations = $this->countOpenReservationsForPromo($promo->id, $priorReservationId);
+                $ownerRedeemedPlusReserved = $this->countOwnerRedemptionsAndReservations($ownerKey, null, $promo->id, $priorReservationId);
 
                 $result = $this->promos->evaluate($promo->code, $subtotal, $openReservations, $ownerRedeemedPlusReserved, $at);
                 $discount = (int) $result['discount_toman'];
@@ -180,13 +193,11 @@ final class QuoteService
                 ]);
             }
 
-            // Stamp the newly-created quote as the successor of
-            // any quotes we superseded earlier.
-            CoreBillingQuote::query()
-                ->where('owner_key', $ownerKey)
-                ->where('plan_version_id', $lockedVersion->id)
-                ->where('superseded_by_quote_id', 0)
-                ->update(['superseded_by_quote_id' => (int) $quote->id]);
+            // Supersede any remaining open quote for the same
+            // (owner, plan version) — release its reservation in
+            // the same transaction and stamp the new quote as
+            // successor.
+            $this->supersedeOpenQuotesForOwnerVersion($ownerKey, $lockedVersion->id, (int) $quote->id, $at);
 
             $this->audit->record(
                 $actor,
@@ -385,53 +396,25 @@ final class QuoteService
         }
     }
 
-    /**
-     * After a new quote is created, stamp superseded prior rows with
-     * superseded_by_quote_id pointing at the new quote. Called by
-     * create() inside the same transaction after insert.
-     */
-    public function linkSupersededBy(int $newQuoteId, string $ownerKey, int $planVersionId, CarbonImmutable $at): void
-    {
-        CoreBillingQuote::query()
-            ->where('owner_key', $ownerKey)
-            ->where('plan_version_id', $planVersionId)
-            ->where('status', CoreBillingQuote::STATUS_SUPERSEDED)
-            ->whereNull('superseded_by_quote_id')
-            ->where('id', '!=', $newQuoteId)
-            ->update(['superseded_by_quote_id' => $newQuoteId]);
-    }
-
-    private function countOpenReservationsForPromo(int $promoId): int
+    private function countOpenReservationsForPromo(int $promoId, ?int $excludeReservationId = null): int
     {
         return (int) CorePromoReservation::query()
             ->where('promo_id', $promoId)
             ->where('state', CorePromoReservation::STATE_RESERVED)
+            ->when($excludeReservationId !== null, fn ($q) => $q->where('id', '!=', $excludeReservationId))
             ->count();
     }
 
-    private function countOwnerRedemptionsAndReservations(string $ownerKey, ?string $unusedCode, ?int $promoId): int
+    private function countOwnerRedemptionsAndReservations(string $ownerKey, ?string $unusedCode, ?int $promoId, ?int $excludeReservationId = null): int
     {
         if ($promoId === null) {
             return 0;
         }
-        // Count reserved reservations for this owner+promo that are
-        // still consuming capacity. Redeemed counts come from the
-        // promo owner counter not per-owner (we don't have a
-        // per-owner redemption table; per_owner_limit counts
-        // reservations the owner currently holds against this
-        // promo — a conservative interpretation that prevents
-        // double-dipping via serial quote-reserve-and-expire abuse,
-        // consistent with "counting redeemed + open valid reservations").
-        //
-        // Since core_promotions does not track per-owner redeemed
-        // history (that would be a separate table), we count
-        // currently-reserved rows for (owner, promo) only; prior
-        // redemptions that completed and whose reservations are
-        // 'redeemed' also count.
         return (int) CorePromoReservation::query()
             ->where('owner_key', $ownerKey)
             ->where('promo_id', $promoId)
             ->whereIn('state', [CorePromoReservation::STATE_RESERVED, CorePromoReservation::STATE_REDEEMED])
+            ->when($excludeReservationId !== null, fn ($q) => $q->where('id', '!=', $excludeReservationId))
             ->count();
     }
 
