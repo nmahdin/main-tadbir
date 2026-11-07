@@ -138,7 +138,16 @@ final class QuoteService
                     throw new BillingDomainException('promo_not_found', 'Promotion code is not recognized.');
                 }
                 $promo = CorePromotion::query()->lockForUpdate()->find($promo->id);
+                // Count open reservations globally. The prior open
+                // quote for this (owner, version) is about to be
+                // superseded and its reservation released in the
+                // same transaction, so exclude it: the slot is
+                // atomically transferred to the new quote. This is
+                // safe because supersession only ever targets
+                // quotes of the SAME owner-key.
                 $openReservations = $this->countOpenReservationsForPromo($promo->id, $priorReservationId);
+                // Per-owner limit: same reasoning — exclude the
+                // reservation we are about to release.
                 $ownerRedeemedPlusReserved = $this->countOwnerRedemptionsAndReservations($ownerKey, null, $promo->id, $priorReservationId);
 
                 $result = $this->promos->evaluate($promo->code, $subtotal, $openReservations, $ownerRedeemedPlusReserved, $at);

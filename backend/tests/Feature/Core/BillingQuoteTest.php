@@ -14,6 +14,7 @@ use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Plans\CorePlan;
+use App\Core\Plans\CorePlanVersion;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Plans\PlanProvisioningException;
 use App\Core\Rbac\MembershipPermissions;
@@ -150,10 +151,12 @@ class BillingQuoteTest extends TestCase
         // Before expiry (29:59 after creation) still open.
         $this->assertTrue($q->isOpen());
         $this->assertFalse($q->isExpiredAt($at->addMinutes(29)->addSeconds(59)));
-        // At exact expires_at: expired.
+        // At exact expires_at: expired per boundary rule (gte).
         $this->assertTrue($q->isExpiredAt($at->addMinutes(30)));
 
-        // Lazy expiry via findForOwner:
+        // Put expires_at in the real past to exercise lazy expiry
+        // via findForOwner (wall-clock now must be >= expires_at).
+        $q->forceFill(['expires_at' => CarbonImmutable::now()->subSecond()])->save();
         $found = $svc->findForOwner((int) $q->id, $this->personalOwner($this->actor));
         $this->assertSame(CoreBillingQuote::STATUS_EXPIRED, $found->status);
     }
@@ -208,34 +211,23 @@ class BillingQuoteTest extends TestCase
         $v = $this->publishedVersion('pers', CorePlan::AUDIENCE_PERSONAL, ['monthly' => 100_000]);
         $promo = $this->createPromo('RACE', 'fixed', null, 10_000, maxRedemptions: 1);
         $svc = app(QuoteService::class);
-        $owner = $this->personalOwner($this->actor);
 
-        $winners = 0;
-        $losers = 0;
-        // In a single PHP process, open two parallel transactions via
-        // separate DB connections to simulate concurrent creates.
-        $connA = DB::connection()->getPdo();
-        // Use two separate transactions through the query builder to
-        // force both to evaluate capacity against the same promo row.
-        // Since SQLite in-memory doesn't isolate writes from separate
-        // connections well, we approximate by using two immediate
-        // serialized calls in this test; the MySQL-specific suite
-        // (BillingQuoteConcurrencyMysqlTest) verifies the real
-        // engine-level isolation.
-        for ($i = 0; $i < 2; $i++) {
-            try {
-                $svc->create($this->actor, $owner, $v, 'monthly', 'RACE', 'kc'.$i);
-                $winners++;
-            } catch (\App\Core\Billing\BillingDomainException $e) {
-                if ($e->errorCode === 'promo_capacity_exceeded') {
-                    $losers++;
-                } else {
-                    throw $e;
-                }
-            }
-        }
-        $this->assertSame(1, $winners, 'Exactly one quote reserves the last slot.');
-        $this->assertSame(1, $losers, 'The second attempt fails with capacity exhausted.');
+        // Two distinct users so the second create is NOT just
+        // superseding the first (which would atomically transfer
+        // the single slot). In a real concurrent scenario the
+        // first COMMIT wins and the second caller sees capacity
+        // exhausted; serialized here with a single connection so
+        // the second sequential call deterministically rejects.
+        // The MySQL-specific suite (BillingQuoteConcurrencyMysqlTest)
+        // exercises real engine-level FOR UPDATE isolation.
+        $actorB = User::factory()->create(['status' => 'active']);
+        $ownerB = $this->personalOwner($actorB);
+
+        $svc->create($this->actor, $this->personalOwner($this->actor), $v, 'monthly', 'RACE', 'kc-0');
+
+        $this->expectException(\App\Core\Billing\BillingDomainException::class);
+        $this->expectExceptionMessage('redemption limit');
+        $svc->create($actorB, $ownerB, $v, 'monthly', 'RACE', 'kc-1');
     }
 
     // ---- idempotency ----
