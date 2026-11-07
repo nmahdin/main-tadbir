@@ -18,7 +18,7 @@ use App\Core\Plans\PlanProvisioner;
 use App\Core\Plans\PlanProvisioningException;
 use App\Core\Rbac\MembershipPermissions;
 use App\Core\Rbac\PermissionCatalog;
-use App\Core\Rbac\MembershipStatus;
+use App\Core\Memberships\MembershipStatus;
 use App\Core\Rbac\ScopedPermission;
 use App\Core\Rbac\ScopedRole;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;

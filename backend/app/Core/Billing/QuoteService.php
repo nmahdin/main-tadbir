@@ -128,7 +128,8 @@ final class QuoteService
             $taxable = $subtotal - $discount;
             $taxResult = $this->tax->calculateTax($taxable, $at);
             $taxAmount = (int) $taxResult['amount_toman'];
-            $taxRule = $taxResult['rule'];
+            $taxRule = $taxResult['rule_id'];
+            $taxRateBp = $taxResult['rate_basis_points'];
             $total = $taxable + $taxAmount;
 
             if ($total < 0) {
@@ -154,8 +155,8 @@ final class QuoteService
                 'total_toman' => $total,
                 'promo_id' => $promo?->id,
                 'promo_code_snapshot' => $promo?->code,
-                'tax_rule_id' => $taxRule?->id,
-                'tax_rate_basis_points' => $taxResult['rate_basis_points'],
+                'tax_rule_id' => $taxRule,
+                'tax_rate_basis_points' => $taxRateBp,
                 'status' => CoreBillingQuote::STATUS_OPEN,
                 'expires_at' => $expiresAt->toDateTimeString(),
                 'idempotency_key' => $idempotencyKey,
