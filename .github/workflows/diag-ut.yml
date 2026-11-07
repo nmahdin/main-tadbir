@@ -10,49 +10,32 @@ jobs:
     timeout-minutes: 8
     permissions:
       pull-requests: write
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - name: Configure PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mbstring, pdo_pgsql, fileinfo, zip, opcache
+          extensions: mbstring, pdo_sqlite, fileinfo, zip, opcache
           coverage: none
           tools: composer:v2
       - name: Install
         working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Run phpunit
+      - name: PHPUnit verbose
         id: ut
         working-directory: backend
         env:
           APP_ENV: testing
           APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-          DB_CONNECTION: pgsql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 5432
-          DB_DATABASE: postgres
-          DB_USERNAME: postgres
-          DB_PASSWORD: postgres
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: |
           set +e
-          php artisan test --env=testing > ut.out 2>&1
+          php vendor/bin/phpunit --colors=always --testdox > ut.out 2>&1
           echo "ec=$?" >> $GITHUB_OUTPUT
       - name: Post
         if: always() && github.event_name == 'pull_request'
@@ -61,7 +44,7 @@ jobs:
           script: |
             const fs = require('fs');
             const out = fs.readFileSync('backend/ut.out','utf8');
-            const body = '## PHPUnit failures\n\n```\n' + out.slice(-30000) + '\n```';
+            const body = '## PHPUnit failures (canonical sqlite)\n\n```\n' + out.slice(-40000) + '\n```';
             await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
       - name: Fail
         if: always()
