@@ -6,3 +6,5 @@
 .odl-backdrop{position:absolute;inset:0;z-index:29;border:0;background:rgb(15 23 42 / .42);cursor:pointer}.odl-side--drawer{position:absolute;right:0;top:0;bottom:0;z-index:30;width:min(280px,87%);animation:odl-drawer-in .18s ease-out}@keyframes odl-drawer-in{from{transform:translateX(100%)}to{transform:translateX(0)}}
 @container odl-shell-frame (max-width:900px){.odl-content{padding:14px}.odl-app-header{padding:8px 12px}}@container odl-shell-frame (max-width:600px){.odl-app-header{height:62px;min-height:62px}.odl-context-action{display:none}.odl-header-actions{gap:1px}.odl-kpis{grid-template-columns:1fr}.odl-content-heading h3{font-size:16px}.odl-app{height:630px}.odl-dropdown{min-width:205px}}
 .odl :is(button,input,select,a):focus-visible{outline:2px solid #39677c;outline-offset:2px}@media(prefers-reduced-motion:reduce){.odl *,.odl *::before,.odl *::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+.odl-kpi-data{display:grid;gap:5px;min-height:104px}.odl-kpi-data svg{color:#39677c}.odl-kpi-data strong{font-size:21px}.odl-kpi-data span{font-size:12px;font-weight:750}.odl-kpi-data small{font-size:10px;color:#617b89}

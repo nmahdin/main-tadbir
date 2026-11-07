@@ -20,7 +20,7 @@ test('FE-ODL-01 demo is isolated from production shell and focus management is p
  const shell=read('src/features/showcase/lab/OceanShellPlayground.tsx');
  const css=read('src/features/showcase/lab/oceanLab.css');
  assert.ok(lab.includes('<OceanDesignLab />'));
- for(const part of ['ORGANIZATION_NAV','PLATFORM_NAV','aria-expanded','aria-current','Escape','data-tour-id','role="status"','onKeyDown','setDrawerOpen'])assert.ok(shell.includes(part),part);
+ for(const part of ['ORGANIZATION_NAV','PLATFORM_NAV','aria-expanded','aria-current','Escape','data-tour-id','role="status"',"addEventListener('keydown'",'setDrawerOpen'])assert.ok(shell.includes(part),part);
  for(const forbidden of ['useApp(', 'useAuth(', 'useEnvironment(', 'logoutSession(', 'navigate(', 'fetch(', 'localStorage'])assert.ok(!shell.includes(forbidden),forbidden);
  assert.ok(css.includes('container-type:inline-size'));
  assert.ok(css.includes('@container odl-shell-frame (max-width:600px)'));

@@ -1,7 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {Bell,ChevronDown,FolderKanban,LayoutDashboard,ListTodo,Menu,PanelRightClose,PanelRightOpen,Settings2,ShieldCheck,UserRound,X,type LucideIcon} from 'lucide-react';
 import {ORGANIZATION_NAV,PLATFORM_NAV} from '../../../app/shell/navigation';
-import {KpiCard} from '../../dashboard/widgets';
+import {Card} from '../../../shared/ui/Primitives';
 import {PrimaryContentContainer} from '../../../shared/ui/PrimaryContentContainer';
 import {LAB_ENVS,LAB_WIDTHS,defaultCollapsed,mobileDrawer,toggleGroup,ensureActive,type LabDevice,type LabEnvironment} from './shellState';
 type Item={key:string;title:string;icon:LucideIcon;disabled?:boolean};
@@ -124,8 +124,10 @@ export function OceanShellPlayground({initialEnv='workspace',initialWidth=1440}:
      <main className="odl-content" data-tour-id="demo-dashboard">
       <div className="odl-content-heading"><div><small>OCEAN / DASHBOARD</small><h3>پیشخوان {label.label}</h3><p>نمونهٔ صفحه با طراحی مصوب و داده‌های فرضی.</p></div>
        <span className="odl-preview-tag">نمایشی</span></div>
-      <div className="odl-kpis"><KpiCard icon={FolderKanban} label="پروژه‌های نمونه" value="۱۲" hint="کارت مستقل · ۲۰px"/>
-       <KpiCard icon={ListTodo} label="وظایف نمونه" value="۲۸" hint="سایهٔ بسیار ملایم"/></div>
+      <div className="odl-kpis">
+       <Card elevation="standalone"><div className="odl-kpi-data"><FolderKanban size={19} aria-hidden/><strong>۱۲</strong><span>پروژه‌های نمونه</span><small>کارت مستقل · ۲۰px</small></div></Card>
+       <Card elevation="standalone"><div className="odl-kpi-data"><ListTodo size={19} aria-hidden/><strong>۲۸</strong><span>وظایف نمونه</span><small>سایهٔ بسیار ملایم</small></div></Card>
+      </div>
       <PrimaryContentContainer elevation="soft" className="odl-primary">
        <h4>محدودهٔ اصلی محتوا</h4><p>گوشه‌های ۲۴ پیکسل و سایهٔ ظریف؛ بدون سایهٔ تو در تو.</p>
        <div className="odl-nested">پنل داخلی · ۱۶ پیکسل · بدون سایه</div>
