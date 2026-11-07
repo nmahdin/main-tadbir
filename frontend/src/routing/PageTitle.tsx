@@ -3,8 +3,9 @@ import { useLocation } from 'react-router-dom';
 import type { ActiveView } from '../types';
 import { runtime } from '../config/runtime';
 import { resolveRoute } from './routes';
+import { PAGE_TITLE_SUFFIX } from './brandName';
 
-export const PAGE_TITLE_SUFFIX = 'پلتفرم تدبیر';
+export { PAGE_TITLE_SUFFIX };
 
 const pageNames: Record<ActiveView, string> = {
   dashboard: 'داشبورد',
