@@ -15,6 +15,7 @@ use App\Core\Subscriptions\SubscriptionOwner;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Core\Workspaces\Workspace;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

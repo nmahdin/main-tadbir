@@ -107,6 +107,13 @@ final class QuoteService
             $subtotal = (int) $price->amount_toman;
             $this->assertAmountWithinBounds($subtotal);
 
+            // First supersede any existing open quote for the same
+            // (owner, plan version) so its promo reservation is
+            // released before we count open capacity below. Pass 0
+            // as the successor placeholder; we'll stamp the real
+            // new-quote id after insert.
+            $this->supersedeOpenQuotesForOwnerVersion($ownerKey, $lockedVersion->id, 0, $at);
+
             // Promo evaluation under promo row lock (if provided).
             $promo = null;
             $discount = 0;
@@ -173,11 +180,13 @@ final class QuoteService
                 ]);
             }
 
-            // Supersede any existing open quote for the same
-            // (owner, plan version) — SPEC M2-R5. Release its
-            // reservation in the same transaction and stamp the
-            // new quote as the successor.
-            $this->supersedeOpenQuotesForOwnerVersion($ownerKey, $lockedVersion->id, (int) $quote->id, $at);
+            // Stamp the newly-created quote as the successor of
+            // any quotes we superseded earlier.
+            CoreBillingQuote::query()
+                ->where('owner_key', $ownerKey)
+                ->where('plan_version_id', $lockedVersion->id)
+                ->where('superseded_by_quote_id', 0)
+                ->update(['superseded_by_quote_id' => (int) $quote->id]);
 
             $this->audit->record(
                 $actor,
@@ -219,7 +228,7 @@ final class QuoteService
         if ($quote === null) {
             return null;
         }
-        $this->lazyExpireIfNeeded($quote);
+        $this->lazyExpireIfNeeded($quote, CarbonImmutable::now());
 
         return $quote->fresh(['price', 'planVersion.plan', 'promo', 'taxRule']);
     }

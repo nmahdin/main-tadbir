@@ -316,8 +316,8 @@ class BillingQuoteTest extends TestCase
         // Simulate future price publication by creating a new price row and
         // pointing it (supersession). Existing quote amounts unchanged.
         $publisher = app(PlanPricePublisher::class);
-        $newDraft = $publisher->createDraft($v1, 'monthly', 600_000, $this->actor);
-        $publisher->publish($v1, ['monthly' => 600_000], $this->actor);
+        $publisher->createDraftPrice($v1, 'monthly', 600_000, $this->actor);
+        $publisher->publishPrices($v1, ['monthly' => 600_000], $this->actor);
         $q->refresh();
         $this->assertSame(500_000, (int) $q->subtotal_toman);
         $this->assertSame(500_000, (int) $q->total_toman);
