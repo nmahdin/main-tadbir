@@ -270,9 +270,9 @@ const MainLayout: React.FC = () => {
             {/* اسکلت هم‌شکل همان نما (دور ۱۰۰): تا دانلود کد صفحه، چرخندهٔ
                 تمام‌صفحه دیده نمی‌شود. */}
             <React.Suspense fallback={viewSkeleton(activeView)}>
-            <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? viewSkeleton(activeView) : renderActiveView()}</RouteEntity>
-            <PageTransitionReady view={activeView} onReady={finishPageTransition} />
-          </React.Suspense></ErrorBoundary>
+              <RouteEntity>{isWorkspaceLoading && !['dashboard','projects','my-tasks','content','notifications','approvals'].includes(activeView) ? viewSkeleton(activeView) : renderActiveView()}</RouteEntity>
+              <PageTransitionReady view={activeView} onReady={finishPageTransition} />
+            </React.Suspense></ErrorBoundary>
         </main>
       </div>
 
