@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\V1\Platform\PlatformAssignmentController;
 use App\Http\Controllers\Api\V1\Platform\PlatformAuditController;
 use App\Http\Controllers\Api\V1\Platform\PlatformBillingPriceController;
 use App\Http\Controllers\Api\V1\Platform\PlatformOrganizationController;
+use App\Http\Controllers\Api\V1\Platform\PlatformPromotionController;
+use App\Http\Controllers\Api\V1\Platform\PlatformTaxRuleController;
 use App\Http\Controllers\Api\V1\Platform\PlatformRoleController;
 use App\Http\Controllers\Api\V1\Platform\PlatformSubscriptionController;
 use App\Http\Controllers\Api\V1\Platform\PlatformUserController;
@@ -49,4 +51,13 @@ Route::prefix('platform')->name('api.v1.platform.')->group(function (): void {
     // Stage C5-M2-S1 — commercial price administration (platform.billing.manage).
     Route::get('billing/plans/{planKey}/prices', [PlatformBillingPriceController::class, 'showPlanPrices'])->name('billing.prices.show-plan');
     Route::post('billing/plan-versions/{version}/publish-prices', [PlatformBillingPriceController::class, 'publish'])->name('billing.prices.publish');
+    // Stage C5-M2-S2 — tax rule and promotion administration (platform.billing.manage).
+    Route::get('billing/tax-rules', [PlatformTaxRuleController::class, 'index'])->name('billing.taxes.index');
+    Route::get('billing/tax-rules/active', [PlatformTaxRuleController::class, 'active'])->name('billing.taxes.active');
+    Route::post('billing/tax-rules', [PlatformTaxRuleController::class, 'store'])->name('billing.taxes.store');
+    Route::post('billing/tax-rules/{rule}/activate', [PlatformTaxRuleController::class, 'activate'])->name('billing.taxes.activate');
+    Route::post('billing/tax-rules/{rule}/deactivate', [PlatformTaxRuleController::class, 'deactivate'])->name('billing.taxes.deactivate');
+    Route::get('billing/promotions', [PlatformPromotionController::class, 'index'])->name('billing.promos.index');
+    Route::post('billing/promotions', [PlatformPromotionController::class, 'store'])->name('billing.promos.store');
+    Route::post('billing/promotions/{promotion}/deactivate', [PlatformPromotionController::class, 'deactivate'])->name('billing.promos.deactivate');
 });

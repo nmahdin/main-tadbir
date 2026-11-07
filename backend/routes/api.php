@@ -375,6 +375,10 @@ Route::prefix('v1')->group(function (): void {
         Route::post('users/{user}/account-lifecycle', AccountLifecycleController::class)->name('api.v1.users.account-lifecycle');
         // Platform domain routes (ARCH-01 registrar).
         require app_path('Core/Platform/Routes/api.php');
+        // C5-M2-S2 read-only commercial catalog (any authenticated active
+        // account; specific billing permissions are NOT required to read
+        // catalog). Administration lives under /platform/billing above.
+        Route::get('billing/catalog', [\App\Http\Controllers\Api\V1\BillingCatalogController::class, 'index'])->name('api.v1.billing.catalog');
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
         // UX-02-3-FINAL: bulk status reuses the single-record service per task.
         Route::post('tasks/bulk-status', [TaskController::class, 'bulkStatus'])->middleware('permission:tasks.view')->name('api.v1.tasks.bulk-status');
