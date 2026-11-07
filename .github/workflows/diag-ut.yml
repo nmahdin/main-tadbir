@@ -1,0 +1,39 @@
+name: diag ut (ephemeral)
+on:
+  pull_request:
+  push:
+    branches: ['arena/**']
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip, opcache
+          coverage: none
+          tools: composer:v2
+      - name: Install
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Pint
+        id: pint
+        working-directory: backend
+        run: |
+          set +e
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > pint.out 2>&1
+          echo "ec=$?" >> $GITHUB_OUTPUT
+      - name: Post pint
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('fs');
+            let out='';
+            try{out=fs.readFileSync('backend/pint.out','utf8')}catch(e){out='no pint.out'}
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body:'## pint\n\n```\n'+out.slice(-10000)+'\n```'});
