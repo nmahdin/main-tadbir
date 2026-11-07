@@ -48,7 +48,7 @@ export function OceanShellPlayground({initialEnv='workspace',initialWidth=1440}:
   const key=(event:KeyboardEvent)=>{
    if(event.key==='Escape'){event.preventDefault();setDrawerOpen(false);return;}
    if(event.key!=='Tab')return;
-   const focus=Array.from(drawer.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')??[]);
+   const focus=Array.from(drawer.current?.querySelectorAll('button:not(:disabled)')??[]) as HTMLButtonElement[];
    if(!focus.length)return;
    if(event.shiftKey&&document.activeElement===focus[0]){event.preventDefault();focus[focus.length-1].focus();}
    else if(!event.shiftKey&&document.activeElement===focus[focus.length-1]){event.preventDefault();focus[0].focus();}
