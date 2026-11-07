@@ -20,8 +20,19 @@ const SPINNER_SIZE_CLASS: Record<SpinnerSize, string> = {
   xl: 'w-10 h-10',
 };
 
+/**
+ * نشانگر چرخان مشترک.
+ *
+ * در اندازه‌های `lg`/`xl` — که همیشه لودینگ سطح صفحه یا لایه‌اند، نه چرخندهٔ
+ * ریزِ داخل دکمه — سرعت چرخش بیشتر است (`ui-spin-fast`، یک دور در ۰٫۶ ثانیه).
+ * چرخنده‌های `sm`/`md` همان ۱ ثانیهٔ آرام را نگه می‌دارند تا روی دکمه‌ها آرام
+ * و بی‌سر و صدا بمانند.
+ */
 export const InlineSpinner: React.FC<{ size?: SpinnerSize; className?: string }> = ({ size = 'sm', className = '' }) => (
-  <Loader2 className={`animate-spin ${SPINNER_SIZE_CLASS[size]} ${className}`} aria-hidden="true" />
+  <Loader2
+    className={`animate-spin ${size === 'lg' || size === 'xl' ? 'ui-spin-fast' : ''} ${SPINNER_SIZE_CLASS[size]} ${className}`}
+    aria-hidden="true"
+  />
 );
 
 export const LoadingSpinner: React.FC<{

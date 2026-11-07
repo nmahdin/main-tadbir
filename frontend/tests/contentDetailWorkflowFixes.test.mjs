@@ -90,7 +90,7 @@ test('the reviewer chip uses the same grey tone as the other responsibility chip
   assert.match(chip, /بدون نیاز به ارزیاب/);
   assert.match(chip, /ارزیاب تعیین نشده/);
   // کلیک روی نشان، فهرست انتخاب ارزیاب را باز می‌کند؛ بدون پنجرهٔ ویرایش جریان.
-  assert.match(chip, /stagePersonPanel\(stage, 'reviewer'\)/);
+  assert.match(chip, /stagePersonPanel\(stage, 'reviewer', stagePersonPicker\?\.stageId === stage\.id/);
 });
 
 test('stage deadlines carry tier colours and drive the derived «تأخیر» status', () => {

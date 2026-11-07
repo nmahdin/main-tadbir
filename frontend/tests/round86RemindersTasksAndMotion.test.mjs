@@ -127,8 +127,11 @@ test('یادآوری انتشار عقب‌افتاده هر چند ساعت ت�
 
 test('«خواندن همه»ی پیام‌ها نشانگر لودینگ دارد', () => {
   assert.match(notifications, /const \[markingAll, setMarkingAll\] = useState\(false\);/);
-  assert.match(notifications, /markingAll \? <LoaderCircle className=\"h-4 w-4 animate-spin\" aria-hidden \/> : <CheckCheck/);
-  assert.match(notifications, /'در حال علامت‌گذاری…' : 'خواندن همه'/);
+  // چرخنده و آیکون در یک خانهٔ ثابت جا می‌گیرند و برچسب عرض ثابت دارد تا با
+  // شروع/پایان درخواست جابه‌جا نشوند (دور ۹۱).
+  assert.match(notifications, /markingAll \? <LoaderCircle className=\"h-4 w-4 animate-spin\" \/> : <CheckCheck/);
+  assert.match(notifications, /\{markingAll \? 'در حال علامت‌گذاری…' : 'خواندن همه'\}/);
+  assert.match(notifications, /className=\"invisible col-start-1 row-start-1 whitespace-nowrap\">در حال علامت‌گذاری…/);
   assert.match(notifications, /aria-busy=\{markingAll \|\| undefined\}/);
   // پیام‌های سربرگ هم همان نشانگر را دارند.
   assert.match(navbar, /در حال علامت‌گذاری/);

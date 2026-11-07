@@ -298,8 +298,15 @@ export const TopNavbar: React.FC<{ onOpenSidebar?: () => void }> = ({ onOpenSide
                     aria-busy={readMutation.isPending || undefined}
                     className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer disabled:cursor-wait disabled:opacity-70"
                   >
-                    {readMutation.isPending && <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-                    {readMutation.isPending ? 'در حال علامت‌گذاری…' : 'علامت‌گذاری همه به عنوان خوانده‌شده'}
+                    {/* خانهٔ ثابت آیکون + رزرو عرض برچسب: با شروع/پایان درخواست،
+                        متن و چرخنده جابه‌جا نمی‌شوند. */}
+                    <span className="grid h-3.5 w-3.5 shrink-0 place-items-center" aria-hidden>
+                      {readMutation.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <span className="h-3.5 w-3.5" />}
+                    </span>
+                    <span className="grid text-right">
+                      <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-nowrap">در حال علامت‌گذاری…</span>
+                      <span className="col-start-1 row-start-1 whitespace-nowrap">{readMutation.isPending ? 'در حال علامت‌گذاری…' : 'علامت‌گذاری همه به عنوان خوانده‌شده'}</span>
+                    </span>
                   </button>
                 )}
               </div>

@@ -2,6 +2,7 @@ import { DamLibrary } from '../dam/DamLibrary';
 import { resourceUrl } from '../../utils/resourceUrl';
 import { Button, FormField, Input, Modal, Select, Textarea } from '../common/Primitives';
 import { PersianDatePicker } from '../common/PersianDatePicker';
+import { FloatingMenu } from '../common/FloatingMenu';
 import { AttachmentComposer, attachmentDraftCount, createEmptyAttachmentDraft, persistAttachmentDraft } from '../common/AttachmentComposer';
 import { runtime } from '../../config/runtime';
 import { RelatedRecords } from '../workspace/RelatedRecords';
@@ -1085,10 +1086,13 @@ export const ContentDetailView: React.FC = () => {
           {saving ? <InlineSpinner size="sm" /> : getStageStatusBadge(stage.status, readyForStart, stage.reviewRequired !== false)}
           {canManageContentWorkflow && !saving && <ChevronDown className="h-3 w-3 text-slate-400" aria-hidden />}
         </button>
-        {open && (
-          <>
-            <button type="button" tabIndex={-1} aria-label="بستن فهرست وضعیت مرحله" onClick={() => setStageStatusPicker(null)} className="fixed inset-0 z-30 cursor-default" />
-            <div role="listbox" aria-label="انتخاب وضعیت مرحله" className="absolute right-0 top-full z-40 mt-1 w-52 rounded-xl border border-slate-200 bg-white p-1.5 text-right shadow-xl">
+        <FloatingMenu
+          open={open}
+          onClose={() => setStageStatusPicker(null)}
+          closeLabel="بستن فهرست وضعیت مرحله"
+          className="w-52 rounded-xl border border-slate-200 bg-white p-1.5 text-right shadow-xl"
+        >
+            <div role="listbox" aria-label="انتخاب وضعیت مرحله">
               {/* وضعیت کنونی در سرصفحهٔ فهرست نوشته می‌شود تا حتی اگر گزینه‌ای
                   با نام دیگری هم‌معنا باشد، کاربر بداند کجاست. */}
               <p className="px-2 pb-1 pt-0.5 text-[10px] font-black text-slate-500">
@@ -1110,17 +1114,15 @@ export const ContentDetailView: React.FC = () => {
                       ? 'bg-indigo-600 text-white font-black shadow-xs'
                       : 'font-bold text-slate-700 hover:bg-slate-50'}`}
                   >
-                    <span className="flex items-center gap-1.5">
-                      {current && <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-white" />}
-                      {choice.label}
-                    </span>
+                    {/* گزینهٔ فعال فقط با تیک و زمینهٔ اصلی مشخص می‌شود؛ دایرهٔ
+                        کوچک کنار متن زائد بود (بازخورد کاربر). */}
+                    <span className="flex items-center gap-1.5">{choice.label}</span>
                     {current && <Check className="h-3.5 w-3.5 shrink-0" />}
                   </button>
                 );
               })}
             </div>
-          </>
-        )}
+        </FloatingMenu>
       </div>
     );
   };
@@ -1337,16 +1339,25 @@ export const ContentDetailView: React.FC = () => {
       : { type: 'error', title: 'تغییر وضعیت مرحله انجام نشد', message: commandFailure('دلیل دقیق در پیام‌های سرور آمده است؛ دسترسی و وضعیت جریان را بررسی کنید.') });
   };
 
-  /** فهرست کشویی انتخاب فرد؛ با کلیک بیرون بسته می‌شود و داده‌ای جعل نمی‌کند. */
-  const stagePersonPanel = (stage: ContentStage, field: 'assignee' | 'reviewer') => {
+  /**
+   * فهرست کشویی انتخاب فرد؛ با کلیک بیرون بسته می‌شود و داده‌ای جعل نمی‌کند.
+   *
+   * `open` به‌جای شرطِ رندر در والد پاس داده می‌شود تا پنل هنگام بسته‌شدن هم در
+   * صفحه بماند و انیمیشن خروجش دیده شود (دور ۹۱).
+   */
+  const stagePersonPanel = (stage: ContentStage, field: 'assignee' | 'reviewer', open: boolean) => {
     const options = stagePeopleOptions(stage, field);
     const currentId = field === 'assignee'
       ? stage.assigneeId
       : stage.reviewerId || stage.approverId || content.approverId || content.ownerId;
     return (
-      <>
-        <button type="button" tabIndex={-1} aria-label="بستن فهرست انتخاب فرد" onClick={() => setStagePersonPicker(null)} className="fixed inset-0 z-30 cursor-default bg-transparent" />
-        <div role="listbox" aria-label={field === 'assignee' ? 'انتخاب مسئول انجام مرحله' : 'انتخاب ارزیاب مرحله'} className="absolute right-0 top-full z-40 mt-1 max-h-64 w-60 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 text-right shadow-xl">
+      <FloatingMenu
+        open={open}
+        onClose={() => setStagePersonPicker(null)}
+        closeLabel="بستن فهرست انتخاب فرد"
+        className="max-h-64 w-60 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 text-right shadow-xl"
+      >
+        <div role="listbox" aria-label={field === 'assignee' ? 'انتخاب مسئول انجام مرحله' : 'انتخاب ارزیاب مرحله'}>
           <p className="px-2 pb-1 pt-0.5 text-[10px] font-black text-slate-500">{field === 'assignee' ? 'مسئول انجام این مرحله' : 'ارزیاب این مرحله'}</p>
           {options.map(user => {
             const selected = sameId(user.id, currentId);
@@ -1368,7 +1379,7 @@ export const ContentDetailView: React.FC = () => {
           })}
           {options.length === 0 && <p className="px-2 py-2 text-[10px] font-bold text-slate-400">کاربر فعالی برای انتخاب نیست.</p>}
         </div>
-      </>
+      </FloatingMenu>
     );
   };
 
@@ -1630,7 +1641,7 @@ export const ContentDetailView: React.FC = () => {
                               )}
                               {canAssignStagePeople && <ChevronDown className="h-3 w-3 text-slate-400" aria-hidden />}
                             </button>
-                            {stagePersonPicker?.stageId === stage.id && stagePersonPicker.field === 'assignee' && stagePersonPanel(stage, 'assignee')}
+                            {stagePersonPanel(stage, 'assignee', stagePersonPicker?.stageId === stage.id && stagePersonPicker.field === 'assignee')}
                           </div>
 
                           {/* ارزیاب مرحله؛ همان الگوی مستقیم، با گزینه‌های دارای مجوز تأیید */}
@@ -1662,7 +1673,7 @@ export const ContentDetailView: React.FC = () => {
                               )}
                               {canAssignStagePeople && stage.reviewRequired !== false && <ChevronDown className="h-3 w-3 text-slate-400" aria-hidden />}
                             </button>
-                            {stagePersonPicker?.stageId === stage.id && stagePersonPicker.field === 'reviewer' && stagePersonPanel(stage, 'reviewer')}
+                            {stagePersonPanel(stage, 'reviewer', stagePersonPicker?.stageId === stage.id && stagePersonPicker.field === 'reviewer')}
                           </div>
 
                           {/* مهلت مرحله؛ مثل تراشهٔ مسئول با کلیک همان‌جا تاریخ
@@ -1687,22 +1698,24 @@ export const ContentDetailView: React.FC = () => {
                               {stageDeadlineLabel && <span className="text-[10px] font-bold">· {stageDeadlineLabel}</span>}
                               {canAssignStagePeople && <ChevronDown className="h-3 w-3 opacity-60" aria-hidden />}
                             </button>
-                            {stageDeadlinePicker === stage.id && (
-                              <>
-                                <button type="button" tabIndex={-1} aria-label="بستن انتخاب تاریخ" onClick={() => setStageDeadlinePicker(null)} className="fixed inset-0 z-30 cursor-default bg-transparent" />
-                                {/* دور ۹۰: کلیک روی خود تاریخ، مستقیم تقویم را باز می‌کند؛
-                                    پیش‌تر یک کادر میانی با یک فیلد دیگر باز می‌شد و کاربر
-                                    باید دوباره روی آن فیلد کلیک می‌کرد. */}
-                                <div className="absolute left-0 top-full z-40 mt-1 w-72 text-right">
-                                  <PersianDatePicker
-                                    value={stage.deadline ? String(stage.deadline).slice(0, 10) : ''}
-                                    onChange={date => { setStageDeadlinePicker(null); void changeStageDeadline(stage, date); }}
-                                    variant="panel"
-                                    onClose={() => setStageDeadlinePicker(null)}
-                                  />
-                                </div>
-                              </>
-                            )}
+                            {/* دور ۹۰: کلیک روی خود تاریخ، مستقیم تقویم را باز می‌کند؛
+                                پیش‌تر یک کادر میانی با یک فیلد دیگر باز می‌شد و کاربر
+                                باید دوباره روی آن فیلد کلیک می‌کرد. دور ۹۱: باز و
+                                بسته‌شدن این پنل هم مثل بقیهٔ منوهای شناور نرم شد. */}
+                            <FloatingMenu
+                              open={stageDeadlinePicker === stage.id}
+                              onClose={() => setStageDeadlinePicker(null)}
+                              closeLabel="بستن انتخاب تاریخ"
+                              origin="start"
+                              className="w-72 text-right"
+                            >
+                              <PersianDatePicker
+                                value={stage.deadline ? String(stage.deadline).slice(0, 10) : ''}
+                                onChange={date => { setStageDeadlinePicker(null); void changeStageDeadline(stage, date); }}
+                                variant="panel"
+                                onClose={() => setStageDeadlinePicker(null)}
+                              />
+                            </FloatingMenu>
                           </div>
                         </div>
                       </div>

@@ -184,8 +184,8 @@ test('مسئول و ارزیاب مرحله با کلیک و بدون پنجره
   assert.match(detail, /await assignStageResponsibility\(content\.id, stage\.id, field === 'assignee'/);
   assert.match(detail, /\{ reviewerId: userId, reviewerStrategy: 'stage_reviewer' \}/);
   // هر دو نشان، فهرست انتخاب را باز می‌کنند و گزینه‌ها از دادهٔ واقعی کاربران می‌آیند.
-  assert.match(detail, /stagePersonPanel\(stage, 'assignee'\)/);
-  assert.match(detail, /stagePersonPanel\(stage, 'reviewer'\)/);
+  assert.match(detail, /stagePersonPanel\(stage, 'assignee', stagePersonPicker\?\.stageId === stage\.id/);
+  assert.match(detail, /stagePersonPanel\(stage, 'reviewer', stagePersonPicker\?\.stageId === stage\.id/);
   assert.match(detail, /const stagePeopleOptions = \(stage: ContentStage, field: 'assignee' \| 'reviewer'\) => \{/);
   assert.match(detail, /\(user\.permissions \|\| \[\]\)\.includes\('content\.approve'\)/);
   assert.match(detail, /aria-haspopup=\{canAssignStagePeople \? 'listbox' : undefined\}/);

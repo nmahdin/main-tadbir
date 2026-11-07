@@ -187,7 +187,9 @@ export const PersianDatePicker: React.FC<PersianDatePickerProps> = ({
     <div
       ref={calendarRef}
       style={portal ? calendarPosition : undefined}
-      className={`${panelOnly ? 'relative' : portal ? 'fixed z-[100] max-h-[calc(100vh-1rem)] overflow-y-auto' : 'absolute z-50 mt-2 right-0'} w-72 bg-white rounded-2xl border border-slate-200 shadow-xl p-3.5 animate-in fade-in zoom-in-95 duration-150`}
+      /* در حالت `panel` خودِ والد (FloatingMenu) انیمیشن ورود/خروج را اجرا
+         می‌کند؛ انیمیشن دومی اینجا باعث پرشِ دوبرابر می‌شد. */
+      className={`${panelOnly ? 'relative' : portal ? 'fixed z-[100] max-h-[calc(100vh-1rem)] overflow-y-auto' : 'absolute z-50 mt-2 right-0'} w-72 bg-white rounded-2xl border border-slate-200 shadow-xl p-3.5${panelOnly ? '' : ' animate-in fade-in zoom-in-95 duration-150'}`}
     >
           {/* Header Navigation */}
           <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">

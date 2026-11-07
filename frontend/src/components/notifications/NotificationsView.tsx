@@ -145,8 +145,16 @@ export const NotificationsView: React.FC = () => {
         aria-busy={markingAll || undefined}
         className="ui-button ui-button-secondary w-fit text-xs inline-flex items-center gap-1.5 disabled:cursor-wait"
       >
-        {markingAll ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCheck className="h-4 w-4" />}
-        {markingAll ? 'در حال علامت‌گذاری…' : 'خواندن همه'}
+        {/* خانهٔ ثابت آیکون: چرخنده دقیقاً جای آیکون قبلی می‌نشیند و جابه‌جا نمی‌شود. */}
+        <span className="grid h-4 w-4 shrink-0 place-items-center" aria-hidden>
+          {markingAll ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+        </span>
+        {/* عرض برچسب با بلندترین متن رزرو می‌شود تا با عوض‌شدن متن، دکمه (و
+            چرخندهٔ داخلش) جابه‌جا نشود. */}
+        <span className="grid text-right">
+          <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-nowrap">در حال علامت‌گذاری…</span>
+          <span className="col-start-1 row-start-1 whitespace-nowrap">{markingAll ? 'در حال علامت‌گذاری…' : 'خواندن همه'}</span>
+        </span>
       </button>}
     </header>
 
@@ -172,7 +180,12 @@ export const NotificationsView: React.FC = () => {
               className="ui-button ui-button-ghost ui-icon-button text-emerald-600 disabled:cursor-wait"
               title="خوانده‌شده"
               aria-label="علامت‌گذاری به‌عنوان خوانده‌شده"
-            >{markingId === notification.id ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCircle2 className="h-4 w-4" />}</button>}
+            >
+              {/* همان خانهٔ ثابت: چرخنده و آیکون هم‌اندازه‌اند و جای هم می‌نشینند. */}
+              <span className="grid h-4 w-4 shrink-0 place-items-center" aria-hidden>
+                {markingId === notification.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              </span>
+            </button>}
             <button onClick={() => clearNotification(notification.id)} className="ui-button ui-button-ghost ui-icon-button text-slate-400 hover:text-rose-600" title="حذف اعلان" aria-label="حذف اعلان"><Trash2 className="h-4 w-4" /></button>
           </div>
         </article>;
