@@ -173,18 +173,37 @@ final class TaxRuleService
 
     private function deactivateAllActiveLocked(?User $actor): void
     {
-        // Lock candidate rows FOR UPDATE via an ordered select, then
-        // update; MySQL serializes concurrent creates on this scan.
-        $active = CoreTaxRule::query()
-            ->where('is_active', true)
-            ->lockForUpdate()
-            ->get();
-        foreach ($active as $rule) {
-            $rule->forceFill([
-                'is_active' => false,
-                'deactivated_by' => $actor?->id,
-                'deactivated_at' => now(),
-            ])->save();
+        // Cross-engine serialization for the "at most one active"
+        // invariant (Q3=A). On MySQL/MariaDB we acquire an explicit
+        // table write lock to serialize concurrent activate/create
+        // calls even when no active row exists (InnoDB gap locks do
+        // not protect against two inserters both observing zero
+        // active rows). On SQLite write transactions are already
+        // serialized, so no extra lock is needed.
+        $driver = DB::connection()->getDriverName();
+        $usedTableLock = false;
+        if (in_array($driver, ['mysql', 'mariadb'], true)) {
+            DB::unprepared('LOCK TABLES core_tax_rules WRITE');
+            $usedTableLock = true;
+        }
+
+        try {
+            $active = CoreTaxRule::query()
+                ->where('is_active', true)
+                ->when($usedTableLock, fn ($q) => $q)  // table lock already held
+                ->when(! $usedTableLock, fn ($q) => $q->lockForUpdate())
+                ->get();
+            foreach ($active as $rule) {
+                $rule->forceFill([
+                    'is_active' => false,
+                    'deactivated_by' => $actor?->id,
+                    'deactivated_at' => now(),
+                ])->save();
+            }
+        } finally {
+            if ($usedTableLock) {
+                DB::unprepared('UNLOCK TABLES');
+            }
         }
     }
 

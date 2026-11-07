@@ -61,6 +61,9 @@ final class QuoteService
             ? CoreBillingQuote::ownerKeyForOrganization((int) $owner->organization->id)
             : CoreBillingQuote::ownerKeyForPersonalWorkspace((int) $owner->personalWorkspace->id);
 
+        // Normalize promo code for replay fingerprinting.
+        $normalizedPromo = ($promoCode !== null && $promoCode !== '') ? trim($promoCode) : null;
+
         // Fast-path replay: if an idempotent quote already exists,
         // return it without mutating anything (no duplicate
         // reservation, no supersession).
@@ -77,12 +80,24 @@ final class QuoteService
                     'The idempotency key is already bound to a different owner.',
                 );
             }
+            // Payload fingerprint: a reused key with a different
+            // plan/period/promo must not silently return an
+            // unrelated quote (RFC 7231-style idempotency replay
+            // guard).
+            if ((int) $existing->plan_version_id !== (int) $planVersion->id
+                || $existing->period !== $period
+                || ($existing->promo_code_snapshot) !== $normalizedPromo) {
+                throw new BillingDomainException(
+                    'quote_idempotency_payload_mismatch',
+                    'The idempotency key was already used with a different request payload.',
+                );
+            }
             $this->lazyExpireIfNeeded($existing, $at);
 
             return ['quote' => $existing, 'is_replay' => true];
         }
 
-        return DB::transaction(function () use ($actor, $owner, $ownerKey, $planVersion, $period, $promoCode, $idempotencyKey, $at): array {
+        return DB::transaction(function () use ($actor, $owner, $ownerKey, $planVersion, $period, $promoCode, $normalizedPromo, $idempotencyKey, $at): array {
             // Lock plan version row to serialize publications with
             // quote creation (consistent lock order: version then
             // promo row).
@@ -346,15 +361,16 @@ final class QuoteService
     private function markQuoteExpiredLocked(CoreBillingQuote $locked, CarbonImmutable $at): void
     {
         $locked->forceFill(['status' => CoreBillingQuote::STATUS_EXPIRED])->save();
-        // Release any reserved promo capacity.
-        foreach ($locked->reservations()->lockForUpdate()->get() as $res) {
-            if ($res->state === CorePromoReservation::STATE_RESERVED) {
-                $res->forceFill([
-                    'state' => CorePromoReservation::STATE_EXPIRED,
-                    'released_at' => $at->toDateTimeString(),
-                ])->save();
-            }
-        }
+        // Atomically release any RESERVED promo capacity for this
+        // quote. Single UPDATE with a state guard prevents double-
+        // release under concurrent sweeper + lazy expiry races.
+        CorePromoReservation::query()
+            ->where('quote_id', (int) $locked->id)
+            ->where('state', CorePromoReservation::STATE_RESERVED)
+            ->update([
+                'state' => CorePromoReservation::STATE_EXPIRED,
+                'released_at' => $at->toDateTimeString(),
+            ]);
 
         $this->audit->record(
             null,
@@ -382,14 +398,15 @@ final class QuoteService
                 'status' => CoreBillingQuote::STATUS_SUPERSEDED,
                 'superseded_by_quote_id' => $excludeQuoteId,
             ])->save();
-            foreach ($prior->reservations()->lockForUpdate()->get() as $res) {
-                if ($res->state === CorePromoReservation::STATE_RESERVED) {
-                    $res->forceFill([
-                        'state' => CorePromoReservation::STATE_RELEASED,
-                        'released_at' => $at->toDateTimeString(),
-                    ])->save();
-                }
-            }
+            // Atomic release: single UPDATE with state guard
+            // prevents double-release races.
+            CorePromoReservation::query()
+                ->where('quote_id', (int) $prior->id)
+                ->where('state', CorePromoReservation::STATE_RESERVED)
+                ->update([
+                    'state' => CorePromoReservation::STATE_RELEASED,
+                    'released_at' => $at->toDateTimeString(),
+                ]);
 
             $this->audit->record(
                 null,
