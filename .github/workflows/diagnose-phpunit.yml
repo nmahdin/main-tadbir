@@ -1,0 +1,38 @@
+name: PHPUnit diagnosis (ephemeral)
+on:
+  pull_request:
+  push:
+    branches: ['arena/**']
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
+          coverage: none
+          tools: composer:v2
+      - name: Install
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Composer validate + Pint
+        working-directory: backend
+        run: |
+          composer validate --no-check-publish --strict
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
+      - name: Migrate
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array; SESSION_DRIVER: array; QUEUE_CONNECTION: sync
+        run: php artisan migrate:fresh --force --no-interaction
