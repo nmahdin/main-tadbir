@@ -86,7 +86,7 @@ final class QuoteService
             // guard).
             if ((int) $existing->plan_version_id !== (int) $planVersion->id
                 || $existing->period !== $period
-                || ($existing->promo_code_snapshot) !== $normalizedPromo) {
+                || $existing->promo_code_snapshot !== $normalizedPromo) {
                 throw new BillingDomainException(
                     'quote_idempotency_payload_mismatch',
                     'The idempotency key was already used with a different request payload.',
@@ -97,7 +97,7 @@ final class QuoteService
             return ['quote' => $existing, 'is_replay' => true];
         }
 
-        return DB::transaction(function () use ($actor, $owner, $ownerKey, $planVersion, $period, $promoCode, $idempotencyKey, $at): array {
+        return DB::transaction(function () use ($actor, $owner, $ownerKey, $planVersion, $period, $normalizedPromo, $idempotencyKey, $at): array {
             // Lock plan version row to serialize publications with
             // quote creation (consistent lock order: version then
             // promo row).
@@ -144,9 +144,9 @@ final class QuoteService
             $promo = null;
             $discount = 0;
             $reservationIdem = 'quote:'.$idempotencyKey;
-            $ownerRedeemedPlusReserved = $this->countOwnerRedemptionsAndReservations($ownerKey, $promoCode, null, $priorReservationId);
-            if ($promoCode !== null && $promoCode !== '') {
-                $promo = $this->promos->findByCode($promoCode);
+            $ownerRedeemedPlusReserved = $this->countOwnerRedemptionsAndReservations($ownerKey, $normalizedPromo, null, $priorReservationId);
+            if ($normalizedPromo !== null) {
+                $promo = $this->promos->findByCode($normalizedPromo);
                 if ($promo === null) {
                     throw new BillingDomainException('promo_not_found', 'Promotion code is not recognized.');
                 }

@@ -174,36 +174,28 @@ final class TaxRuleService
     private function deactivateAllActiveLocked(?User $actor): void
     {
         // Cross-engine serialization for the "at most one active"
-        // invariant (Q3=A). On MySQL/MariaDB we acquire an explicit
-        // table write lock to serialize concurrent activate/create
-        // calls even when no active row exists (InnoDB gap locks do
-        // not protect against two inserters both observing zero
-        // active rows). On SQLite write transactions are already
-        // serialized, so no extra lock is needed.
-        $driver = DB::connection()->getDriverName();
-        $usedTableLock = false;
-        if (in_array($driver, ['mysql', 'mariadb'], true)) {
-            DB::unprepared('LOCK TABLES core_tax_rules WRITE');
-            $usedTableLock = true;
-        }
+        // invariant (Q3=A). Lock the sentinel row created by the
+        // C5-M2-S3 audit migration (id=-1) FOR UPDATE before scanning
+        // for active rows; this serializes all concurrent
+        // create/activate calls inside their transactions (LOCK
+        // TABLES is avoided because it implicitly commits any
+        // in-progress transaction, breaking atomicity). On SQLite,
+        // write transactions are already serialized by the engine,
+        // but locking the sentinel keeps behavior uniform.
+        $sentinelId = -1;
+        DB::table('core_tax_rules')->where('id', $sentinelId)->lockForUpdate()->get();
 
-        try {
-            $active = CoreTaxRule::query()
-                ->where('is_active', true)
-                ->when($usedTableLock, fn ($q) => $q)  // table lock already held
-                ->when(! $usedTableLock, fn ($q) => $q->lockForUpdate())
-                ->get();
-            foreach ($active as $rule) {
-                $rule->forceFill([
-                    'is_active' => false,
-                    'deactivated_by' => $actor?->id,
-                    'deactivated_at' => now(),
-                ])->save();
-            }
-        } finally {
-            if ($usedTableLock) {
-                DB::unprepared('UNLOCK TABLES');
-            }
+        $active = CoreTaxRule::query()
+            ->where('is_active', true)
+            ->where('id', '!=', $sentinelId)
+            ->lockForUpdate()
+            ->get();
+        foreach ($active as $rule) {
+            $rule->forceFill([
+                'is_active' => false,
+                'deactivated_by' => $actor?->id,
+                'deactivated_at' => now(),
+            ])->save();
         }
     }
 

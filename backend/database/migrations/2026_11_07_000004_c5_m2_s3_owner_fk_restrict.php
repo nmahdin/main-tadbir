@@ -8,71 +8,79 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * C5-M2-S3 acceptance correction: switch quote owner foreign keys from
-     * ON DELETE SET NULL to ON DELETE RESTRICT, matching core_subscriptions
-     * precedent and preserving audit-grade owner integrity on immutable
-     * financial snapshots. Without this, a hard-deleted organization or
-     * personal workspace would leave a quote with a NULL owner — financially
-     * ambiguous and unreachable by owner-scoped authz.
+     * C5-M2-S3 acceptance corrections:
+     *   1. Switch quote owner foreign keys from ON DELETE SET NULL to
+     *      ON DELETE RESTRICT (matching core_subscriptions precedent)
+     *      so hard-deleting an organization or personal workspace
+     *      that still owns an immutable financial snapshot is
+     *      rejected by the database. Prevents financially-ambiguous
+     *      orphaned quotes.
+     *   2. Insert a sentinel lock row (id=-1) into core_tax_rules
+     *      used by TaxRuleService to serialize concurrent tax-rule
+     *      activation (Q3=A "at most one active" invariant).
      *
-     * Additive: drops and re-adds the two foreign keys (no data migration).
-     * Safe on MySQL / MariaDB / MariaDB 10.4. SQLite's ALTER TABLE DROP
-     * FOREIGN KEY is not directly supported; we skip the FK swap there
-     * (SQLite tests do not exercise hard-delete of organizations or
-     * personal workspaces).
+     * Additive (no destructive changes; no data migration).
+     * MariaDB 10.4 / MySQL / SQLite safe.
      */
     public function up(): void
     {
         $driver = DB::connection()->getDriverName();
-        if (! in_array($driver, ['mysql', 'mariadb'], true)) {
-            return;
+
+        if (in_array($driver, ['mysql', 'mariadb'], true)) {
+            $dbName = DB::connection()->getDatabaseName();
+            $fks = DB::select(
+                "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+                 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'core_billing_quotes'
+                 AND COLUMN_NAME IN ('organization_id','personal_workspace_id')
+                 AND REFERENCED_TABLE_NAME IS NOT NULL",
+                [$dbName]
+            );
+            foreach ($fks as $fk) {
+                $name = $fk->CONSTRAINT_NAME;
+                DB::statement("ALTER TABLE core_billing_quotes DROP FOREIGN KEY `{$name}`");
+            }
+
+            Schema::table('core_billing_quotes', function (Blueprint $table) {
+                $table->foreign('organization_id')->references('id')->on('organizations')->restrictOnDelete();
+                $table->foreign('personal_workspace_id')->references('id')->on('workspaces')->restrictOnDelete();
+            });
         }
 
-        // Resolve and drop the existing FKs by reflecting on
-        // INFORMATION_SCHEMA. Laravel's auto-generated names are
-        // {table}_{column}_foreign but we resolve them defensively.
-        $dbName = DB::connection()->getDatabaseName();
-        $fks = DB::select(
-            "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
-             WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'core_billing_quotes'
-             AND COLUMN_NAME IN ('organization_id','personal_workspace_id')
-             AND REFERENCED_TABLE_NAME IS NOT NULL",
-            [$dbName]
-        );
-        foreach ($fks as $fk) {
-            $name = $fk->CONSTRAINT_NAME;
-            DB::statement("ALTER TABLE core_billing_quotes DROP FOREIGN KEY `{$name}`");
+        if (in_array($driver, ['mysql', 'mariadb'], true)) {
+            DB::statement("INSERT IGNORE INTO core_tax_rules
+                (id, label, rate_basis_points, is_active, created_at, updated_at)
+                VALUES (-1, '__sentinel_lock__', 0, 0, NOW(), NOW())");
+        } else {
+            DB::statement("INSERT OR IGNORE INTO core_tax_rules
+                (id, label, rate_basis_points, is_active, created_at, updated_at)
+                VALUES (-1, '__sentinel_lock__', 0, 0, datetime('now'), datetime('now'))");
         }
-
-        Schema::table('core_billing_quotes', function (Blueprint $table) {
-            $table->foreign('organization_id')->references('id')->on('organizations')->restrictOnDelete();
-            $table->foreign('personal_workspace_id')->references('id')->on('workspaces')->restrictOnDelete();
-        });
     }
 
     public function down(): void
     {
         $driver = DB::connection()->getDriverName();
-        if (! in_array($driver, ['mysql', 'mariadb'], true)) {
-            return;
-        }
 
-        $dbName = DB::connection()->getDatabaseName();
-        $fks = DB::select(
-            "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
-             WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'core_billing_quotes'
-             AND COLUMN_NAME IN ('organization_id','personal_workspace_id')
-             AND REFERENCED_TABLE_NAME IS NOT NULL",
-            [$dbName]
-        );
-        foreach ($fks as $fk) {
-            $name = $fk->CONSTRAINT_NAME;
-            DB::statement("ALTER TABLE core_billing_quotes DROP FOREIGN KEY `{$name}`");
-        }
+        DB::table('core_tax_rules')->where('id', -1)->delete();
 
-        Schema::table('core_billing_quotes', function (Blueprint $table) {
-            $table->foreign('organization_id')->references('id')->on('organizations')->nullOnDelete();
-            $table->foreign('personal_workspace_id')->references('id')->on('workspaces')->nullOnDelete();
-        });
+        if (in_array($driver, ['mysql', 'mariadb'], true)) {
+            $dbName = DB::connection()->getDatabaseName();
+            $fks = DB::select(
+                "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+                 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'core_billing_quotes'
+                 AND COLUMN_NAME IN ('organization_id','personal_workspace_id')
+                 AND REFERENCED_TABLE_NAME IS NOT NULL",
+                [$dbName]
+            );
+            foreach ($fks as $fk) {
+                $name = $fk->CONSTRAINT_NAME;
+                DB::statement("ALTER TABLE core_billing_quotes DROP FOREIGN KEY `{$name}`");
+            }
+
+            Schema::table('core_billing_quotes', function (Blueprint $table) {
+                $table->foreign('organization_id')->references('id')->on('organizations')->nullOnDelete();
+                $table->foreign('personal_workspace_id')->references('id')->on('workspaces')->nullOnDelete();
+            });
+        }
     }
 };
