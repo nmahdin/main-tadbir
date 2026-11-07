@@ -672,21 +672,17 @@ input[type='checkbox']:disabled, input[type='radio']:disabled { cursor: not-allo
 .ui-pop[data-state='closing'] { animation: ui-menu-out .13s cubic-bezier(.4, 0, 1, 1) both; }
 
 /*
- * سرعت چرخنده‌های لودینگ (دور ۹۱ و ۹۲).
+ * چرخندهٔ لودینگ سریع (دور ۹۱).
  *
- * پیش‌فرض `animate-spin` تالبویند یک دور کامل در ۱ ثانیه است؛ روی نشانگرهای
- * کوچکِ داخل دکمه‌ها و نوارها کند و بی‌واکنش حس می‌شد. دو سطح سرعت داریم:
- *
- * ۱) همهٔ چرخنده‌ها کمی سریع‌تر: ۰٫۶۲ ثانیه (همان کی‌فریم `spin` تالبویند،
- *    فقط مدت کوتاه‌تر). درایهٔ `!important` لازم است چون `animate-spin` کلاس
- *    تالبویند است و قاعدهٔ ما باید بر آن مقدم باشد.
- * ۲) `ui-spin-fast` برای لودینگ تمام‌صفحه، لودینگ‌های سطح صفحه و نشانگر
- *    بارگذاری بخش‌ها/فهرست‌ها: ۰٫۴۵ ثانیه.
- *
- * هیچ کی‌فریم تازه‌ای تعریف نمی‌کنیم؛ همان چرخش ۳۶۰ درجه با مدت کوتاه‌تر.
+ * پیش‌فرض `animate-spin` تالبویند یک دور کامل در ۱ ثانیه است که برای نشانگرهای
+ * کوچکِ داخل دکمه‌ها مناسب است، اما در لودینگ تمام‌صفحه و لودینگ‌های سطح صفحه
+ * کند و بی‌واکنش حس می‌شد. این کلاس فقط همان دو حالت را سریع می‌کند (۰٫۶ ثانیه)،
+ * نه چرخنده‌های کوچک داخل دکمه‌ها را.
  */
-.animate-spin { animation-duration: .62s !important; }
-.ui-spin-fast { animation-duration: .45s !important; }
+@keyframes ui-spin-fast {
+  to { transform: rotate(360deg) }
+}
+.ui-spin-fast { animation: ui-spin-fast .6s linear infinite !important; }
 
 /* کلاس‌های tailwindcss-animate که در JSX استفاده شده‌اند (پیاده‌سازی سبک و بومی). */
 .animate-in { animation-duration: .2s; animation-timing-function: cubic-bezier(.16, 1, .3, 1); animation-fill-mode: both; }

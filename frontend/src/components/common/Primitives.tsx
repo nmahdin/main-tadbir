@@ -26,9 +26,7 @@ export function FormField({ label, error, children, htmlFor, required = false }:
 export function LoadingState({ label = 'در حال بارگذاری…' }: { label?: string }) {
   return <div role="status" aria-live="polite" className="flex items-center justify-center p-4 sm:p-6">
     <div className="inline-flex max-w-full items-center gap-2.5 rounded-xl bg-white px-3.5 py-2.5 text-xs font-bold text-slate-600">
-      {/* نشانگر بارگذاری بخش‌ها/فهرست‌ها: با همان سرعت لودینگ‌های سطح صفحه
-          می‌چرخد تا هنگام کلیک روی یک ردیف، انتظار کند حس نشود. */}
-      <LoaderCircle className="ui-spin-fast h-4 w-4 shrink-0 animate-spin text-indigo-600" aria-hidden />
+      <LoaderCircle className="h-4 w-4 shrink-0 animate-spin text-indigo-600" aria-hidden />
       <span className="truncate">{label}</span>
     </div>
   </div>;
