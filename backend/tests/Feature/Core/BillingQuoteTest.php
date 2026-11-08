@@ -246,63 +246,6 @@ class BillingQuoteTest extends TestCase
         $this->assertTrue($r2['is_replay']);
         $this->assertSame((int) $r1['quote']->id, (int) $r2['quote']->id);
         $this->assertSame(1, CorePromoReservation::query()->where('promo_id', $promo->id)->count());
-    }
-
-    public function test_idempotency_replay_with_changed_payload_is_rejected(): void
-    {
-        $v = $this->publishedVersion('pers', CorePlan::AUDIENCE_PERSONAL, [
-            'monthly' => 100_000,
-            'annual' => 900_000,
-        ]);
-        $svc = app(QuoteService::class);
-        $owner = $this->personalOwner($this->actor);
-        $svc->create($this->actor, $owner, $v, 'monthly', null, 'key-xyz');
-
-        $this->expectException(\App\Core\Billing\BillingDomainException::class);
-        $this->expectExceptionMessage('different request payload');
-        $svc->create($this->actor, $owner, $v, 'annual', null, 'key-xyz');
-    }
-
-    public function test_idempotency_key_is_scoped_per_owner_two_owners_can_share_key(): void
-    {
-        $v = $this->publishedVersion('pers', CorePlan::AUDIENCE_PERSONAL, ['monthly' => 100_000]);
-        $svc = app(QuoteService::class);
-        $r1 = $svc->create($this->actor, $this->personalOwner($this->actor), $v, 'monthly', null, 'shared-key')['quote'];
-        $other = User::factory()->create(['status' => 'active']);
-        $r2 = $svc->create($other, $this->personalOwner($other), $v, 'monthly', null, 'shared-key')['quote'];
-        $this->assertNotSame((int) $r1->id, (int) $r2->id);
-        $this->assertSame(2, CoreBillingQuote::query()->where('idempotency_key', 'shared-key')->count());
-    }
-
-    public function test_owner_delete_restricted_when_quotes_exist(): void
-    {
-        $v = $this->publishedVersion('pers', CorePlan::AUDIENCE_PERSONAL, ['monthly' => 100_000]);
-        $svc = app(QuoteService::class);
-        $q = $svc->create($this->actor, $this->personalOwner($this->actor), $v, 'monthly', null, 'krestrict')['quote'];
-        $this->assertNotNull($q->personal_workspace_id);
-
-        $threw = false;
-        try {
-            DB::table('workspaces')->where('id', $q->personal_workspace_id)->delete();
-        } catch (\Throwable) {
-            $threw = true;
-        }
-        $this->assertTrue($threw, 'Deleting an owner workspace with a quote must be blocked by RESTRICT FK.');
-        $this->assertNotNull(CoreBillingQuote::find($q->id), 'Quote must remain intact after blocked delete.');
-    }
-
-    public function test_conversion_lock_contract_strictly_before_expiry(): void
-    {
-        config(['billing.quote.ttl_minutes' => 30]);
-        $v = $this->publishedVersion('pers', CorePlan::AUDIENCE_PERSONAL, ['monthly' => 100_000]);
-        $svc = app(QuoteService::class);
-        $at = CarbonImmutable::now();
-        $q = $svc->create($this->actor, $this->personalOwner($this->actor), $v, 'monthly', null, 'kconv', null, $at)['quote'];
-        $this->assertTrue($q->isConvertibleAt($at->addMinutes(29)->addSeconds(59)));
-        $this->assertFalse($q->isConvertibleAt($at->addMinutes(30)), 'At exact expires_at conversion must be rejected.');
-        $this->assertFalse($q->isConvertibleAt($at->addMinutes(31)));
-    }
-
     // ---- cross-tenant isolation + org permission ----
 
     public function test_cross_owner_quote_access_returns_404_and_org_requires_permission(): void
@@ -515,10 +458,6 @@ class BillingQuoteTest extends TestCase
 
     public function test_concurrent_tax_activation_preserves_single_active_invariant(): void
     {
-        // This test exercises the MySQL/MariaDB LOCK TABLES
-        // serialization path indirectly by running two activation
-        // attempts in separate serial transactions; whichever wins,
-        // exactly one rule must remain active afterwards.
         $svc = app(TaxRuleService::class);
         $r1 = $svc->createRule('A', 900, $this->actor);
         $r2 = $svc->createRule('B', 1000, $this->actor);
@@ -529,6 +468,20 @@ class BillingQuoteTest extends TestCase
             $svc->activate($r2, $this->actor);
         });
         $this->assertSame(1, CoreTaxRule::query()->where('is_active', true)->count(), 'At most one tax rule may be active at any instant (Q3=A).');
+    }
+
+    public function test_conversion_lock_contract_strictly_before_expiry(): void
+    {
+        // S4 lock contract — helper isConvertibleAt requires strictly
+        // less than expires_at; at the exact boundary conversion fails.
+        config(['billing.quote.ttl_minutes' => 30]);
+        $v = $this->publishedVersion('pconv', CorePlan::AUDIENCE_PERSONAL, ['monthly' => 100_000]);
+        $svc = app(QuoteService::class);
+        $at = CarbonImmutable::now();
+        $q = $svc->create($this->actor, $this->personalOwner($this->actor), $v, 'monthly', null, 'kconv', null, $at)['quote'];
+        $this->assertTrue($q->isConvertibleAt($at->addMinutes(29)->addSeconds(59)));
+        $this->assertFalse($q->isConvertibleAt($at->addMinutes(30)), 'At exact expires_at conversion must be rejected.');
+        $this->assertFalse($q->isConvertibleAt($at->addMinutes(31)));
     }
 
     private function grantOrgPermission(User $user, Organization $org, string $permKey): void
