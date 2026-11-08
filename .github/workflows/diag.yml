@@ -1,15 +1,16 @@
-name: diag-phpunit3
+name: diag-phpunit-artifact
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
   workflow_dispatch:
 jobs:
   backend:
-    name: Backend contracts and tests (CLONE)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/14/merge
       - name: Configure PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -17,16 +18,12 @@ jobs:
           extensions: mbstring, pdo_sqlite, fileinfo, zip
           coverage: none
           tools: composer:v2
-      - name: Validate Composer contract
-        working-directory: backend
-        run: composer validate --no-check-publish --strict
-      - name: Install locked dependencies
-        working-directory: backend
+      - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Pint check (Stage 02 architecture zones only)
+      - name: Pint
         working-directory: backend
         run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
-      - name: Migration gate on a clean database
+      - name: Migrate
         working-directory: backend
         env:
           APP_ENV: testing
@@ -47,4 +44,12 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: |
-          php vendor/bin/phpunit --colors=never 2>&1 | tail -100
+          set -o pipefail
+          php vendor/bin/phpunit --colors=never 2>&1 | tee /tmp/phpunit.out | tail -200
+          echo "===TAIL100==="
+          tail -100 /tmp/phpunit.out
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: phpunit-log
+          path: /tmp/phpunit.out
