@@ -10,6 +10,7 @@ import '../lab/oceanLab.css';
 import '../lab/tour.css';
 import '../lab/layout.css';
 import './studio.css';
+import './studioPages.css';
 
 export function OceanStudioLayout({gallery}:{gallery:React.ReactNode}){
  const location=useLocation();
