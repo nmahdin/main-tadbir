@@ -1,9 +1,8 @@
-name: diag-pint2
+name: diag-pint3
 on:
-  pull_request:
-    paths: ['backend/**', '.github/workflows/diag.yml']
   push:
     branches: [arena/582a70e5-main-tadbir]
+  workflow_dispatch:
 jobs:
   pint:
     runs-on: ubuntu-latest
@@ -16,10 +15,13 @@ jobs:
           tools: composer
       - working-directory: backend
         run: composer install --no-progress --no-interaction --prefer-dist
-      - name: pint (full quality command)
+      - name: pint --test (exact quality command)
         working-directory: backend
         run: |
           set +e
-          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.out 2>&1
-          echo "exit=$?"
-          tail -100 /tmp/pint.out
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tee /tmp/pint.out
+          rc=$?
+          echo "--- FILE LIST WITH ISSUES ---"
+          # Show files pint marked FAILED
+          grep -E "(FAIL|!|\\.php$)" /tmp/pint.out | tail -60
+          exit $rc
