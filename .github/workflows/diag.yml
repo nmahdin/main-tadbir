@@ -1,4 +1,4 @@
-name: diag-pint3
+name: diag-pint4
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
@@ -14,14 +14,7 @@ jobs:
           extensions: mbstring,xml,curl,zip,pdo_mysql,intl,bcmath
           tools: composer
       - working-directory: backend
-        run: composer install --no-progress --no-interaction --prefer-dist
-      - name: pint --test (exact quality command)
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Pint (exact quality config)
         working-directory: backend
-        run: |
-          set +e
-          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tee /tmp/pint.out
-          rc=$?
-          echo "--- FILE LIST WITH ISSUES ---"
-          # Show files pint marked FAILED
-          grep -E "(FAIL|!|\\.php$)" /tmp/pint.out | tail -60
-          exit $rc
+        run: php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tail -200
