@@ -34,7 +34,7 @@ export function CommandPalettePage(){
   if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();setActive(x=>moveCommandIndex(x,e.key==='ArrowDown'?'down':'up',commands.length));return;}
   if(e.key==='Enter'&&commands.length&&!(e.target instanceof HTMLButtonElement)){e.preventDefault();choose(commands[Math.max(0,Math.min(active,commands.length-1))]);return;}
   if(e.key==='Tab'){
-   const all=Array.from(panel.current?.querySelectorAll<HTMLElement>('input:not(:disabled),button:not(:disabled),select:not(:disabled)')??[]);
+   const all=Array.from(panel.current?.querySelectorAll('input:not(:disabled),button:not(:disabled),select:not(:disabled)')??[]) as HTMLElement[];
    if(!all.length)return;
    if(e.shiftKey&&document.activeElement===all[0]){e.preventDefault();all[all.length-1].focus();}
    if(!e.shiftKey&&document.activeElement===all[all.length-1]){e.preventDefault();all[0].focus();}
