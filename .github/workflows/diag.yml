@@ -23,7 +23,7 @@ jobs:
       - name: Pint verbose
         working-directory: backend
         run: |
-          set -o pipefail
-          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tee pintout.txt
-          echo "===TAIL==="
-          tail -100 pintout.txt
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > pintout.txt 2>&1 || true
+          echo "===OUTPUT==="
+          cat pintout.txt
+          echo "===END==="
