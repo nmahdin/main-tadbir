@@ -135,6 +135,7 @@ final class TaxRuleService
         /** @var CoreTaxRule|null $rule */
         $rule = CoreTaxRule::query()
             ->where('is_active', true)
+            ->where('id', '!=', -1)
             ->where(function ($q) use ($at): void {
                 $q->whereNull('valid_from')->orWhere('valid_from', '<=', $at);
             })
@@ -174,20 +175,24 @@ final class TaxRuleService
     private function deactivateAllActiveLocked(?User $actor): void
     {
         // Cross-engine serialization for the "at most one active"
-        // invariant (Q3=A). Lock the sentinel row created by the
-        // C5-M2-S3 audit migration (id=-1) FOR UPDATE before scanning
-        // for active rows; this serializes all concurrent
-        // create/activate calls inside their transactions (LOCK
-        // TABLES is avoided because it implicitly commits any
-        // in-progress transaction, breaking atomicity). On SQLite,
-        // write transactions are already serialized by the engine,
-        // but locking the sentinel keeps behavior uniform.
-        $sentinelId = -1;
-        DB::table('core_tax_rules')->where('id', $sentinelId)->lockForUpdate()->get();
+        // invariant (Q3=A). Lock the singleton mutex row in
+        // `core_tax_rule_active_mutex` FOR UPDATE before scanning for
+        // active rows; this serializes concurrent create/activate
+        // calls inside their transactions. LOCK TABLES is avoided
+        // because it implicitly commits the open transaction and
+        // breaks atomicity. On SQLite, write transactions are
+        // already serialized by the engine but locking the mutex
+        // keeps behavior uniform.
+        if (DB::getSchemaBuilder()->hasTable('core_tax_rule_active_mutex')) {
+            DB::table('core_tax_rule_active_mutex')
+                ->where('mutex_key', 'singleton')
+                ->lockForUpdate()
+                ->first();
+        }
 
         $active = CoreTaxRule::query()
             ->where('is_active', true)
-            ->where('id', '!=', $sentinelId)
+            ->where('id', '!=', -1) // legacy in-table sentinel (if present pre-migration)
             ->lockForUpdate()
             ->get();
         foreach ($active as $rule) {

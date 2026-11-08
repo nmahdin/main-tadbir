@@ -41,6 +41,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $converted_at
  * @property int|null $superseded_by_quote_id
  * @property string $idempotency_key
+ * @property string|null $payload_hash
  * @property int|null $created_by_user_id
  */
 class CoreBillingQuote extends Model
@@ -73,6 +74,7 @@ class CoreBillingQuote extends Model
         'status',
         'expires_at',
         'idempotency_key',
+        'payload_hash',
         'created_by_user_id',
     ];
 
@@ -129,6 +131,16 @@ class CoreBillingQuote extends Model
     public function isExpiredAt(CarbonImmutable $at): bool
     {
         return $at->gte($this->expires_at);
+    }
+
+    /**
+     * S4 conversion lock contract: a quote is convertible only while
+     * OPEN and strictly BEFORE expires_at. At the exact boundary the
+     * quote is expired and conversion MUST fail (directive §3.7).
+     */
+    public function isConvertibleAt(CarbonImmutable $at): bool
+    {
+        return $this->status === self::STATUS_OPEN && $at->lt($this->expires_at);
     }
 
     public function organization(): BelongsTo

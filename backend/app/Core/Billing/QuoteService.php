@@ -61,43 +61,27 @@ final class QuoteService
             ? CoreBillingQuote::ownerKeyForOrganization((int) $owner->organization->id)
             : CoreBillingQuote::ownerKeyForPersonalWorkspace((int) $owner->personalWorkspace->id);
 
-        // Normalize promo code for replay fingerprinting.
-        $normalizedPromo = ($promoCode !== null && $promoCode !== '') ? trim($promoCode) : null;
+        // Normalize promo code (uppercase + trim) for lookup,
+        // snapshot and payload fingerprinting.
+        $normalizedPromo = ($promoCode !== null && $promoCode !== '') ? strtoupper(trim($promoCode)) : null;
 
-        // Fast-path replay: if an idempotent quote already exists,
-        // return it without mutating anything (no duplicate
-        // reservation, no supersession).
+        $payloadHash = self::hashPayload((int) $planVersion->id, $period, $normalizedPromo);
+
+        // Fast-path replay: idempotency keys are unique per (owner, key).
+        // A different owner reusing the same key simply creates a new
+        // quote (composite unique prevents collision).
         $existing = CoreBillingQuote::query()
+            ->where('owner_key', $ownerKey)
             ->where('idempotency_key', $idempotencyKey)
             ->first();
         if ($existing !== null) {
-            // Idempotency keys are scoped to the actor's owner in
-            // addition to the unique DB constraint: a different
-            // owner reusing the same key is a 422.
-            if ($existing->owner_key !== $ownerKey) {
-                throw new BillingDomainException(
-                    'quote_idempotency_key_conflict',
-                    'The idempotency key is already bound to a different owner.',
-                );
-            }
-            // Payload fingerprint: a reused key with a different
-            // plan/period/promo must not silently return an
-            // unrelated quote (RFC 7231-style idempotency replay
-            // guard).
-            if ((int) $existing->plan_version_id !== (int) $planVersion->id
-                || $existing->period !== $period
-                || $existing->promo_code_snapshot !== $normalizedPromo) {
-                throw new BillingDomainException(
-                    'quote_idempotency_payload_mismatch',
-                    'The idempotency key was already used with a different request payload.',
-                );
-            }
+            $this->assertIdempotentPayloadMatches($existing, $payloadHash);
             $this->lazyExpireIfNeeded($existing, $at);
 
             return ['quote' => $existing, 'is_replay' => true];
         }
 
-        return DB::transaction(function () use ($actor, $owner, $ownerKey, $planVersion, $period, $normalizedPromo, $idempotencyKey, $at): array {
+        return DB::transaction(function () use ($actor, $owner, $ownerKey, $planVersion, $period, $normalizedPromo, $idempotencyKey, $payloadHash, $at): array {
             // Lock plan version row to serialize publications with
             // quote creation (consistent lock order: version then
             // promo row).
@@ -202,6 +186,7 @@ final class QuoteService
                 'status' => CoreBillingQuote::STATUS_OPEN,
                 'expires_at' => $expiresAt->toDateTimeString(),
                 'idempotency_key' => $idempotencyKey,
+                'payload_hash' => $payloadHash,
                 'created_by_user_id' => $actor->id,
             ]);
 
@@ -481,6 +466,41 @@ final class QuoteService
         }
         if (! preg_match('/^[A-Za-z0-9._:\-]+$/', $key)) {
             throw new BillingDomainException('quote_idempotency_key_invalid', 'Idempotency key contains invalid characters.');
+        }
+    }
+
+    /**
+     * Canonical payload fingerprint: only inputs that materially affect
+     * the resulting price/promo/tax/total are part of the hash. TTL
+     * and actor metadata are not (actor is bound through owner_key).
+     */
+    private static function hashPayload(int $planVersionId, string $period, ?string $normalizedPromo): string
+    {
+        return hash('sha256', implode('|', [
+            'v1',
+            (string) $planVersionId,
+            $period,
+            $normalizedPromo ?? '',
+        ]));
+    }
+
+    /**
+     * Guard: a reused idempotency key with a different request payload
+     * is a client bug, not a silent replay. Rows created before the
+     * payload_hash column existed (hash NULL) are treated as
+     * "hash unknown" and matched on owner+key only, preserving forward
+     * compatibility for in-flight replays at deploy time.
+     */
+    private function assertIdempotentPayloadMatches(CoreBillingQuote $existing, string $payloadHash): void
+    {
+        if ($existing->payload_hash === null) {
+            return;
+        }
+        if (! hash_equals((string) $existing->payload_hash, $payloadHash)) {
+            throw new BillingDomainException(
+                'quote_idempotency_payload_mismatch',
+                'The idempotency key was already used with a different request payload.',
+            );
         }
     }
 
