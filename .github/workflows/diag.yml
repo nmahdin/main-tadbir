@@ -1,4 +1,4 @@
-name: diag-phpunit
+name: diag-phpunit2
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
@@ -26,7 +26,7 @@ jobs:
         run: |
           touch database/ci.sqlite
           php artisan migrate:fresh --force --no-interaction
-      - name: PHPUnit
+      - name: PHPUnit (full suite)
         working-directory: backend
         env:
           APP_ENV: testing
@@ -36,4 +36,4 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/ 2>&1 | tail -100
+        run: php vendor/bin/phpunit --colors=never 2>&1 | tail -200
