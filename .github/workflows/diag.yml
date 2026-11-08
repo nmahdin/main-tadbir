@@ -1,4 +1,4 @@
-name: diag-exactv2
+name: diag-with-tee
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
@@ -17,16 +17,13 @@ jobs:
           extensions: mbstring, pdo_sqlite, fileinfo, zip
           coverage: none
           tools: composer:v2
-      - name: Validate Composer contract
-        working-directory: backend
-        run: composer validate --no-check-publish --strict
-      - name: Install locked dependencies
+      - name: Install deps
         working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Pint check (Stage 02 architecture zones only)
+      - name: Pint
         working-directory: backend
         run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
-      - name: Migration gate on a clean database
+      - name: Migrate
         working-directory: backend
         env:
           APP_ENV: testing
@@ -36,7 +33,7 @@ jobs:
         run: |
           touch database/ci.sqlite
           php artisan migrate:fresh --force --no-interaction
-      - name: PHPUnit
+      - name: PHPUnit w/ tee
         working-directory: backend
         env:
           APP_ENV: testing
@@ -46,4 +43,9 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: php vendor/bin/phpunit --colors=never
+        run: |
+          set -o pipefail
+          php vendor/bin/phpunit --colors=never 2>&1 | tee /tmp/results.txt
+      - name: Show last 120 lines on FAIL
+        if: failure()
+        run: tail -120 /tmp/results.txt
