@@ -1,14 +1,17 @@
-name: diag-pint7
+name: diag-pint8
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
   workflow_dispatch:
 jobs:
-  pint:
+  backend:
+    name: Backend contracts and tests (CLONE)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
           extensions: mbstring, pdo_sqlite, fileinfo, zip
@@ -20,13 +23,12 @@ jobs:
       - name: Install locked dependencies
         working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Pint
+      - name: Pint check (Stage 02 architecture zones only)
         working-directory: backend
         run: |
-          echo "PWD=$(pwd)"
-          echo "===RUN PINT==="
+          echo "=== PINT ==="
           set +e
           php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
           rc=$?
-          echo "pint exit=$rc"
+          echo "pint-rc=$rc"
           exit 0
