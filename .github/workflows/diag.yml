@@ -1,4 +1,4 @@
-name: diag-pint4
+name: diag-pint5
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
@@ -11,10 +11,19 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mbstring,xml,curl,zip,pdo_mysql,intl,bcmath
-          tools: composer
-      - working-directory: backend
-        run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Pint (exact quality config)
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
+          coverage: none
+          tools: composer:v2
+      - name: Validate Composer contract
         working-directory: backend
-        run: php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tail -200
+        run: composer validate --no-check-publish --strict
+      - name: Install locked dependencies
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Pint verbose
+        working-directory: backend
+        run: |
+          set -o pipefail
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tee pintout.txt
+          echo "===TAIL==="
+          tail -100 pintout.txt
