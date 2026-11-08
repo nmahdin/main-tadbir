@@ -34,7 +34,7 @@ test("DS-1 primitives expose the consolidated component APIs", () => {
 
 test("primary design template route is public and lazy", () => {
   assert.match(app, /import\('\.\.\/features\/showcase\/UiShowcaseThemeComparison'\)/);
-  assert.match(app, /path="\/theme-previews"/);
+  assert.match(app, /path="\/theme-previews\/\*"/);
   assert.doesNotMatch(app, /path="\/_dev\/ui-showcase"/);
 });
 

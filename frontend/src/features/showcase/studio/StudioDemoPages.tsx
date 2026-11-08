@@ -190,8 +190,8 @@ function DataPage(){
   <div className="ods-table-toolbar"><SearchInput aria-label="جست‌وجوی ردیف‌های نمونه" value={q} onChange={e=>{setQ(e.target.value);setPage(1);}} onClear={()=>{setQ('');setPage(1);}} placeholder="عنوان، شناسه یا تیم"/>
    <Button variant="secondary" onClick={()=>{setDescending(x=>!x);setPage(1);}}>ترتیب شناسه: {descending?'نزولی':'صعودی'}</Button></div>
   {filtered.length?<><Table caption="رکوردهای نمایشی" columns={['شناسه','عنوان','مسئول','وضعیت']}>
-   {current.map(row=><TableRow key={row.id}><TableCell><bdi dir="ltr">{row.id}</bdi></TableCell><TableCell>{row.name}</TableCell><TableCell>{row.owner}</TableCell>
-     <TableCell><Badge tone={row.status==='done'?'success':row.status==='pending'?'warning':'info'}>{row.status==='done'?'تکمیل':row.status==='pending'?'در انتظار':'فعال'}</Badge></TableCell></TableRow>)}
+   {current.map(row=><React.Fragment key={row.id}><TableRow><TableCell><bdi dir="ltr">{row.id}</bdi></TableCell><TableCell>{row.name}</TableCell><TableCell>{row.owner}</TableCell>
+     <TableCell><Badge tone={row.status==='done'?'success':row.status==='pending'?'warning':'info'}>{row.status==='done'?'تکمیل':row.status==='pending'?'در انتظار':'فعال'}</Badge></TableCell></TableRow></React.Fragment>)}
   </Table>
   <nav className="ods-pagination" aria-label="صفحه‌بندی جدول"><Button variant="secondary" size="sm" disabled={index===1} onClick={()=>setPage(x=>x-1)}>صفحه قبل</Button>
    <span>صفحهٔ {index.toLocaleString('fa-IR')} از {totalPages.toLocaleString('fa-IR')}</span>
