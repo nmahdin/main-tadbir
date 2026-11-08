@@ -5,6 +5,8 @@ import {STUDIO_GROUPS,STUDIO_PAGES,resolveStudioPage,studioGroupFor,studioPath,s
 import {StudioDemoPage,StudioOverview} from './StudioDemoPages';
 import {AdvancedFiltersPage} from './advanced/AdvancedFiltersPage';
 import {FormWizardPage} from './advanced/FormWizardPage';
+import {CommandPalettePage} from './advanced/CommandPalettePage';
+import './advanced/commands.css';
 import './advanced/wizard.css';
 import './advanced/patterns.css';
 import {OceanShellPlayground} from '../lab/OceanShellPlayground';
@@ -83,6 +85,7 @@ export function OceanStudioLayout({gallery}:{gallery:React.ReactNode}){
   if(page.id==='layout')return <div className="ods-prototype"><LayoutEditorPrototype/></div>;
   if(page.id==='advanced-filters')return <AdvancedFiltersPage/>;
   if(page.id==='advanced-wizard')return <FormWizardPage/>;
+  if(page.id==='command-palette')return <CommandPalettePage/>;
   return <StudioDemoPage pageId={page.id}/>;
  };
  return <div className="ods-studio" dir="rtl" data-testid="ocean-studio-shell" data-collapsed={sidebarCompact}>
