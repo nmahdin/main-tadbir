@@ -1,5 +1,5 @@
-import {STUDIO_PAGES,studioPath} from '../studioRoutes';
-import {normalizePersian} from './filterModel';
+import {STUDIO_PAGES,studioPath} from '../studioRoutes.ts';
+import {normalizePersian} from './filterModel.ts';
 export type MockEnvironment='workspace'|'organization'|'platform';
 export type CommandEntry={id:string;pageId:string;label:string;hint:string;allowed:readonly MockEnvironment[]};
 export const MOCK_COMMANDS:CommandEntry[]=[
