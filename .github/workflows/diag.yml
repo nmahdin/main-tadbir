@@ -1,4 +1,4 @@
-name: diag-with-tee
+name: diag-junit
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
@@ -10,18 +10,15 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Configure PHP
-        uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
           extensions: mbstring, pdo_sqlite, fileinfo, zip
           coverage: none
           tools: composer:v2
-      - name: Install deps
-        working-directory: backend
+      - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Pint
-        working-directory: backend
+      - working-directory: backend
         run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
       - name: Migrate
         working-directory: backend
@@ -33,7 +30,7 @@ jobs:
         run: |
           touch database/ci.sqlite
           php artisan migrate:fresh --force --no-interaction
-      - name: PHPUnit w/ tee
+      - name: PHPUnit with JUnit
         working-directory: backend
         env:
           APP_ENV: testing
@@ -44,8 +41,31 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: |
-          set -o pipefail
-          php vendor/bin/phpunit --colors=never 2>&1 | tee /tmp/results.txt
-      - name: Show last 120 lines on FAIL
-        if: failure()
-        run: tail -120 /tmp/results.txt
+          set +e
+          php vendor/bin/phpunit --colors=never --log-junit /tmp/junit.xml
+          echo EXIT=$? > /tmp/rc.txt
+      - name: Surface failures as annotations
+        if: always()
+        run: |
+          set -e
+          python3 -c "
+import xml.etree.ElementTree as ET
+import sys
+try:
+    tree = ET.parse('/tmp/junit.xml')
+    root = tree.getroot()
+    failures = []
+    errors = []
+    for ts in root.iter('testsuite'):
+        for tc in ts.findall('testcase'):
+            for f in tc.findall('failure') + tc.findall('error'):
+                failures.append((tc.attrib.get('classname',''), tc.attrib.get('name',''), f.text or ''))
+    for cname,name,txt in failures[:20]:
+        short = txt.strip().replace('\n','%0A')[:900]
+        print(f'::error file=test::{cname}::{name} - {short}')
+    sys.exit(0)
+"
+          echo "---"
+          cat /tmp/rc.txt
+      - name: Exit with phpunit rc
+        run: exit $(grep EXIT /tmp/rc.txt | cut -d= -f2)
