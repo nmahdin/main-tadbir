@@ -28,7 +28,7 @@ test('SPEC-ODL-02 proposed 28px radius is Studio-only with exactly Amendment B s
  assert.ok(code.includes('data-testid="studio-radius-24"')&&code.includes('data-testid="studio-radius-28"'));
 });
 test('SPEC-ODL-02 real demo controls provide validation, pagination, error, success and focus primitives',()=>{
- for(const part of ['onSubmit={submit}','onChange={setDate}','role="alert"','type="submit"','disabled','loading','setPage','aria-pressed','role="status"','new Intl.DateTimeFormat'])assert.ok(code.includes(part),part);
+ for(const part of ['onSubmit={submit}','onChange={setDate}','<Alert tone="error"','<Alert tone="success"','type="submit"','disabled','loading','setPage','aria-pressed','role="status"','new Intl.DateTimeFormat'])assert.ok(code.includes(part),part);
 });
 test('SPEC-ODL-02 coverage is grounded to four official international design sources',()=>{
  assert.ok(code.includes('https://docs.tabler.io/ui/components'));
