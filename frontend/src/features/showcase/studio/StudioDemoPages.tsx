@@ -10,10 +10,12 @@ export function StudioOverview(){
     <div className="ods-hero-actions"><Link to={studioPath('components/buttons')}>مشاهدهٔ دکمه‌ها <ArrowLeft size={16}/></Link>
       <Link to={studioPath('foundations/radius')}>مقایسهٔ گردی سطوح</Link></div>
    </section>
-   <div className="ods-overview-grid">{STUDIO_GROUPS.filter(x=>x.id!=='home').map(group=>
-    <Link key={group.id} className="ods-overview-group" to={studioPath(group.items[0].slug)}>
-      <span className="ods-group-icon"><group.items[0].icon size={20}/></span><strong>{group.title}</strong>
-      <small>{group.items.length.toLocaleString('fa-IR')} صفحهٔ مستقل</small><ArrowLeft size={16}/></Link>)}</div>
+   <div className="ods-overview-grid">{STUDIO_GROUPS.filter(x=>x.id!=='home').map(group=>{
+    const Icon=group.items[0].icon;
+    return <Link key={group.id} className="ods-overview-group" to={studioPath(group.items[0].slug)}>
+      <span className="ods-group-icon"><Icon size={20}/></span><strong>{group.title}</strong>
+      <small>{group.items.length.toLocaleString('fa-IR')} صفحهٔ مستقل</small><ArrowLeft size={16}/></Link>;
+   })}</div>
  </div>;
 }
 export function StudioDemoPage({pageId}:{pageId:string}){
