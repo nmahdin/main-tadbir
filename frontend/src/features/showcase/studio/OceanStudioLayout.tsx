@@ -80,7 +80,7 @@ export function OceanStudioLayout({gallery}:{gallery:React.ReactNode}){
   return <StudioDemoPage pageId={page.id}/>;
  };
  return <div className="ods-studio" dir="rtl" data-testid="ocean-studio-shell" data-collapsed={sidebarCompact}>
-  <a className="ods-skip" href="#ocean-studio-main">رفتن به محتوای اصلی</a>
+  <a className="ods-skip" href="#ocean-studio-main" tabIndex={mobile&&drawerOpen?-1:undefined} aria-hidden={mobile&&drawerOpen?true:undefined}>رفتن به محتوای اصلی</a>
   {mobile&&drawerOpen&&<button type="button" className="ods-backdrop" aria-label="بستن فهرست با لمس پس‌زمینه"
     tabIndex={-1} onClick={()=>setDrawerOpen(false)}/>}
   <aside ref={sidebar} className={'ods-sidebar '+(sidebarCompact?'ods-sidebar--compact ':'')+(mobile&&drawerOpen?'ods-sidebar--open':'')}
@@ -118,7 +118,7 @@ export function OceanStudioLayout({gallery}:{gallery:React.ReactNode}){
    <footer className="ods-sidebar-foot"><span className="ods-foot-mark"><Command size={17}/></span>
     {!sidebarCompact&&<span><strong>فقط برای طراحی</strong><small>بدون دادهٔ کاربری یا API</small></span>}</footer>
   </aside>
-  <div className="ods-workspace">
+  <div className="ods-workspace" inert={mobile&&drawerOpen}>
    <header className="ods-topbar">
     <div className="ods-topbar-title">
      {mobile&&<button ref={opener} className="ods-icon-button" type="button" aria-label="بازکردن فهرست استودیو"

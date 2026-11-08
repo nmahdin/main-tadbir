@@ -38,6 +38,7 @@ test('SPEC-ODL-02 mobile focus trap, Escape dismissal and no page-level overflow
  const open=page.getByRole('button',{name:'بازکردن فهرست استودیو'});
  await open.click();
  await expect(page.getByRole('dialog',{name:'فهرست صفحات استودیو'})).toBeVisible();
+ await expect(page.locator('.ods-workspace')).toHaveAttribute('inert','');
  await page.keyboard.press('Tab');
  expect(await page.getByRole('dialog',{name:'فهرست صفحات استودیو'}).evaluate(el=>el.contains(document.activeElement))).toBe(true);
  await page.keyboard.press('Escape');

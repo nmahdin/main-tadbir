@@ -29,6 +29,7 @@ test('SPEC-ODL-02 shared shell is above page-specific content and preserves hist
  assert.ok(studio.includes('aria-expanded'));
  assert.ok(studio.includes("event.key==='Escape'"));
  assert.ok(studio.includes('sidebar.current.inert=mobile&&!drawerOpen'));
+ assert.ok(studio.includes('className="ods-workspace" inert={mobile&&drawerOpen}'), 'mobile modal must remove background from the focus and accessibility tree');
  assert.ok(studio.includes('skipDrawerFocusRestore.current=true'), 'navigation must not steal focus from its destination');
  assert.ok(studio.includes('filtering||openedGroups.includes(section.id)'), 'filtered results must show even if group was collapsed');
  for(const prohibited of ['useAuth(', 'useApp(', 'logoutSession(', 'setActiveView(', 'localStorage','fetch('])assert.ok(!studio.includes(prohibited),prohibited);
