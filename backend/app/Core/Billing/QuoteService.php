@@ -407,9 +407,12 @@ final class QuoteService
 
     private function countOpenReservationsForPromo(int $promoId, ?int $excludeReservationId = null): int
     {
+        // A reservation consumes capacity in RESERVED (quote) or
+        // CONVERTED (order after S4 conversion). RELEASED/EXPIRED/
+        // REDEEMED are terminal and do not occupy a slot.
         return (int) CorePromoReservation::query()
             ->where('promo_id', $promoId)
-            ->where('state', CorePromoReservation::STATE_RESERVED)
+            ->whereIn('state', [CorePromoReservation::STATE_RESERVED, CorePromoReservation::STATE_CONVERTED])
             ->when($excludeReservationId !== null, fn ($q) => $q->where('id', '!=', $excludeReservationId))
             ->count();
     }
@@ -423,7 +426,11 @@ final class QuoteService
         return (int) CorePromoReservation::query()
             ->where('owner_key', $ownerKey)
             ->where('promo_id', $promoId)
-            ->whereIn('state', [CorePromoReservation::STATE_RESERVED, CorePromoReservation::STATE_REDEEMED])
+            ->whereIn('state', [
+                CorePromoReservation::STATE_RESERVED,
+                CorePromoReservation::STATE_CONVERTED,
+                CorePromoReservation::STATE_REDEEMED,
+            ])
             ->when($excludeReservationId !== null, fn ($q) => $q->where('id', '!=', $excludeReservationId))
             ->count();
     }

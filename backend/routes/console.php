@@ -44,6 +44,13 @@ Schedule::command('billing:expire-quotes')
     ->everyMinute()
     ->withoutOverlapping(2);
 
+// C5-M2-S4: sweep expired review orders (7-day TTL default) and
+// release their promo reservations every hour. Lazy expiry also
+// runs at read-time.
+Schedule::command('billing:expire-orders')
+    ->hourly()
+    ->withoutOverlapping(2);
+
 // Overdue reminders are idempotent, so they may run as often or as rarely as the
 // host allows. Nothing below assumes a permanent cron: the command is safe to
 // call from the Bale tick above, from an external scheduler, or by hand.

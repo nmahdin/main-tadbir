@@ -388,6 +388,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('billing/quotes/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'indexForOrganization'])->name('api.v1.billing.quotes.org.index');
         Route::post('billing/quotes/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'createForOrganization'])->name('api.v1.billing.quotes.org.create');
         Route::get('billing/quotes/{quote}', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'show'])->name('api.v1.billing.quotes.show')->whereNumber('quote');
+        Route::post('billing/quotes/{quote}/convert', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'convert'])->name('api.v1.billing.quotes.convert')->whereNumber('quote');
+        Route::get('billing/orders', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'indexForPersonal'])->name('api.v1.billing.orders.personal.index');
+        Route::get('billing/orders/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'indexForOrganization'])->name('api.v1.billing.orders.org.index');
+        Route::get('billing/orders/{order}', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'show'])->name('api.v1.billing.orders.show')->whereNumber('order');
+        Route::post('billing/orders/{order}/cancel', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'cancel'])->name('api.v1.billing.orders.cancel')->whereNumber('order');
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
         // UX-02-3-FINAL: bulk status reuses the single-record service per task.
         Route::post('tasks/bulk-status', [TaskController::class, 'bulkStatus'])->middleware('permission:tasks.view')->name('api.v1.tasks.bulk-status');

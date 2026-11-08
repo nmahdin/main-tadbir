@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property string $state
  * @property Carbon|null $released_at
  * @property string $idempotency_key
+ * @property int|null $order_id
  */
 class CorePromoReservation extends Model
 {
@@ -30,12 +31,22 @@ class CorePromoReservation extends Model
 
     public const STATE_EXPIRED = 'expired';
 
+    /**
+     * Reservation transferred to an order during S4 conversion. The
+     * slot still counts toward global/per-owner capacity (so it is
+     * NOT free), but it is now anchored to the order instead of the
+     * quote. M3 payment will flip this to REDEEMED; order cancel or
+     * review-expiry flips it to RELEASED.
+     */
+    public const STATE_CONVERTED = 'converted';
+
     public const STATE_REDEEMED = 'redeemed';
 
     protected $table = 'core_billing_promo_reservations';
 
     protected $fillable = [
         'quote_id',
+        'order_id',
         'promo_id',
         'owner_key',
         'state',
@@ -47,6 +58,7 @@ class CorePromoReservation extends Model
     {
         return [
             'quote_id' => 'integer',
+            'order_id' => 'integer',
             'promo_id' => 'integer',
             'released_at' => 'datetime',
         ];
@@ -62,8 +74,18 @@ class CorePromoReservation extends Model
         return $this->belongsTo(CorePromotion::class, 'promo_id');
     }
 
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(CoreBillingOrder::class, 'order_id');
+    }
+
+    /**
+     * A reservation counts against promo capacity while it is in
+     * RESERVED (quote holds it) or CONVERTED (order holds it). Once
+     * released/expired/redeemed the slot is freed or finalized.
+     */
     public function isConsumingCapacity(): bool
     {
-        return $this->state === self::STATE_RESERVED;
+        return in_array($this->state, [self::STATE_RESERVED, self::STATE_CONVERTED], true);
     }
 }
