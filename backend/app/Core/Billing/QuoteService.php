@@ -204,7 +204,7 @@ final class QuoteService
             // (owner, plan version) — release its reservation in
             // the same transaction and stamp the new quote as
             // successor.
-            $this->supersedeOpenQuotesForOwnerVersion($ownerKey, $lockedVersion->id, (int) $quote->id, $at);
+            $this->supersedeOpenQuotesForOwnerVersion($ownerKey, $lockedVersion->id, $period, (int) $quote->id, $at);
 
             $this->audit->record(
                 $actor,
@@ -368,11 +368,12 @@ final class QuoteService
         );
     }
 
-    private function supersedeOpenQuotesForOwnerVersion(string $ownerKey, int $planVersionId, ?int $excludeQuoteId, CarbonImmutable $at): void
+    private function supersedeOpenQuotesForOwnerVersion(string $ownerKey, int $planVersionId, string $period, ?int $excludeQuoteId, CarbonImmutable $at): void
     {
         $toSupersede = CoreBillingQuote::query()
             ->where('owner_key', $ownerKey)
             ->where('plan_version_id', $planVersionId)
+            ->where('period', $period)
             ->where('status', CoreBillingQuote::STATUS_OPEN)
             ->when($excludeQuoteId !== null, fn ($q) => $q->where('id', '!=', $excludeQuoteId))
             ->lockForUpdate()

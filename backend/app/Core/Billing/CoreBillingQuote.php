@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -186,6 +187,14 @@ class CoreBillingQuote extends Model
     public function reservations(): HasMany
     {
         return $this->hasMany(CorePromoReservation::class, 'quote_id');
+    }
+
+    /**
+     * At-most-one order per quote (UNIQUE FK on core_billing_orders.quote_id).
+     */
+    public function order(): HasOne
+    {
+        return $this->hasOne(CoreBillingOrder::class, 'quote_id');
     }
 
     public function scopeForOwnerKey(Builder $query, string $ownerKey): Builder

@@ -81,41 +81,78 @@ final class OrderService
             return ['order' => $idemExisting, 'is_replay' => true];
         }
 
-        [$order, $isReplay] = DB::transaction(function () use ($actor, $owner, $ownerKey, $quote, $idempotencyKey, $payloadHash, $at): array {
-            // Re-lock quote FOR UPDATE in lock order (quote first,
-            // consistent with sweeper/supersession).
-            $lockedQuote = CoreBillingQuote::query()
+        // Re-lock quote FOR UPDATE in a short transaction so we can
+        // transition terminal states (expired/superseded) before raising,
+        // without rolling them back when we throw.
+        $preCheck = DB::transaction(function () use ($quote, $at): array {
+            $locked = CoreBillingQuote::query()
                 ->lockForUpdate()
                 ->findOrFail($quote->id);
 
-            // Another concurrent transaction may have converted it.
-            $existingOrder = CoreBillingOrder::query()
-                ->where('quote_id', $lockedQuote->id)
-                ->first();
+            $already = CoreBillingOrder::query()->where('quote_id', $locked->id)->first();
+            if ($already !== null) {
+                return ['already' => $already];
+            }
+            if ($locked->status === CoreBillingQuote::STATUS_SUPERSEDED) {
+                return ['reject' => 'quote_superseded', 'quote' => $locked];
+            }
+            if ($locked->status === CoreBillingQuote::STATUS_CONVERTED) {
+                // Convert: race where another txn converted; caller will re-check.
+                $already = CoreBillingOrder::query()->where('quote_id', $locked->id)->first();
+
+                return ['already' => $already ?? 'quote_already_converted'];
+            }
+            if ($locked->status === CoreBillingQuote::STATUS_EXPIRED) {
+                return ['reject' => 'quote_expired', 'quote' => $locked];
+            }
+            if (! $locked->isConvertibleAt($at)) {
+                // Lazily expire inside the txn so the status update +
+                // reservation release are atomic and durable (we will
+                // commit & re-read before throwing).
+                $this->expireQuoteLocked($locked, $at);
+
+                return ['reject' => 'quote_expired', 'quote' => $locked->fresh()];
+            }
+
+            return ['ok' => $locked];
+        });
+
+        if (isset($preCheck['already'])) {
+            if ($preCheck['already'] instanceof CoreBillingOrder) {
+                if ($preCheck['already']->owner_key !== $ownerKey) {
+                    throw new BillingDomainException('order_owner_mismatch', 'The order belongs to a different owner.');
+                }
+
+                return ['order' => $preCheck['already'], 'is_replay' => true];
+            }
+            throw new BillingDomainException((string) $preCheck['already'], 'This quote has already been converted.');
+        }
+        if (isset($preCheck['reject'])) {
+            $code = $preCheck['reject'];
+            $msg = match ($code) {
+                'quote_expired' => 'This quote has expired and cannot be converted.',
+                'quote_superseded' => 'This quote has been superseded by a newer quote and cannot be converted.',
+                default => 'Quote cannot be converted.',
+            };
+
+            throw new BillingDomainException($code, $msg);
+        }
+        $lockedQuote = $preCheck['ok'];
+
+        [$order, $isReplay] = DB::transaction(function () use ($actor, $owner, $ownerKey, $lockedQuote, $idempotencyKey, $payloadHash, $at): array {
+            // Re-lock the quote; another concurrent txn may have raced.
+            $locked = CoreBillingQuote::query()->lockForUpdate()->findOrFail($lockedQuote->id);
+            $existingOrder = CoreBillingOrder::query()->where('quote_id', $locked->id)->first();
             if ($existingOrder !== null) {
                 return [$existingOrder, true];
             }
-
-            if ($lockedQuote->status === CoreBillingQuote::STATUS_SUPERSEDED) {
-                throw new BillingDomainException('quote_superseded', 'This quote has been superseded by a newer quote and cannot be converted.');
-            }
-            if ($lockedQuote->status === CoreBillingQuote::STATUS_EXPIRED) {
-                throw new BillingDomainException('quote_expired', 'This quote has expired and cannot be converted.');
-            }
-            if ($lockedQuote->status === CoreBillingQuote::STATUS_CONVERTED) {
-                // Should have been caught above; defensive.
-                $existingOrder = CoreBillingOrder::query()->where('quote_id', $lockedQuote->id)->first();
-                if ($existingOrder !== null) {
-                    return [$existingOrder, true];
-                }
-                throw new BillingDomainException('quote_already_converted', 'This quote has already been converted.');
-            }
-            // Strictly-before boundary: at exact expires_at conversion fails.
-            if (! $lockedQuote->isConvertibleAt($at)) {
-                // Lazily expire before raising (releases reservation).
-                $this->expireQuoteLocked($lockedQuote, $at);
-
-                throw new BillingDomainException('quote_expired', 'This quote has expired and cannot be converted.');
+            if ($locked->status !== CoreBillingQuote::STATUS_OPEN || ! $locked->isConvertibleAt($at)) {
+                // State changed between pre-check and inner txn: expire /
+                // supersede race; bail (outer caller should retry if wanted).
+                throw new BillingDomainException(
+                    $locked->status === CoreBillingQuote::STATUS_EXPIRED ? 'quote_expired' : 'quote_superseded',
+                    'Quote state changed; please retry.',
+                );
             }
 
             $reviewTtlDays = (int) config('billing.provisional.order_review_ttl_days', 7);

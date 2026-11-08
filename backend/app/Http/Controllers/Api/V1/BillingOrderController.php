@@ -45,12 +45,29 @@ final class BillingOrderController extends Controller
             return response()->json(['message' => 'پیش‌فاکتور یافت نشد.', 'code' => 'quote_not_found'], 404);
         }
 
+        // Validate the JSON body idempotency_key only when the header is
+        // absent. Laravel's validator cannot see HTTP headers through
+        // required_without, so we key the condition manually.
         $data = $request->validate([
-            'idempotency_key' => ['required_without:Idempotency-Key', 'nullable', 'string', 'max:80'],
+            'idempotency_key' => ['nullable', 'string', 'max:80'],
         ]);
-        $idempotencyKey = trim((string) ($request->header('Idempotency-Key')
+        if ($request->hasHeader('Idempotency-Key')) {
+            // Prefer header; body field is irrelevant in that branch.
+        } elseif ($request->hasHeader('idempotency-key')) {
+            // All lowercase variant from some clients.
+        } elseif (!array_key_exists('idempotency_key', $data) || $data['idempotency_key'] === null || $data['idempotency_key'] === '') {
+            return response()->json([
+                'message' => 'Idempotency-Key header or idempotency_key body is required.',
+                'code' => 'order_idempotency_key_required',
+                'errors' => ['idempotency_key' => ['The idempotency key field is required when Idempotency-Key header is not present.']],
+            ], 422);
+        }
+        $idempotencyKey = trim((string) (
+            $request->header('Idempotency-Key')
+            ?? $request->header('idempotency-key')
             ?? $data['idempotency_key']
-            ?? throw new BillingDomainException('order_idempotency_key_required', 'Idempotency-Key header or body is required.')));
+            ?? throw new BillingDomainException('order_idempotency_key_required', 'Idempotency-Key header or body is required.')
+        ));
 
         try {
             $result = $this->orders->convert(
