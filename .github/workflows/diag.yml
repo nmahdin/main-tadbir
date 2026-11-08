@@ -1,32 +1,23 @@
-name: diag-exact
+name: diag-comment
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
   workflow_dispatch:
 jobs:
   backend:
-    name: Backend contracts and tests (EXACT CLONE)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Configure PHP
-        uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
           extensions: mbstring, pdo_sqlite, fileinfo, zip
           coverage: none
           tools: composer:v2
-      - name: Validate Composer contract
-        working-directory: backend
-        run: composer validate --no-check-publish --strict
-      - name: Install locked dependencies
-        working-directory: backend
+      - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Pint check (Stage 02 architecture zones only)
-        working-directory: backend
-        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
-      - name: Migration gate on a clean database
+      - name: Migrate
         working-directory: backend
         env:
           APP_ENV: testing
@@ -36,7 +27,7 @@ jobs:
         run: |
           touch database/ci.sqlite
           php artisan migrate:fresh --force --no-interaction
-      - name: PHPUnit
+      - name: PHPUnit and write output to a file in workspace
         working-directory: backend
         env:
           APP_ENV: testing
@@ -48,8 +39,12 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           set +e
-          OUT=$(php vendor/bin/phpunit --colors=never 2>&1)
-          rc=$?
-          echo "$OUT" | tail -120
-          echo "=== PHPUnit exit=$rc ==="
-          exit $rc
+          php vendor/bin/phpunit --colors=never > /tmp/phpunit.txt 2>&1
+          echo "exit=$?" >> /tmp/phpunit.txt
+          # Also write to a github env file so we can upload it as artifact
+          cp /tmp/phpunit.txt ../phpunit-result.txt
+          tail -80 ../phpunit-result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phpunit-result
+          path: phpunit-result.txt
