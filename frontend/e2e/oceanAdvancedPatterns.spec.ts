@@ -1,0 +1,65 @@
+import {test,expect} from '@playwright/test';
+
+test('ODL-03 A filter draft/apply/clear and direct URL history',async({page})=>{
+ await page.setViewportSize({width:1440,height:900});
+ await page.goto('/theme-previews/patterns/filters');
+ await expect(page.getByRole('heading',{name:'سازندهٔ فیلترهای پیشرفته'})).toBeVisible();
+ await page.getByRole('button',{name:'افزودن گروه'}).click();
+ await page.getByRole('textbox',{name:'مقدار شرط 1 در گروه 1'}).fill('گزارش');
+ await expect(page.locator('.ods-pattern-table tbody tr')).toHaveCount(6);
+ await page.getByRole('button',{name:'اعمال فیلتر'}).click();
+ await expect(page.locator('.ods-pattern-table tbody tr')).toHaveCount(3);
+ await expect(page).toHaveURL(/filter=/);
+ await page.reload();
+ await expect(page.locator('.ods-pattern-table tbody tr')).toHaveCount(3);
+ await page.getByRole('button',{name:'پاک کردن همه'}).click();
+ await expect(page.locator('.ods-pattern-table tbody tr')).toHaveCount(6);
+ await page.goBack();
+ await expect(page.locator('.ods-pattern-table tbody tr')).toHaveCount(3);
+});
+test('ODL-03 B per-step validation, review and no-submission confirmation',async({page})=>{
+ await page.setViewportSize({width:834,height:1112});
+ await page.goto('/theme-previews/patterns/wizard');
+ await page.getByRole('button',{name:'مرحلهٔ بعد'}).click();
+ await expect(page.getByRole('alert')).toBeVisible();
+ await page.getByRole('textbox',{name:'عنوان درخواست'}).fill('درخواست آموزشی آزمایشی');
+ await page.getByRole('button',{name:'مرحلهٔ بعد'}).click();
+ await page.getByRole('textbox',{name:'ایمیل پاسخ'}).fill('sample@example.com');
+ await page.getByRole('textbox',{name:'توضیح درخواست'}).fill('توضیح تکمیلی درخواست آزمایشی و تست');
+ await page.getByRole('button',{name:'مرحلهٔ بعد'}).click();
+ await expect(page.getByRole('heading',{name:'مرور و بررسی'})).toBeVisible();
+ await page.getByRole('button',{name:'تأیید نمایشی'}).click();
+ await expect(page.getByText('هیچ اطلاعاتی ثبت، ارسال یا ذخیره نشده است.')).toBeVisible();
+});
+test('ODL-03 B discard warning traps focus and Escape restores it',async({page})=>{
+ await page.goto('/theme-previews/patterns/wizard');
+ await page.getByRole('textbox',{name:'عنوان درخواست'}).fill('نمونهٔ تغییر');
+ const discard=page.getByRole('button',{name:'لغو و پاک‌کردن'});
+ await discard.click();
+ const dialog=page.getByRole('alertdialog',{name:'تغییرات ذخیره‌نشده'});
+ await expect(dialog).toBeVisible();
+ await expect(dialog.getByRole('button',{name:'ادامهٔ ویرایش'})).toBeFocused();
+ await page.keyboard.press('Escape');
+ await expect(dialog).toHaveCount(0);
+ await expect(discard).toBeFocused();
+});
+test('ODL-03 C Ctrl+K, permission filtering and known Studio destinations',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/theme-previews/patterns/commands');
+ await page.keyboard.press('Control+k');
+ const dialog=page.getByRole('dialog',{name:'فرمان‌های آزمایشی'});
+ await expect(dialog).toBeVisible();
+ const search=page.getByRole('combobox',{name:'جست‌وجوی فرمان‌ها'});
+ await expect(search).toBeFocused();
+ await search.fill('فیلترهای پیشرفته');
+ await expect(dialog.getByText('هیچ فرمان مجازی با این عبارت پیدا نشد.')).toBeVisible();
+ await page.keyboard.press('Escape');
+ await expect(dialog).toHaveCount(0);
+ await expect(page.getByRole('button',{name:/بازکردن فرمان‌ها/})).toBeFocused();
+ await page.getByRole('combobox',{name:'محیط مجوزهای نمایشی'}).selectOption('platform');
+ await page.keyboard.press('Control+k');
+ await search.fill('فیلترهای پیشرفته');
+ await expect(dialog.getByRole('option',{name:/فیلترهای پیشرفته/})).toBeVisible();
+ await search.press('Enter');
+ await expect(page).toHaveURL(/\/theme-previews\/patterns\/filters$/);
+});
