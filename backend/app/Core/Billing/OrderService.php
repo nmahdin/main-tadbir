@@ -27,8 +27,7 @@ final class OrderService
 {
     public function __construct(
         private readonly AuditWriter $audit,
-    ) {
-    }
+    ) {}
 
     /**
      * Convert a quote into an order, or return the existing order on
