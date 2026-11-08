@@ -1,4 +1,4 @@
-name: diag-pint6
+name: diag-pint7
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
@@ -20,22 +20,13 @@ jobs:
       - name: Install locked dependencies
         working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Run Pint (fail-tolerant)
+      - name: Pint
         working-directory: backend
         run: |
           echo "PWD=$(pwd)"
-          ls vendor/bin/pint
-          echo "===RUN==="
-          php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > pintout.txt 2>&1
+          echo "===RUN PINT==="
+          set +e
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
           rc=$?
-          echo "exit=$rc"
-          echo "===PINTOUT LENGTH==="
-          wc -l pintout.txt
-          echo "===PINTOUT==="
-          cat pintout.txt
-          echo "===END==="
+          echo "pint exit=$rc"
           exit 0
-      - uses: actions/upload-artifact@v4
-        with:
-          name: pintout
-          path: backend/pintout.txt
