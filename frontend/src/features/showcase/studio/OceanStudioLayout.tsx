@@ -3,6 +3,8 @@ import {Link,useLocation} from 'react-router-dom';
 import {ArrowLeft,ChevronDown,ChevronLeft,Command,ExternalLink,Home,Menu,PanelRightClose,PanelRightOpen,Search,X} from 'lucide-react';
 import {STUDIO_GROUPS,STUDIO_PAGES,resolveStudioPage,studioGroupFor,studioPath,studioToggleGroup,type StudioPage} from './studioRoutes';
 import {StudioDemoPage,StudioOverview} from './StudioDemoPages';
+import {AdvancedFiltersPage} from './advanced/AdvancedFiltersPage';
+import './advanced/patterns.css';
 import {OceanShellPlayground} from '../lab/OceanShellPlayground';
 import {GuidedTourPrototype} from '../lab/GuidedTourPrototype';
 import {LayoutEditorPrototype} from '../lab/LayoutEditorPrototype';
@@ -77,6 +79,7 @@ export function OceanStudioLayout({gallery}:{gallery:React.ReactNode}){
   if(page.id==='shell')return <div className="ods-prototype"><OceanShellPlayground/></div>;
   if(page.id==='tour')return <div className="ods-prototype"><GuidedTourPrototype/></div>;
   if(page.id==='layout')return <div className="ods-prototype"><LayoutEditorPrototype/></div>;
+  if(page.id==='advanced-filters')return <AdvancedFiltersPage/>;
   return <StudioDemoPage pageId={page.id}/>;
  };
  return <div className="ods-studio" dir="rtl" data-testid="ocean-studio-shell" data-collapsed={sidebarCompact}>

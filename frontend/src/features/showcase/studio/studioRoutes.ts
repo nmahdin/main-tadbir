@@ -1,4 +1,4 @@
-import { AlertCircle, BellRing, Blocks, BookOpen, CalendarDays, FormInput, GalleryHorizontal, Grid2x2, LayoutDashboard, LayoutPanelTop, Layers, MousePointerClick, Palette, PanelsTopLeft, Radius, Ruler, Shapes, Sparkles, Table2, TextCursorInput, Type, type LucideIcon } from 'lucide-react';
+import { AlertCircle, BellRing, Blocks, BookOpen, CalendarDays, FormInput, GalleryHorizontal, Grid2x2, LayoutDashboard, LayoutPanelTop, Layers, ListFilter, MousePointerClick, Palette, PanelsTopLeft, Radius, Ruler, Shapes, Sparkles, Table2, TextCursorInput, Type, type LucideIcon } from 'lucide-react';
 export const STUDIO_ROOT='/theme-previews';
 export type StudioPage={id:string;slug:string;title:string;description:string;group:string;icon:LucideIcon};
 export type StudioGroup={id:string;title:string;items:readonly StudioPage[]};
@@ -26,6 +26,9 @@ export const STUDIO_GROUPS:readonly StudioGroup[]=[
   item('components','navigation','components/navigation','ناوبری و لایه‌ها','تب، Breadcrumb، Tooltip و Popover',PanelsTopLeft),
   item('components','dashboard','components/dashboard','داشبورد و ابزارک‌ها','کارت‌های آماری و نماهای نمونه',Grid2x2),
   item('components','locale','components/locale','فارسی و راست‌به‌چپ','ارقام، تاریخ و متن ترکیبی فارسی و لاتین',CalendarDays)
+ ]},
+ {id:'advanced',title:'الگوهای پیشرفته',items:[
+  item('advanced','advanced-filters','patterns/filters','فیلترهای پیشرفته','گروه‌های AND/OR و همگام‌سازی نشانی',ListFilter)
  ]},
  {id:'prototypes',title:'نمونه‌های تعاملی',items:[
   item('prototypes','shell','prototypes/shell','پوستهٔ آزمایشی','سایدبار و هدر تعاملی با دادهٔ ساختگی',LayoutPanelTop),
