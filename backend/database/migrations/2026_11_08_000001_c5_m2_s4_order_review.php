@@ -99,13 +99,23 @@ return new class extends Migration
         // free/reserve flip-flop). FK uses nullOnDelete so a hard
         // purge of historical orders is possible in a later
         // operations milestone without blocking on reservation rows.
+        //
+        // SQLite does not support adding foreign keys via ALTER TABLE
+        // in Laravel's portable schema grammar; FKs are skipped there
+        // (consistent with the S3 owner-FK migration). On MySQL/MariaDB
+        // the FK is added explicitly to enforce referential integrity.
         Schema::table('core_billing_promo_reservations', function (Blueprint $table): void {
             $table->unsignedBigInteger('order_id')->nullable()->after('quote_id');
-            $table->foreign('order_id', 'billing_reservations_order_id_foreign')
-                ->references('id')->on('core_billing_orders')
-                ->nullOnDelete();
             $table->index(['order_id'], 'billing_reservations_order_idx');
         });
+
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            Schema::table('core_billing_promo_reservations', function (Blueprint $table): void {
+                $table->foreign('order_id', 'billing_reservations_order_id_foreign')
+                    ->references('id')->on('core_billing_orders')
+                    ->nullOnDelete();
+            });
+        }
 
         if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
             DB::statement("ALTER TABLE core_billing_orders ADD CONSTRAINT billing_orders_status_valid CHECK (status IN ('in_review','cancelled','review_expired'))");
@@ -117,8 +127,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            Schema::table('core_billing_promo_reservations', function (Blueprint $table): void {
+                $table->dropForeign('billing_reservations_order_id_foreign');
+            });
+        }
         Schema::table('core_billing_promo_reservations', function (Blueprint $table): void {
-            $table->dropForeign('billing_reservations_order_id_foreign');
             $table->dropIndex('billing_reservations_order_idx');
             $table->dropColumn('order_id');
         });
