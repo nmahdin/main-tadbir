@@ -1,4 +1,4 @@
-name: diag-pint9
+name: diag-pint10
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
@@ -16,11 +16,13 @@ jobs:
           tools: composer:v2
       - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Run pint to AUTOFIX then show diff
+      - name: run pint on exact backend targets
         working-directory: backend
         run: |
-          php vendor/bin/pint app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
-          cd ..
-          git diff --stat
-          echo "===DIFF==="
-          git diff | head -500
+          echo "PWD=$(pwd)"
+          echo "===LIST FILES==="
+          ls app/Core/Billing/OrderService.php app/Http/Controllers/Api/V1/BillingOrderController.php
+          echo "===RUN PINT==="
+          set -x
+          php vendor/bin/pint --test -v app/Core/Billing/OrderService.php app/Core/Billing/CoreBillingOrder.php app/Core/Billing/CoreBillingOrderLine.php app/Core/Billing/CorePromoReservation.php app/Core/Billing/QuoteService.php app/Http/Controllers/Api/V1/BillingOrderController.php app/Console/Commands/ExpireBillingOrders.php tests/Feature/Core/BillingOrderTest.php
+          echo "rc=$?"
