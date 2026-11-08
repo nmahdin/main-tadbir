@@ -22,15 +22,19 @@ jobs:
         run: composer install --prefer-dist --no-interaction --no-progress
       - name: Run Pint (fail-tolerant)
         working-directory: backend
-        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > pintout.txt 2>&1 || true
-      - name: Show pintout
-        working-directory: backend
         run: |
+          echo "PWD=$(pwd)"
+          ls vendor/bin/pint
+          echo "===RUN==="
+          php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > pintout.txt 2>&1
+          rc=$?
+          echo "exit=$rc"
           echo "===PINTOUT LENGTH==="
           wc -l pintout.txt
           echo "===PINTOUT==="
           cat pintout.txt
           echo "===END==="
+          exit 0
       - uses: actions/upload-artifact@v4
         with:
           name: pintout
