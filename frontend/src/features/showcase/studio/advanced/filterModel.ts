@@ -25,7 +25,7 @@ export function normalizePersian(text:string):string{return text.normalize('NFKC
  .replace(/[\u064B-\u065F\u0670]/g,'').replace(/[\u200c\u200d]/g,' ').replace(/[۰-۹]/g,ch=>String(ch.charCodeAt(0)-0x6f0))
  .replace(/[٠-٩]/g,ch=>String(ch.charCodeAt(0)-0x660)).toLocaleLowerCase('fa-IR').replace(/\s+/g,' ').trim();}
 const object=(v:unknown):v is Record<string,unknown>=>typeof v==='object'&&v!==null&&!Array.isArray(v);
-const safeId=(v:unknown)=>typeof v==='string'&&/^[a-z0-9-]{1,40}$/.test(v);
+const safeId=(v:unknown):v is string=>typeof v==='string'&&/^[a-z0-9-]{1,40}$/.test(v);
 const validJoin=(v:unknown):v is Join=>v==='and'||v==='or';
 export function validFilter(v:unknown):v is Filter{
  if(!object(v)||v.v!==1||!validJoin(v.join)||!Array.isArray(v.groups)||v.groups.length>4)return false;
