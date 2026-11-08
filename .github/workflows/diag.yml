@@ -1,32 +1,42 @@
-name: diag-phpunit2
+name: diag-phpunit3
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
   workflow_dispatch:
 jobs:
   backend:
+    name: Backend contracts and tests (CLONE)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mbstring, pdo_sqlite, fileinfo, zip, pdo_mysql
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
           coverage: none
           tools: composer:v2
-      - working-directory: backend
+      - name: Validate Composer contract
+        working-directory: backend
+        run: composer validate --no-check-publish --strict
+      - name: Install locked dependencies
+        working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Migrate (sqlite)
+      - name: Pint check (Stage 02 architecture zones only)
+        working-directory: backend
+        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
+      - name: Migration gate on a clean database
         working-directory: backend
         env:
           APP_ENV: testing
           APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           DB_CONNECTION: sqlite
-          DB_DATABASE: ':memory:'
+          DB_DATABASE: database/ci.sqlite
         run: |
           touch database/ci.sqlite
           php artisan migrate:fresh --force --no-interaction
-      - name: PHPUnit (full suite)
+      - name: PHPUnit
         working-directory: backend
         env:
           APP_ENV: testing
@@ -36,4 +46,5 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: php vendor/bin/phpunit --colors=never 2>&1 | tail -200
+        run: |
+          php vendor/bin/phpunit --colors=never 2>&1 | tail -100
