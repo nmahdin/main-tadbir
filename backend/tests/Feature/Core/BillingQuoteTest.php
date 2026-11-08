@@ -197,12 +197,20 @@ class BillingQuoteTest extends TestCase
         $this->assertSame(CoreBillingQuote::STATUS_OPEN, $q1->status);
         $this->assertSame(CorePromoReservation::STATE_RESERVED, $q1->reservations->first()->state);
 
-        $q2 = $svc->create($this->actor, $owner, $v, 'annual', 'CAP1', 'ks2')['quote'];
+        // Cross-period quotes do NOT supersede each other (monthly,
+        // quarterly, annual are independent lines), per C5-M2-S4
+        // acceptance (different periods may review concurrently).
+        $q2annual = $svc->create($this->actor, $owner, $v, 'annual', null, 'ks2a')['quote'];
+        $q1->refresh();
+        $this->assertSame(CoreBillingQuote::STATUS_OPEN, $q1->status, 'cross-period quotes do not supersede');
+        $this->assertSame(CoreBillingQuote::STATUS_OPEN, $q2annual->status);
+
+        // Same-period creation supersedes the prior monthly quote.
+        $q2 = $svc->create($this->actor, $owner, $v, 'monthly', 'CAP1', 'ks2')['quote'];
         $q1->refresh();
         $this->assertSame(CoreBillingQuote::STATUS_SUPERSEDED, $q1->status);
         $this->assertSame((int) $q2->id, (int) $q1->superseded_by_quote_id);
-        // Prior reservation released.
-        $this->assertSame(CorePromoReservation::STATE_RELEASED, $q1->reservations->first()->state);
+        $this->assertSame(CorePromoReservation::STATE_RELEASED, $q1->reservations()->where('state', CorePromoReservation::STATE_RELEASED)->first()->state);
         $this->assertSame(CorePromoReservation::STATE_RESERVED, $q2->reservations->first()->state);
     }
 
