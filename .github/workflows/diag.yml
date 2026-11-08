@@ -1,0 +1,26 @@
+name: diag-pint9
+on:
+  push:
+    branches: [arena/582a70e5-main-tadbir]
+  workflow_dispatch:
+jobs:
+  pint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
+          coverage: none
+          tools: composer:v2
+      - working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Run pint to AUTOFIX then show diff
+        working-directory: backend
+        run: |
+          php vendor/bin/pint app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
+          cd ..
+          git diff --stat
+          echo "===DIFF==="
+          git diff | head -500
