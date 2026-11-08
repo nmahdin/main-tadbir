@@ -1,4 +1,4 @@
-name: diag-pint12
+name: diag-pint13
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
@@ -16,12 +16,10 @@ jobs:
           tools: composer:v2
       - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: pint targeted FAILING FILES FIRST
+      - name: pint whole backend scope
         working-directory: backend
         run: |
           set +e
-          for f in app/Core/Billing/OrderService.php app/Core/Billing/CoreBillingOrder.php app/Core/Billing/CoreBillingOrderLine.php app/Core/Billing/CorePromoReservation.php app/Core/Billing/QuoteService.php app/Http/Controllers/Api/V1/BillingOrderController.php app/Console/Commands/ExpireBillingOrders.php tests/Feature/Core/BillingOrderTest.php routes/api.php routes/console.php; do
-            echo "=== $f ==="
-            php vendor/bin/pint --test -v "$f" 2>&1 | tail -20
-            echo "---"
-          done
+          echo "=== starting pint ==="
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1
+          echo "=== finished rc=$? ==="
