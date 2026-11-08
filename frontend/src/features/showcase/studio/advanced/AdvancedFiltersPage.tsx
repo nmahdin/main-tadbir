@@ -2,7 +2,13 @@ import React,{useEffect,useRef,useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
 import {Button,Card,Badge,EmptyState} from '../../../../shared/ui/Primitives';
 import {FIELDS,OPERATORS,ROWS,EMPTY_FILTER,makeGroup,parseFilter,validFilter,matchRows,type Filter,type Group,type Condition,type Field,type Operator,type Join} from './filterModel';
-let seq=1;const id=(prefix:string)=>prefix+'-'+seq++;
+let seq=1;
+const id=(prefix:string,filter:Filter):string=>{
+ const used=new Set(filter.groups.flatMap(group=>[group.id,...group.conditions.map(condition=>condition.id)]));
+ let candidate=prefix+'-'+seq++;
+ while(used.has(candidate)||(prefix==='g'&&used.has(candidate+'-c0')))candidate=prefix+'-'+seq++;
+ return candidate;
+};
 export function AdvancedFiltersPage(){
  const [params,setParams]=useSearchParams(),raw=params.get('filter');
  const [draft,setDraft]=useState<Filter>(()=>parseFilter(raw)),[message,setMessage]=useState('');
@@ -17,7 +23,7 @@ export function AdvancedFiltersPage(){
  const results=matchRows(ROWS,applied);
  return <div className="ods-patterns" dir="rtl"><Card title="سازندهٔ فیلترهای پیشرفته" description="فقط داده‌های ساختگی؛ AND/OR بین گروه‌ها و شرط‌ها.">
   <div className="ods-pattern-bar"><label>ارتباط گروه‌ها<select aria-label="ارتباط میان گروه‌ها" value={draft.join} onChange={e=>setDraft({...draft,join:e.target.value as Join})}><option value="and">AND / همه</option><option value="or">OR / یکی</option></select></label>
-   <Button variant="secondary" disabled={draft.groups.length>=4} onClick={()=>setDraft({...draft,groups:[...draft.groups,makeGroup(id('g'))]})}>افزودن گروه</Button></div>
+   <Button variant="secondary" disabled={draft.groups.length>=4} onClick={()=>setDraft({...draft,groups:[...draft.groups,makeGroup(id('g',draft))]})}>افزودن گروه</Button></div>
   {!draft.groups.length&&<p className="ods-pattern-hint">هیچ شرطی انتخاب نشده؛ همهٔ نتایج نمایش داده می‌شوند.</p>}
   {draft.groups.map((g,n)=><fieldset key={g.id} className="ods-pattern-group"><legend>گروه {n+1}</legend>
    <div className="ods-pattern-bar"><label>ارتباط شرط‌ها<select aria-label={'ارتباط شرط‌های گروه '+(n+1)} value={g.join} onChange={e=>updateGroup(g.id,x=>({...x,join:e.target.value as Join}))}><option value="and">AND / همه</option><option value="or">OR / یکی</option></select></label>
@@ -34,7 +40,7 @@ export function AdvancedFiltersPage(){
      <input aria-label={'مقدار شرط '+(i+1)+' در گروه '+(n+1)} value={c.value} maxLength={100} placeholder="عبارت نمونه" onChange={e=>changeCondition(g.id,c.id,x=>({...x,value:e.target.value}))}/>}</label>
     <button type="button" disabled={g.conditions.length===1} onClick={()=>updateGroup(g.id,x=>({...x,conditions:x.conditions.filter(y=>y.id!==c.id)}))}>حذف شرط</button>
    </div>)}
-   <Button variant="secondary" disabled={g.conditions.length>=5} onClick={()=>updateGroup(g.id,x=>({...x,conditions:[...x.conditions,{id:id('c'),field:'title',op:'contains',value:''}]}))}>افزودن شرط</Button>
+   <Button variant="secondary" disabled={g.conditions.length>=5} onClick={()=>updateGroup(g.id,x=>({...x,conditions:[...x.conditions,{id:id('c',draft),field:'title',op:'contains',value:''}]}))}>افزودن شرط</Button>
   </fieldset>)}
   <div className="ods-pattern-actions"><Button onClick={apply}>اعمال فیلتر</Button><Button variant="secondary" onClick={()=>{setDraft(parseFilter(raw));setMessage('پیش‌نویس بازنشانی شد.');}}>بازنشانی پیش‌نویس</Button><Button variant="secondary" onClick={clear}>پاک کردن همه</Button></div>
   <p className="ods-pattern-hint" role="status">{message}</p>

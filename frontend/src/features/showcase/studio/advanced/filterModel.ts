@@ -27,14 +27,15 @@ export function normalizePersian(text:string):string{return text.normalize('NFKC
 const object=(v:unknown):v is Record<string,unknown>=>typeof v==='object'&&v!==null&&!Array.isArray(v);
 const safeId=(v:unknown):v is string=>typeof v==='string'&&/^[a-z0-9-]{1,40}$/.test(v);
 const validJoin=(v:unknown):v is Join=>v==='and'||v==='or';
+const exactKeys=(value:Record<string,unknown>,keys:readonly string[]):boolean=>Object.keys(value).every(key=>keys.includes(key))&&keys.every(key=>key in value);
 export function validFilter(v:unknown):v is Filter{
- if(!object(v)||v.v!==1||!validJoin(v.join)||!Array.isArray(v.groups)||v.groups.length>4)return false;
+ if(!object(v)||!exactKeys(v,['v','join','groups'])||v.v!==1||!validJoin(v.join)||!Array.isArray(v.groups)||v.groups.length>4)return false;
  const ids=new Set<string>();
  for(const g of v.groups){
-  if(!object(g)||!safeId(g.id)||ids.has(g.id)||!validJoin(g.join)||!Array.isArray(g.conditions)||!g.conditions.length||g.conditions.length>5)return false;
+  if(!object(g)||!exactKeys(g,['id','join','conditions'])||!safeId(g.id)||ids.has(g.id)||!validJoin(g.join)||!Array.isArray(g.conditions)||!g.conditions.length||g.conditions.length>5)return false;
   ids.add(g.id as string);
   for(const c of g.conditions){
-   if(!object(c)||!safeId(c.id)||ids.has(c.id)||typeof c.value!=='string'||c.value.length>100||/[\u0000-\u001f]/.test(c.value))return false;
+   if(!object(c)||!exactKeys(c,['id','field','op','value'])||!safeId(c.id)||ids.has(c.id)||typeof c.value!=='string'||c.value.length>100||/[\u0000-\u001f]/.test(c.value))return false;
    const field=FIELDS.find(f=>f.id===c.field);if(!field||!field.operators.some(op=>op===c.op))return false;
    ids.add(c.id as string);
   }
@@ -44,8 +45,10 @@ export function validFilter(v:unknown):v is Filter{
 export function parseFilter(raw:string|null):Filter{if(!raw||raw.length>3000)return EMPTY_FILTER;try{const v:unknown=JSON.parse(raw);return validFilter(v)?v:EMPTY_FILTER;}catch{return EMPTY_FILTER;}}
 export function matchRows(rows:readonly RecordRow[],filter:Filter):RecordRow[]{
  const join=(xs:boolean[],op:Join)=>op==='and'?xs.every(Boolean):xs.some(Boolean);
- if(!filter.groups.length)return [...rows];
- return rows.filter(row=>join(filter.groups.map(g=>join(g.conditions.map(c=>{
+ const activeGroups=filter.groups.map(g=>({...g,conditions:g.conditions.filter(c=>normalizePersian(c.value).length>0)}))
+  .filter(g=>g.conditions.length>0);
+ if(!activeGroups.length)return [...rows];
+ return rows.filter(row=>join(activeGroups.map(g=>join(g.conditions.map(c=>{
   const value=normalizePersian(c.value),cell=normalizePersian(row[c.field]);if(!value)return true;
   if(c.op==='contains')return cell.includes(value);if(c.op==='startsWith')return cell.startsWith(value);
   if(c.op==='equals')return cell===value;return cell!==value;

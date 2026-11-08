@@ -8,6 +8,7 @@ test('ODL-03 A typed filter validation rejects unknown fields/operators and vers
  assert.equal(validFilter({...q,groups:[{...g,conditions:[{...g.conditions[0],field:'unknown'}]}]}),false);
  assert.equal(validFilter({...q,groups:[{...g,conditions:[{...g.conditions[0],field:'status',op:'contains'}]}]}),false);
  assert.deepEqual(parseFilter('not json'),EMPTY_FILTER);assert.equal(FIELDS.length,4);
+ assert.equal(validFilter({...q,unsafe:true}),false,'unknown model keys must be rejected');
 });
 test('ODL-03 A two-level AND/OR groups evaluate mock data',()=>{
  const q={v:1,join:'or',groups:[
@@ -15,10 +16,12 @@ test('ODL-03 A two-level AND/OR groups evaluate mock data',()=>{
  {id:'g2',join:'and',conditions:[{id:'c3',field:'status',op:'equals',value:'تکمیل'}]}]};
  assert.deepEqual(matchRows(ROWS,q).map(x=>x.id),['TD-001','TD-003','TD-006']);
  assert.equal(matchRows(ROWS,EMPTY_FILTER).length,ROWS.length);
+ const withEmptyOr={v:1,join:'or',groups:[{id:'blank',join:'or',conditions:[{id:'empty',field:'title',op:'contains',value:'  '}]},q.groups[1]]};
+ assert.deepEqual(matchRows(ROWS,withEmptyOr).map(x=>x.id),['TD-003','TD-006'],'blank OR groups must not match everything');
 });
 test('ODL-03 A route and frontend-only URL draft/apply/reset semantics',()=>{
  const ui=read('src/features/showcase/studio/advanced/AdvancedFiltersPage.tsx');
  assert.ok(read('src/features/showcase/studio/studioRoutes.ts').includes('patterns/filters'));
- for(const s of ['useSearchParams','setParams(next)','parseFilter(raw)','role="status"','<fieldset'])assert.ok(ui.includes(s),s);
+ for(const s of ['useSearchParams','setParams(next)','parseFilter(raw)','role="status"','<fieldset',"id('g',draft)","id('c',draft)"])assert.ok(ui.includes(s),s);
  for(const bad of ['fetch(', 'localStorage','useAuth(','dangerouslySetInnerHTML'])assert.ok(!ui.includes(bad),bad);
 });
