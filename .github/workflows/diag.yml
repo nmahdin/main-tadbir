@@ -1,10 +1,34 @@
-name: diag-fail
+name: diag-fail2
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
   workflow_dispatch:
 jobs:
-  backend:
+  backend-head:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
+          coverage: none
+          tools: composer:v2
+      - working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: PHPUnit (HEAD)
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php vendor/bin/phpunit --colors=never 2>&1 | tail -80
+  backend-merge:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -19,20 +43,7 @@ jobs:
           tools: composer:v2
       - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: Pint
-        working-directory: backend
-        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
-      - name: Migrate
-        working-directory: backend
-        env:
-          APP_ENV: testing
-          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-          DB_CONNECTION: sqlite
-          DB_DATABASE: database/ci.sqlite
-        run: |
-          touch database/ci.sqlite
-          php artisan migrate:fresh --force --no-interaction
-      - name: PHPUnit (filter Core first)
+      - name: PHPUnit (PR merge commit)
         working-directory: backend
         env:
           APP_ENV: testing
@@ -44,9 +55,5 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           set +e
-          echo "=== CORE TESTS ==="
-          php vendor/bin/phpunit --colors=never tests/Feature/Core 2>&1 | tail -80
-          echo "=== exit-core=$? ==="
-          echo "=== ALL TESTS (last 60 lines) ==="
-          php vendor/bin/phpunit --colors=never 2>&1 | tail -60
-          echo "=== exit-all=$? ==="
+          php vendor/bin/phpunit --colors=never 2>&1 | tail -120
+          echo "exit=$?"
