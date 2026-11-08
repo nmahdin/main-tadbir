@@ -1,22 +1,12 @@
-name: diag-s4
+name: diag-pint
 on:
   pull_request:
-    paths:
-      - 'backend/**'
-      - '.github/workflows/diag.yml'
+    paths: ['backend/**', '.github/workflows/diag.yml']
   push:
     branches: [arena/582a70e5-main-tadbir]
 jobs:
-  ut:
+  pint:
     runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: test
-        ports: ["3306:3306"]
-        options: --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot" --health-interval=5s --health-timeout=5s --health-retries=10
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -24,19 +14,11 @@ jobs:
           php-version: '8.4'
           extensions: mbstring,xml,curl,zip,pdo_mysql,intl,bcmath
           tools: composer
-      - name: Composer install
-        working-directory: backend
+      - working-directory: backend
         run: composer install --no-progress --no-interaction --prefer-dist
-      - name: Migrate + PHPUnit (S4+S3+S2+S1 tests)
+      - name: pint diff on S4 files
         working-directory: backend
-        env:
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: test
-          DB_USERNAME: root
-          DB_PASSWORD: root
-          APP_ENV: testing
         run: |
-          php artisan migrate --force -v
-          vendor/bin/phpunit --colors=never tests/Feature/Core/BillingOrderTest.php tests/Feature/Core/BillingQuoteTest.php tests/Feature/Core/BillingTaxAndPromotionTest.php tests/Feature/Core/BillingPlanCatalogTest.php 2>&1 | tail -150
+          php vendor/bin/pint -v app/Core/Billing/OrderService.php app/Core/Billing/CoreBillingOrder.php app/Core/Billing/CoreBillingOrderLine.php app/Core/Billing/CorePromoReservation.php app/Core/Billing/QuoteService.php app/Http/Controllers/Api/V1/BillingOrderController.php app/Console/Commands/ExpireBillingOrders.php tests/Feature/Core/BillingOrderTest.php routes/console.php routes/api.php
+          echo "---DIFF---"
+          cd .. && git diff backend/app backend/routes backend/tests | head -500
