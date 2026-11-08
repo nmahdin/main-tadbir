@@ -1,4 +1,4 @@
-name: diag-pint10
+name: diag-pint11
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
@@ -16,13 +16,13 @@ jobs:
           tools: composer:v2
       - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: run pint on exact backend targets
+      - name: pint targeted
         working-directory: backend
         run: |
-          echo "PWD=$(pwd)"
-          echo "===LIST FILES==="
-          ls app/Core/Billing/OrderService.php app/Http/Controllers/Api/V1/BillingOrderController.php
-          echo "===RUN PINT==="
-          set -x
-          php vendor/bin/pint --test -v app/Core/Billing/OrderService.php app/Core/Billing/CoreBillingOrder.php app/Core/Billing/CoreBillingOrderLine.php app/Core/Billing/CorePromoReservation.php app/Core/Billing/QuoteService.php app/Http/Controllers/Api/V1/BillingOrderController.php app/Console/Commands/ExpireBillingOrders.php tests/Feature/Core/BillingOrderTest.php
-          echo "rc=$?"
+          php vendor/bin/pint --test -v app/Core/Billing/OrderService.php app/Core/Billing/CoreBillingOrder.php app/Core/Billing/CoreBillingOrderLine.php app/Core/Billing/CorePromoReservation.php app/Core/Billing/QuoteService.php app/Http/Controllers/Api/V1/BillingOrderController.php app/Console/Commands/ExpireBillingOrders.php tests/Feature/Core/BillingOrderTest.php routes/../routes/api.php routes/../routes/console.php > pintout.txt 2>&1 || true
+          cat pintout.txt
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: pintout
+          path: backend/pintout.txt
