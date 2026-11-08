@@ -21,3 +21,8 @@ test('ODL-03 B route preserves mock-only review, confirmation and warnings',()=>
  for(const s of ["beforeunload","aria-current","role=\"progressbar\"","role=\"alert\"","role=\"alertdialog\"","aria-modal=\"true\"","wizardErrors","step===2","step===3"])assert.ok(ui.includes(s),s);
  for(const bad of ["fetch(","localStorage","useAuth(","dangerouslySetInnerHTML"])assert.ok(!ui.includes(bad),bad);
 });
+
+test('ODL-03 B discard modal traps focus and warns on unsaved Studio navigation',()=>{
+ const source=read('src/features/showcase/studio/advanced/FormWizardPage.tsx');
+ for(const part of ['createPortal','studio.inert=true','dialog.current?.querySelector','window.confirm','aria-modal="true"'])assert.ok(source.includes(part),part);
+});

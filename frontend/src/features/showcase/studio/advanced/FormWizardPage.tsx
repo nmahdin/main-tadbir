@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
+import {createPortal} from 'react-dom';
 import {Button,Card,Input,Textarea,FormField} from '../../../../shared/ui/Primitives';
 import {WIZARD_DEFAULT,WIZARD_STEPS,canAdvance,isWizardDirty,safeStep,wizardErrors,wizardProgress,type WizardData,type WizardStep,type LayoutDirection} from './wizardModel';
 export function FormWizardPage(){
@@ -6,12 +7,36 @@ export function FormWizardPage(){
  const [step,setStep]=useState<WizardStep>(0),[direction,setDirection]=useState<LayoutDirection>('horizontal');
  const [errors,setErrors]=useState<Record<string,string>>({}),[confirmDiscard,setConfirmDiscard]=useState(false),[message,setMessage]=useState('');
  const dirty=isWizardDirty(data)&&step!==3;
- const heading=useRef<HTMLHeadingElement>(null),discardTrigger=useRef<HTMLButtonElement>(null);
+ const heading=useRef<HTMLHeadingElement>(null),discardTrigger=useRef<HTMLButtonElement>(null),dialog=useRef<HTMLDivElement>(null);
  useEffect(()=>{if(dirty){const fn=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};window.addEventListener('beforeunload',fn);return()=>window.removeEventListener('beforeunload',fn);}},[dirty]);
  useEffect(()=>{heading.current?.focus();},[step]);
  useEffect(()=>{
-  if(confirmDiscard){const fn=(e:KeyboardEvent)=>{if(e.key==='Escape'){setConfirmDiscard(false);discardTrigger.current?.focus();}};document.addEventListener('keydown',fn);return()=>document.removeEventListener('keydown',fn);}
+  if(!confirmDiscard)return;
+  const studio=document.querySelector<HTMLElement>('.ods-studio');
+  const previous=studio?.inert??false;if(studio)studio.inert=true;
+  dialog.current?.querySelector<HTMLButtonElement>('button')?.focus();
+  const fn=(event:KeyboardEvent)=>{
+   if(event.key==='Escape'){event.preventDefault();setConfirmDiscard(false);return;}
+   if(event.key!=='Tab')return;
+   const controls=Array.from(dialog.current?.querySelectorAll('button:not(:disabled)')??[]) as HTMLButtonElement[];
+   if(!controls.length)return;
+   if(event.shiftKey&&document.activeElement===controls[0]){event.preventDefault();controls[controls.length-1].focus();}
+   else if(!event.shiftKey&&document.activeElement===controls[controls.length-1]){event.preventDefault();controls[0].focus();}
+  };
+  document.addEventListener('keydown',fn);
+  return()=>{document.removeEventListener('keydown',fn);if(studio)studio.inert=previous;discardTrigger.current?.focus();};
  },[confirmDiscard]);
+ useEffect(()=>{
+  if(!dirty)return;
+  const guard=(event:MouseEvent)=>{
+   const target=event.target;if(!(target instanceof Element))return;
+   const anchor=target.closest<HTMLAnchorElement>('a[href]');
+   if(!anchor||!anchor.closest('.ods-studio')||!anchor.getAttribute('href')?.startsWith('/theme-previews'))return;
+   if(!window.confirm('پیش‌نویس ذخیره نشده است. آیا از صفحه خارج می‌شوید؟')){event.preventDefault();event.stopPropagation();}
+  };
+  document.addEventListener('click',guard,true);
+  return()=>document.removeEventListener('click',guard,true);
+ },[dirty]);
  function next(){const found=wizardErrors(data,step);setErrors(found);if(Object.keys(found).length){setMessage('لطفاً خطاهای این مرحله را اصلاح کنید.');return;}
   if(step===2){setStep(3);setMessage('فرم نمونه تأیید شد؛ هیچ داده‌ای ارسال یا ذخیره نشد.');}
   else{setStep(safeStep(step+1));setMessage('');}}
@@ -58,10 +83,10 @@ export function FormWizardPage(){
     </div>
    </div>
   </Card>
-  {confirmDiscard&&<div className="ods-wizard-overlay"><div role="alertdialog" aria-modal="true" aria-labelledby="ods-discard-title" aria-describedby="ods-discard-description" className="ods-wizard-dialog">
+  {confirmDiscard&&createPortal(<div className="ods-wizard-overlay" dir="rtl"><div ref={dialog} role="alertdialog" aria-modal="true" aria-labelledby="ods-discard-title" aria-describedby="ods-discard-description" className="ods-wizard-dialog">
    <h3 id="ods-discard-title">تغییرات ذخیره‌نشده</h3><p id="ods-discard-description">اگر لغو کنید، اطلاعات این فرم آزمایشی پاک می‌شوند.</p>
    <div className="ods-wizard-actions"><Button variant="secondary" onClick={()=>{setConfirmDiscard(false);discardTrigger.current?.focus();}}>ادامهٔ ویرایش</Button><Button onClick={clear}>حذف پیش‌نویس</Button></div>
-  </div></div>}
+  </div></div>,document.body)}
   <p className="ods-pattern-hint">این نمونه صرفاً نشان‌دهندهٔ قرارداد مراحل و اعتبارسنجی است؛ در محصول واقعی، خروج از مسیر، ذخیرهٔ پیش‌نویس و ارسال نهایی به مجوز و تأیید جداگانه نیاز دارند.</p>
  </section>;
 }
