@@ -48,7 +48,7 @@ export function OceanStudioLayout({gallery}:{gallery:React.ReactNode}){
   const onKey=(event:KeyboardEvent)=>{
    if(event.key==='Escape'){event.preventDefault();setDrawerOpen(false);return;}
    if(event.key!=='Tab')return;
-   const focus=Array.from(sidebar.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled)')??[])
+   const focus=(Array.from(sidebar.current?.querySelectorAll('a[href],button:not(:disabled),input:not(:disabled)')??[]) as HTMLElement[])
      .filter(element=>element.getClientRects().length);
    if(!focus.length)return;
    const first=focus[0],last=focus[focus.length-1];
