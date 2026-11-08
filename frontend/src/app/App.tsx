@@ -321,7 +321,7 @@ export default function App() {
   return <QueryClientProvider client={queryClient}><BrowserRouter><ToastProvider><AuthProvider><UIProvider><AppProvider><EnvironmentProvider>
     <LegacyLinks />
     <Routes>
-      <Route path="/theme-previews" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><UiShowcaseThemeComparison /></React.Suspense>} />
+      <Route path="/theme-previews/*" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><UiShowcaseThemeComparison /></React.Suspense>} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthRegisterPage /></React.Suspense>} />
       <Route path="/forgot-password" element={<React.Suspense fallback={<LoadingState label="در حال بارگذاری…" />}><AuthForgotPage /></React.Suspense>} />

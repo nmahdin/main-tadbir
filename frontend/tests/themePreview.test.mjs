@@ -8,7 +8,7 @@ const app = readFileSync(new URL('../src/app/App.tsx', import.meta.url), 'utf8')
 const design = readFileSync(new URL('../src/styles/index.css', import.meta.url), 'utf8');
 
 test('one public preview route reuses real fictional design showcase', () => {
- assert.match(app, /<Route path="\/theme-previews"/);
+ assert.match(app, /<Route path="\/theme-previews\/\*"/);
  assert.match(preview, /<UiShowcasePage \/>/);
  // No palette-SWITCHING machinery may return (the single approved
  // palette is fixed); local useState for the fictional status-color

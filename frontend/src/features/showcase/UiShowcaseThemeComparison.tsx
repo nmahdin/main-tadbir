@@ -11,10 +11,19 @@ import { Alert, toast } from '../../shared/ui/Notifications';
 import { DataTable, type DataTableState } from '../../shared/ui/DataTable';
 import { initialDataTableState, filterRows, paginateRows, sortRows } from '../../shared/ui/dataTableLogic';
 import './uiShowcaseThemes.css';
-import { OceanDesignLab } from './lab/OceanDesignLab';
+import { OceanStudioLayout } from './studio/OceanStudioLayout';
 
 /** Canonical Tadbir design template with real components and fictional data. */
 export function UiShowcaseThemeComparison() {
+  React.useEffect(() => {
+    document.body.dataset.tadbirThemePreview = 'ocean';
+    return () => { delete document.body.dataset.tadbirThemePreview; };
+  }, []);
+  return <OceanStudioLayout gallery={<OceanLegacyGallery />} />;
+}
+
+/** Retained reference gallery; now one dedicated Studio route. */
+function OceanLegacyGallery() {
   const [colors, setColors] = React.useState({success:'#358D47', warning:'#D46D25', danger:'#BC2424'});
   const [drafts, setDrafts] = React.useState(colors);
   const semanticButtons = [
@@ -22,10 +31,6 @@ export function UiShowcaseThemeComparison() {
     {key:'warning' as const, label:'هشدار', Icon:TriangleAlert},
     {key:'danger' as const, label:'خطر', Icon:ShieldAlert},
   ];
-  React.useEffect(() => {
-    document.body.dataset.tadbirThemePreview = 'ocean';
-    return () => { delete document.body.dataset.tadbirThemePreview; };
-  }, []);
   return <div dir="rtl" className="tadbir-theme-lab">
     <header className="tadbir-theme-lab__header">
       <div>
@@ -81,7 +86,6 @@ export function UiShowcaseThemeComparison() {
         })}
       </div>
     </section>
-    <OceanDesignLab />
     <div className="tadbir-theme-lab__surface"><UiShowcasePage /></div>
   </div>;
 }

@@ -16,7 +16,7 @@ const ds = read('../src/styles/index.css');
 // the preview and the application share the same semantic tokens.
 
 test('public theme preview route is accessible without login', () => {
-  assert.match(app, /<Route path="\/theme-previews" element=/);
+  assert.match(app, /<Route path="\/theme-previews\/\*" element=/);
   assert.match(app, /const UiShowcaseThemeComparison = React\.lazy/);
   assert.doesNotMatch(app, /const UiShowcaseThemeComparison = import\.meta\.env\.DEV/);
 });
