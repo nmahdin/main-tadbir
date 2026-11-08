@@ -1,4 +1,4 @@
-name: diag-pint
+name: diag-pint2
 on:
   pull_request:
     paths: ['backend/**', '.github/workflows/diag.yml']
@@ -16,9 +16,10 @@ jobs:
           tools: composer
       - working-directory: backend
         run: composer install --no-progress --no-interaction --prefer-dist
-      - name: pint diff on S4 files
+      - name: pint (full quality command)
         working-directory: backend
         run: |
-          php vendor/bin/pint -v app/Core/Billing/OrderService.php app/Core/Billing/CoreBillingOrder.php app/Core/Billing/CoreBillingOrderLine.php app/Core/Billing/CorePromoReservation.php app/Core/Billing/QuoteService.php app/Http/Controllers/Api/V1/BillingOrderController.php app/Console/Commands/ExpireBillingOrders.php tests/Feature/Core/BillingOrderTest.php routes/console.php routes/api.php
-          echo "---DIFF---"
-          cd .. && git diff backend/app backend/routes backend/tests | head -500
+          set +e
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.out 2>&1
+          echo "exit=$?"
+          tail -100 /tmp/pint.out
