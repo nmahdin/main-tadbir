@@ -23,7 +23,8 @@ test('SPEC-ODL-02 shared shell is above page-specific content and preserves hist
  assert.ok(root.includes('<UiShowcasePage />'));
  assert.ok(studio.includes('useLocation'));
  assert.ok(studio.includes('to={studioPath(item.slug)}'));
- assert.ok(studio.includes('<RenderPage/>'));
+ assert.ok(studio.includes('{renderPage()}'));
+ assert.ok(!studio.includes('<RenderPage/>'), 'local shell state should not remount the current demo page');
  assert.ok(studio.includes('aria-current'));
  assert.ok(studio.includes('aria-expanded'));
  assert.ok(studio.includes("event.key==='Escape'"));

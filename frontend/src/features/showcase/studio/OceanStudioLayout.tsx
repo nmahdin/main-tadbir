@@ -62,7 +62,9 @@ export function OceanStudioLayout({gallery}:{gallery:React.ReactNode}){
  const visibleGroups=STUDIO_GROUPS.map(g=>({...g,items:g.items.filter(x=>(x.title+' '+x.description).includes(search.trim()))})).filter(g=>g.items.length>0);
  const sidebarCompact=collapsed&&!mobile;
  const title=page?.title??'این صفحه پیدا نشد';
- const RenderPage=()=>{
+ // Render content as a node, not a nested component: collapsing or searching
+ // the sidebar must not remount a form and discard its unsaved demo values.
+ const renderPage=()=>{
   if(!page)return <div className="ods-notfound"><h2>صفحهٔ مورد نظر در استودیو یافت نشد.</h2>
    <Link to={studioPath('')}>بازگشت به نمای کلی</Link></div>;
   if(page.id==='overview')return <StudioOverview/>;
@@ -133,7 +135,7 @@ export function OceanStudioLayout({gallery}:{gallery:React.ReactNode}){
       <h1 ref={heading} tabIndex={-1} id="ods-content-title">{title}</h1><p>{page?.description??'این آدرس بخشی از استودیو نیست.'}</p></div>
       {page&&<span className="ods-page-number">{(STUDIO_PAGES.findIndex(p=>p.id===page.id)+1).toLocaleString('fa-IR')} / {STUDIO_PAGES.length.toLocaleString('fa-IR')}</span>}
      </div>
-     <RenderPage/>
+     {renderPage()}
     </div>
    </main>
   </div>
