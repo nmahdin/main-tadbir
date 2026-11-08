@@ -16,9 +16,11 @@ jobs:
           extensions: mbstring, pdo_sqlite, fileinfo, zip
           coverage: none
           tools: composer:v2
-      - working-directory: backend
+      - name: Install deps
+        working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - working-directory: backend
+      - name: Pint
+        working-directory: backend
         run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
       - name: Migrate
         working-directory: backend
@@ -43,29 +45,28 @@ jobs:
         run: |
           set +e
           php vendor/bin/phpunit --colors=never --log-junit /tmp/junit.xml
-          echo EXIT=$? > /tmp/rc.txt
+          echo $? > /tmp/rc.txt
       - name: Surface failures as annotations
         if: always()
         run: |
-          set -e
-          python3 -c "
-import xml.etree.ElementTree as ET
-import sys
-try:
-    tree = ET.parse('/tmp/junit.xml')
-    root = tree.getroot()
-    failures = []
-    errors = []
-    for ts in root.iter('testsuite'):
-        for tc in ts.findall('testcase'):
-            for f in tc.findall('failure') + tc.findall('error'):
-                failures.append((tc.attrib.get('classname',''), tc.attrib.get('name',''), f.text or ''))
-    for cname,name,txt in failures[:20]:
-        short = txt.strip().replace('\n','%0A')[:900]
-        print(f'::error file=test::{cname}::{name} - {short}')
-    sys.exit(0)
-"
-          echo "---"
-          cat /tmp/rc.txt
+          python3 <<'PY'
+          import xml.etree.ElementTree as ET, sys
+          try:
+              tree = ET.parse('/tmp/junit.xml')
+              root = tree.getroot()
+              failures = []
+              for ts in root.iter('testsuite'):
+                  for tc in ts.findall('testcase'):
+                      for f in tc.findall('failure') + tc.findall('error'):
+                          failures.append((tc.attrib.get('classname',''), tc.attrib.get('name',''), f.text or ''))
+              for cname,name,txt in failures[:20]:
+                  short = txt.strip().replace('\n','%0A')[:900]
+                  print(f'::error file=test::{cname}::{name} - {short}')
+              print(f'TOTAL_FAILURES={len(failures)}')
+          except FileNotFoundError:
+              print('::error::No junit.xml produced')
+          PY
+          echo "--- rc: $(cat /tmp/rc.txt 2>/dev/null)"
       - name: Exit with phpunit rc
-        run: exit $(grep EXIT /tmp/rc.txt | cut -d= -f2)
+        if: always()
+        run: exit $(cat /tmp/rc.txt 2>/dev/null || echo 1)
