@@ -415,7 +415,7 @@ class BillingQuoteTest extends TestCase
             'role_id' => null,
             'status' => MembershipStatus::Active,
         ]);
-        $this->grantOrgPermission($owner, $org, MembershipPermissions::ORG_BILLING_MANAGE);
+        $this->grantOrgPermission($owner, $org, 'organization.billing.manage');
         $svc = app(QuoteService::class);
         $svc->create($owner, new SubscriptionOwner('organization', $org, null), $v, 'monthly', null, 'rk-oz');
 
