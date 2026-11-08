@@ -1,0 +1,39 @@
+name: diag-phpunit
+on:
+  push:
+    branches: [arena/582a70e5-main-tadbir]
+  workflow_dispatch:
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip, pdo_mysql
+          coverage: none
+          tools: composer:v2
+      - working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Migrate (sqlite)
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: |
+          touch database/ci.sqlite
+          php artisan migrate:fresh --force --no-interaction
+      - name: PHPUnit
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php vendor/bin/phpunit --colors=never tests/Feature/Core/ 2>&1 | tail -100
