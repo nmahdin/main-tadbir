@@ -23,6 +23,7 @@ export function OceanStudioLayout({gallery}:{gallery:React.ReactNode}){
  const [search,setSearch]=useState('');
  const sidebar=useRef<HTMLElement>(null),opener=useRef<HTMLButtonElement>(null),heading=useRef<HTMLHeadingElement>(null);
  const routeBefore=useRef(location.pathname),drawerBefore=useRef(false);
+ const skipDrawerFocusRestore=useRef(false);
  useEffect(()=>{
   const media=window.matchMedia('(max-width: 767px)');
   const change=()=>setMobile(media.matches);
@@ -34,16 +35,19 @@ export function OceanStudioLayout({gallery}:{gallery:React.ReactNode}){
  },[mobile,drawerOpen]);
  useEffect(()=>{
   if(location.pathname!==routeBefore.current){
+   // Navigation focuses the next heading, not the opener of the departing drawer.
+   skipDrawerFocusRestore.current=true;
    setDrawerOpen(false);
    heading.current?.focus();
    routeBefore.current=location.pathname;
   }
  },[location.pathname]);
  useEffect(()=>{
-  if(mobile&&drawerOpen) sidebar.current?.querySelector<HTMLElement>('[data-studio-drawer-close]')?.focus();
-  else if(drawerBefore.current) opener.current?.focus();
+  if(mobile&&drawerOpen&&!skipDrawerFocusRestore.current) sidebar.current?.querySelector<HTMLElement>('[data-studio-drawer-close]')?.focus();
+  else if(drawerBefore.current&&!skipDrawerFocusRestore.current) opener.current?.focus();
   drawerBefore.current=mobile&&drawerOpen;
- },[mobile,drawerOpen]);
+  if(!drawerOpen) skipDrawerFocusRestore.current=false;
+ },[mobile,drawerOpen,location.pathname]);
  useEffect(()=>{
   if(!drawerOpen||!mobile)return;
   const onKey=(event:KeyboardEvent)=>{
@@ -59,6 +63,7 @@ export function OceanStudioLayout({gallery}:{gallery:React.ReactNode}){
   document.addEventListener('keydown',onKey);
   return()=>document.removeEventListener('keydown',onKey);
  },[drawerOpen,mobile]);
+ const filtering=search.trim().length>0;
  const visibleGroups=STUDIO_GROUPS.map(g=>({...g,items:g.items.filter(x=>(x.title+' '+x.description).includes(search.trim()))})).filter(g=>g.items.length>0);
  const sidebarCompact=collapsed&&!mobile;
  const title=page?.title??'این صفحه پیدا نشد';
@@ -93,11 +98,12 @@ export function OceanStudioLayout({gallery}:{gallery:React.ReactNode}){
      <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="جست‌وجوی اجزا…" aria-label="جست‌وجو در صفحات استودیو"/></div>}
    <nav className="ods-navigation" aria-label="صفحات استودیو">
     {visibleGroups.map(section=><section className="ods-menu-group" key={section.id}>
-      {!sidebarCompact&&<button className="ods-menu-heading" type="button" aria-expanded={openedGroups.includes(section.id)}
-        aria-controls={'ods-menu-'+section.id}
+      {!sidebarCompact&&<button className="ods-menu-heading" type="button" aria-expanded={filtering||openedGroups.includes(section.id)}
+        aria-controls={'ods-menu-'+section.id} disabled={filtering}
+        title={filtering?'برای تغییر گروه‌بندی، ابتدا عبارت جست‌وجو را پاک کنید.':undefined}
         onClick={()=>setOpenedGroups(current=>studioToggleGroup(current,section.id))}>
-        <span>{section.title}</span><ChevronDown size={15} className={openedGroups.includes(section.id)?'ods-chevron-open':''}/></button>}
-      <div id={'ods-menu-'+section.id} className="ods-menu-links" hidden={!sidebarCompact&&!openedGroups.includes(section.id)}>
+        <span>{section.title}</span><ChevronDown size={15} className={filtering||openedGroups.includes(section.id)?'ods-chevron-open':''}/></button>}
+      <div id={'ods-menu-'+section.id} className="ods-menu-links" hidden={!sidebarCompact&&!filtering&&!openedGroups.includes(section.id)}>
        {section.items.map(item=>{
         const Icon=item.icon,active=page?.id===item.id;
         return <Link className={'ods-menu-link '+(active?'ods-menu-link--active':'')} to={studioPath(item.slug)} key={item.id}

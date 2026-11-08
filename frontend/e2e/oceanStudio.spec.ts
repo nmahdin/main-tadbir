@@ -76,3 +76,22 @@ test('SPEC-ODL-02 mobile/tablet/desktop layouts and reduced motion',async({page}
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
  }
 });
+
+test('SPEC-ODL-02 filtering reopens collapsed groups while retaining the selected demo',async({page})=>{
+ await page.setViewportSize({width:1440,height:900});await page.goto('/theme-previews/components/forms');
+ await page.getByRole('button',{name:/اجزای رابط کاربری/}).click();
+ await expect(page.locator('#ods-menu-components')).toBeHidden();
+ await page.getByRole('searchbox',{name:'جست‌وجو در صفحات استودیو'}).fill('دکمه‌ها');
+ await expect(page.getByRole('link',{name:'دکمه‌ها'})).toBeVisible();
+ await page.getByRole('link',{name:'دکمه‌ها'}).click();
+ await expect(page.getByRole('heading',{name:'دکمه‌ها',exact:true})).toBeFocused();
+});
+test('SPEC-ODL-02 mobile navigation focuses destination instead of closed drawer opener',async({page})=>{
+ await page.setViewportSize({width:390,height:844});await page.goto('/theme-previews/components/forms');
+ const trigger=page.getByRole('button',{name:'بازکردن فهرست استودیو'});
+ await trigger.click();
+ await page.getByRole('dialog',{name:'فهرست صفحات استودیو'}).getByRole('link',{name:'دکمه‌ها'}).click();
+ await expect(page).toHaveURL(/\/theme-previews\/components\/buttons$/);
+ await expect(page.getByRole('heading',{name:'دکمه‌ها',exact:true})).toBeFocused();
+ await expect(trigger).not.toBeFocused();
+});
