@@ -246,6 +246,8 @@ class BillingQuoteTest extends TestCase
         $this->assertTrue($r2['is_replay']);
         $this->assertSame((int) $r1['quote']->id, (int) $r2['quote']->id);
         $this->assertSame(1, CorePromoReservation::query()->where('promo_id', $promo->id)->count());
+    }
+
     // ---- cross-tenant isolation + org permission ----
 
     public function test_cross_owner_quote_access_returns_404_and_org_requires_permission(): void
