@@ -13,11 +13,11 @@ final class NotificationText
         $icon = match ($p['type'] ?? '') {
             'assignment' => '📌', 'deadline', 'overdue' => '⏰', 'comment', 'mention' => '💬', 'status_change' => '🔄', default => '🔔',
         };
-        if (! empty($p['linkMeetingId'])) {
+        if (!empty($p['linkMeetingId'])) {
             $icon = '📅';
         }
         $body = $icon.' *'.MessageText::plain($record->title ?? '', 220)."* \n\n".MessageText::plain((string) ($p['message'] ?? ''), 2800);
-        if (! empty($p['linkTaskId']) && ($task = Task::find($p['linkTaskId']))) {
+        if (!empty($p['linkTaskId']) && ($task = Task::find($p['linkTaskId']))) {
             $body .= "\n\n📅 مهلت: ".PersianDate::format($task->deadline);
         }
 

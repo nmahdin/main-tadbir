@@ -29,7 +29,7 @@ final class ContentCorrection
             ? 'review:'.$reviewTask->id
             : 'event:'.($event['id'] ?? '');
         $sourceKey = hash('sha256', 'correction:'.$content->id.':'.$stage['id'].':'.$cycle);
-        if (! Task::where('source_key', $sourceKey)->exists()) {
+        if (!Task::where('source_key', $sourceKey)->exists()) {
             app(ActiveProjectGuard::class)->project($content->project_id);
         }
         $task = Task::firstOrCreate(['source_key' => $sourceKey], [

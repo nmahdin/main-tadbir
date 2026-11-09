@@ -16,5 +16,7 @@ final readonly class IssuedInvitation
     public function __construct(
         public CoreInvitation $invitation,
         public string $rawToken,
-    ) {}
+    )
+    {
+    }
 }

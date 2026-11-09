@@ -26,7 +26,9 @@ final class InvitationPresenter
         // always inject the canonical store so C6 presentation and
         // C7 writes share one read path.
         private readonly SettingValueStore $settings,
-    ) {}
+    )
+    {
+    }
 
     public function present(CoreInvitation $invitation, ?CarbonImmutable $now = null): InvitationPresentation
     {
@@ -110,13 +112,13 @@ final class InvitationPresenter
      */
     private function publicSetting($settings, string $key): ?string
     {
-        if (! is_array($settings)) {
+        if (!is_array($settings)) {
             return null;
         }
 
         $public = $settings['public'] ?? null;
 
-        if (! is_array($public)) {
+        if (!is_array($public)) {
             return null;
         }
 

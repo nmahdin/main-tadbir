@@ -75,7 +75,9 @@ final class InvitationService
     public function __construct(
         private readonly MembershipPermissions $permissions,
         private readonly AuditWriter $audit,
-    ) {}
+    )
+    {
+    }
 
     /**
      * @throws InvitationException
@@ -375,7 +377,7 @@ final class InvitationService
 
         $operational = AccountStatus::of($actor->status)?->allowsOperationalAccess() ?? false;
 
-        if (! $operational) {
+        if (!$operational) {
             throw new InvitationException('invitation_forbidden', 'The actor lacks invitation authority in this scope.');
         }
 
@@ -391,7 +393,7 @@ final class InvitationService
             default => false,
         };
 
-        if (! $allowed) {
+        if (!$allowed) {
             throw new InvitationException('invitation_forbidden', 'The actor lacks invitation authority in this scope.');
         }
     }
@@ -405,7 +407,7 @@ final class InvitationService
     {
         $operational = AccountStatus::of($actor->status)?->allowsOperationalAccess() ?? false;
 
-        if (! $operational || ! in_array($permission, $actorKeys, true)) {
+        if (!$operational || !in_array($permission, $actorKeys, true)) {
             throw new InvitationException('invitation_forbidden', 'The actor lacks invitation authority in this scope.');
         }
     }
@@ -415,7 +417,7 @@ final class InvitationService
      */
     private function assertOrganizationOperational(Organization $organization): void
     {
-        if (! $organization->isActive()) {
+        if (!$organization->isActive()) {
             throw new InvitationException('invitation_organization_unavailable', 'The organization is not operational, so invitations cannot be issued or changed.');
         }
     }
@@ -435,7 +437,7 @@ final class InvitationService
             && ($organizationId === null || (int) $role->organization_id === $organizationId)
             && ($workspaceId === null || (int) $role->workspace_id === $workspaceId);
 
-        if (! $matches) {
+        if (!$matches) {
             throw new InvitationException('invitation_role_scope_mismatch', 'The intended role does not belong to the invitation scope.');
         }
 

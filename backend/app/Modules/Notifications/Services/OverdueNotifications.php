@@ -27,7 +27,7 @@ final class OverdueNotifications
      */
     public function run(?Carbon $now = null): array
     {
-        if (! Schema::hasColumn('domain_records', 'notification_key')) {
+        if (!Schema::hasColumn('domain_records', 'notification_key')) {
             return ['scanned' => 0, 'reminders' => 0, 'recipients' => []];
         }
 
@@ -111,7 +111,7 @@ final class OverdueNotifications
             $stage = collect($task->content->payload['stages'] ?? [])->first(
                 fn ($candidate) => is_array($candidate) && (string) ($candidate['id'] ?? '') === (string) $task->content_stage_id,
             );
-            if (is_array($stage) && ! empty($stage['departmentId'])) {
+            if (is_array($stage) && !empty($stage['departmentId'])) {
                 $departmentManagerId = Department::query()->whereKey($stage['departmentId'])->value('manager_id');
             }
         }

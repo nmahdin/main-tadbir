@@ -12,12 +12,12 @@ final class ContentAccess
 {
     public function departmentIds(User $actor): array
     {
-        if (! $actor->isActive() || ! $actor->role?->is_active) {
+        if (!$actor->isActive() || !$actor->role?->is_active) {
             return [];
         }
         // Per HTTP request only; a new request rechecks revoked memberships.
         $key = 'content_member_departments_'.$actor->id;
-        if (! request()->attributes->has($key)) {
+        if (!request()->attributes->has($key)) {
             request()->attributes->set($key, Department::forMember($actor)->where('status', 'active')->pluck('id')->map(fn ($id) => (string) $id)->all());
         }
 

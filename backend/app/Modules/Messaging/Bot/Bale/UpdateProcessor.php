@@ -11,28 +11,30 @@ use Illuminate\Support\Facades\Schema;
 /** Both inbound transports use the same atomic domain operations and replay protection. */
 final class UpdateProcessor
 {
-    public function __construct(private Settings $settings, private MenuRouter $router, private BaleClient $client) {}
+    public function __construct(private Settings $settings, private MenuRouter $router, private BaleClient $client)
+    {
+    }
 
     /** Caller holds RuntimeLock. Webhook delivery order is not an offset/authorization check. */
     public function process(#[\SensitiveParameter] array $update, bool $polling = false): bool
     {
-        if (! is_int($update['update_id'] ?? null) || $update['update_id'] < 0 || $update['update_id'] === PHP_INT_MAX) {
+        if (!is_int($update['update_id'] ?? null) || $update['update_id'] < 0 || $update['update_id'] === PHP_INT_MAX) {
             throw new BaleApiException('invalid_updates');
         }
         $id = $update['update_id'];
         $botId = (string) $this->settings->read()['bot_id'];
         $created = DB::transaction(function () use ($update, $id, $botId, $polling): bool {
             $exists = DB::table('bale_inbox')->where('bot_id', $botId)->where('update_id', $id)->exists();
-            if (! $exists) {
+            if (!$exists) {
                 $this->router->handle($update);
                 DB::table('bale_inbox')->insert(['bot_id' => $botId, 'update_id' => $id, 'status' => 'processed', 'created_at' => now()]);
             }
             $this->settings->write([
                 ...($polling ? ['offset' => max((int) ($this->settings->read()['offset'] ?? 0), $id + 1)] : ['last_webhook_at' => now()->toIso8601String()]),
-                ...(! $exists ? ['last_received_at' => now()->toIso8601String(), 'last_update_id' => $id, 'last_received_via' => $polling ? 'short_polling' : 'webhook'] : []),
+                ...(!$exists ? ['last_received_at' => now()->toIso8601String(), 'last_update_id' => $id, 'last_received_via' => $polling ? 'short_polling' : 'webhook'] : []),
             ]);
 
-            return ! $exists;
+            return !$exists;
         });
         $callbackId = $update['callback_query']['id'] ?? null;
         if (is_string($callbackId) && strlen($callbackId) <= 256) {

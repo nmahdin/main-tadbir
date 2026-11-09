@@ -31,7 +31,7 @@ final class PlatformPrimaryGuard
             ->where('platform_role_id', $primaryRoleId)
             ->whereNull('revoked_at')
             ->exists();
-        if (! $holdsPrimary) {
+        if (!$holdsPrimary) {
             return;
         }
 

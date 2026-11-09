@@ -29,7 +29,7 @@ final class TaskOperations
     {
         $query = Task::query();
         $actor = $actor->fresh();
-        if (! $actor?->isActive()) {
+        if (!$actor?->isActive()) {
             return $query->whereRaw('1 = 0');
         }
 
@@ -48,10 +48,10 @@ final class TaskOperations
     public function allowedStatuses(User $actor, Task $task): array
     {
         $actor = $actor->fresh();
-        if (! $actor) {
+        if (!$actor) {
             return [];
         }
-        if (! $actor->isActive() || ! $actor->hasPermission('tasks.view') || ! $this->canChangeStatus($actor, $task)) {
+        if (!$actor->isActive() || !$actor->hasPermission('tasks.view') || !$this->canChangeStatus($actor, $task)) {
             return [];
         }
         if ($task->kind === 'content_review') {
@@ -70,7 +70,7 @@ final class TaskOperations
         if ($task->project_id && Project::query()->whereKey($task->project_id)->where('project_manager_id', $actor->id)->exists()) {
             return true;
         }
-        if (! $task->content_id || ! ($content = Content::query()->find($task->content_id))) {
+        if (!$task->content_id || !($content = Content::query()->find($task->content_id))) {
             return false;
         }
         if ((int) $content->owner_id === (int) $actor->id || $actor->role?->key === 'content_manager') {
@@ -90,7 +90,7 @@ final class TaskOperations
         return DB::transaction(function () use ($actor, $task, $status, $expectedStatus, $source): Task {
             $fresh = Task::whereKey($task->id)->lockForUpdate()->firstOrFail();
             if ($source === 'bale') {
-                abort_unless((int) $fresh->assignee_id === (int) $actor->id && ! $fresh->content_id && in_array($fresh->kind, [null, 'general'], true), 403);
+                abort_unless((int) $fresh->assignee_id === (int) $actor->id && !$fresh->content_id && in_array($fresh->kind, [null, 'general'], true), 403);
             }
             $allowed = $this->allowedStatuses($actor, $fresh);
             abort_if($allowed === [], 403, 'اجازه تغییر وضعیت این وظیفه را ندارید.');
@@ -171,7 +171,7 @@ final class TaskOperations
     public function editable(User $actor, Task $task): bool
     {
         return $actor->isActive() && $actor->hasPermission('tasks.view') && $actor->hasPermission('tasks.edit')
-            && ! $task->content_id && in_array($task->kind, [null, 'general'], true);
+            && !$task->content_id && in_array($task->kind, [null, 'general'], true);
     }
 
     public function detailRules(Task $task): array
@@ -193,7 +193,7 @@ final class TaskOperations
             if ($source === 'bale') {
                 abort_unless((int) $task->assignee_id === (int) $actor->id, 403);
             }
-            abort_if($version !== null && ! hash_equals($this->editVersion($task), $version), 409, 'وظیفه تغییر کرده است؛ دوباره آن را باز کنید.');
+            abort_if($version !== null && !hash_equals($this->editVersion($task), $version), 409, 'وظیفه تغییر کرده است؛ دوباره آن را باز کنید.');
             abort_if(array_diff(array_keys($data), array_keys($this->detailRules($task))) !== [], 422);
             $data = Validator::make($data, $this->detailRules($task))->validate();
             $task->fill($data);
@@ -286,7 +286,7 @@ final class TaskOperations
     private function syncContentStageFromTask(Task $task, string $taskStatus): void
     {
         $content = Content::whereKey($task->content_id)->lockForUpdate()->first();
-        if (! $content) {
+        if (!$content) {
             return;
         }
         $payload = $content->payload ?? [];
@@ -305,7 +305,7 @@ final class TaskOperations
             default => $stages[$index]['status'] ?? 'not_started',
         };
         $stages[$index]['status'] = $stageStatus;
-        if ($taskStatus === 'completed' && ! $reviewRequired) {
+        if ($taskStatus === 'completed' && !$reviewRequired) {
             $stages[$index]['completedAt'] = today()->toDateString();
             if (isset($stages[$index + 1]) && ($stages[$index + 1]['status'] ?? '') === 'pending_dependency') {
                 $stages[$index + 1]['status'] = 'not_started';
@@ -320,7 +320,7 @@ final class TaskOperations
 
     public function updateProjectProgress(?int $projectId): void
     {
-        if (! $projectId || ! ($project = Project::find($projectId))) {
+        if (!$projectId || !($project = Project::find($projectId))) {
             return;
         }
         $total = $project->tasks()->count();

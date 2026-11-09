@@ -26,7 +26,7 @@ final readonly class ModuleManifest
         }
 
         foreach ($permissions as $permission) {
-            if (! is_string($permission) || preg_match('/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/', $permission) !== 1) {
+            if (!is_string($permission) || preg_match('/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/', $permission) !== 1) {
                 throw new InvalidArgumentException("Permission key [{$permission}] owned by module [{$id}] is not a stable dotted key.");
             }
         }

@@ -29,11 +29,11 @@ final class WorkspaceAccess
 
     public function canAccess(User $user, Workspace $workspace): bool
     {
-        if (! $workspace->isActive()) {
+        if (!$workspace->isActive()) {
             return false;
         }
 
-        if (! $this->organizationGuard->allowsWorkspaceOperationalAccess($workspace)) {
+        if (!$this->organizationGuard->allowsWorkspaceOperationalAccess($workspace)) {
             return false;
         }
 

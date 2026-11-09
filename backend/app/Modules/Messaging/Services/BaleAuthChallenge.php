@@ -22,7 +22,9 @@ final class BaleAuthChallenge
 
     public const LIFETIME_MINUTES = 5;
 
-    public function __construct(private Settings $settings, private Outbox $outbox) {}
+    public function __construct(private Settings $settings, private Outbox $outbox)
+    {
+    }
 
     /**
      * Deliberately returns the same result for unknown, inactive, unlinked and valid accounts.
@@ -37,12 +39,12 @@ final class BaleAuthChallenge
         }
         RateLimiter::hit($rateKey, 600);
 
-        if (! $this->settings->ready()) {
+        if (!$this->settings->ready()) {
             return;
         }
         $user = User::query()->where('username', $login)->first();
         $link = $user ? BaleUserLink::where('user_id', $user->id)->first() : null;
-        if (! $user?->isActive() || ! $link) {
+        if (!$user?->isActive() || !$link) {
             return;
         }
 
@@ -80,24 +82,24 @@ final class BaleAuthChallenge
         }
         RateLimiter::hit($rateKey, 600);
 
-        if (! preg_match('/^\d{6}$/D', $code)) {
+        if (!preg_match('/^\d{6}$/D', $code)) {
             throw $this->invalid();
         }
 
         $user = DB::transaction(function () use ($login, $purpose, $code): ?User {
             $user = User::query()->where('username', $login)->lockForUpdate()->first();
-            if (! $user?->isActive() || ! BaleUserLink::where('user_id', $user->id)->exists()) {
+            if (!$user?->isActive() || !BaleUserLink::where('user_id', $user->id)->exists()) {
                 return null;
             }
             $challenge = DB::table('bale_auth_challenges')->where('user_id', $user->id)->where('purpose', $purpose)->lockForUpdate()->first();
-            if (! $challenge || now()->gte($challenge->expires_at) || (int) $challenge->attempts >= 5) {
+            if (!$challenge || now()->gte($challenge->expires_at) || (int) $challenge->attempts >= 5) {
                 if ($challenge) {
                     DB::table('bale_auth_challenges')->where('id', $challenge->id)->delete();
                 }
 
                 return null;
             }
-            if (! hash_equals((string) $challenge->code_hash, $this->hash($user, $purpose, $code))) {
+            if (!hash_equals((string) $challenge->code_hash, $this->hash($user, $purpose, $code))) {
                 DB::table('bale_auth_challenges')->where('id', $challenge->id)->increment('attempts');
 
                 return null;
@@ -109,7 +111,7 @@ final class BaleAuthChallenge
             return $user;
         });
 
-        if (! $user) {
+        if (!$user) {
             throw $this->invalid();
         }
         RateLimiter::clear($rateKey);
@@ -124,7 +126,7 @@ final class BaleAuthChallenge
 
     private function guardPurpose(string $purpose): void
     {
-        if (! in_array($purpose, [self::LOGIN, self::PASSWORD_RESET], true)) {
+        if (!in_array($purpose, [self::LOGIN, self::PASSWORD_RESET], true)) {
             throw ValidationException::withMessages(['purpose' => 'نوع درخواست نامعتبر است.']);
         }
     }

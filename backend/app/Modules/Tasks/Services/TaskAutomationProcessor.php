@@ -15,7 +15,7 @@ final class TaskAutomationProcessor
     {
         DB::transaction(function () use ($event): void {
             $content = Content::whereKey($event->contentId)->lockForUpdate()->first();
-            if (! $content || ! ContentPublication::published($content)) {
+            if (!$content || !ContentPublication::published($content)) {
                 return;
             }
             $receipt = $content->payload['_publication'] ?? [];

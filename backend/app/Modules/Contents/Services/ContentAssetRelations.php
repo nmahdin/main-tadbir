@@ -17,11 +17,11 @@ final class ContentAssetRelations
     public function normalize(User $actor, ?Content $content, array $stages): array
     {
         foreach ($stages as $stageIndex => $stage) {
-            if (! is_array($stage)) {
+            if (!is_array($stage)) {
                 continue;
             }
             foreach (($stage['outputs'] ?? []) as $outputIndex => $output) {
-                if (! is_array($output) || empty($output['assetId'])) {
+                if (!is_array($output) || empty($output['assetId'])) {
                     continue;
                 }
                 $asset = DamAsset::query()->find($output['assetId']);
@@ -35,13 +35,13 @@ final class ContentAssetRelations
                 ) : null;
                 $alreadyLinked = $asset && $content && $asset->relations()
                     ->where('related_type', 'content')->where('related_id', $content->id)->exists();
-                if (! $asset || (! is_array($legacyOutput) && ! $alreadyLinked && ! app(DamAssetAccess::class)->canView($actor, $asset))) {
+                if (!$asset || (!is_array($legacyOutput) && !$alreadyLinked && !app(DamAssetAccess::class)->canView($actor, $asset))) {
                     throw ValidationException::withMessages(['stages' => 'دارایی خروجی انتخابی در دسترس نیست.']);
                 }
-                $version = ! empty($output['assetVersionId'])
+                $version = !empty($output['assetVersionId'])
                     ? $asset->versions()->whereKey($output['assetVersionId'])->first()
                     : $asset->versions()->orderByDesc('version_number')->first();
-                if (! $version) {
+                if (!$version) {
                     if (is_array($legacyOutput)) {
                         // Old metadata-only links may predate DamVersion. Preserve
                         // them until a real revision is uploaded; never invent a version.
@@ -62,22 +62,22 @@ final class ContentAssetRelations
     public function sync(User $actor, Content $content): void
     {
         foreach (($content->payload['stages'] ?? []) as $stage) {
-            if (! is_array($stage) || empty($stage['id'])) {
+            if (!is_array($stage) || empty($stage['id'])) {
                 continue;
             }
             foreach (($stage['outputs'] ?? []) as $output) {
-                if (! is_array($output) || empty($output['id']) || empty($output['assetId'])) {
+                if (!is_array($output) || empty($output['id']) || empty($output['assetId'])) {
                     continue;
                 }
                 $asset = DamAsset::query()->find($output['assetId']);
-                if (! $asset) {
+                if (!$asset) {
                     continue;
                 }
                 $context = [
                     'relation_role' => DamRelationRole::STAGE_OUTPUT,
                     'stage_id' => (string) $stage['id'],
                     'output_id' => (string) $output['id'],
-                    'asset_version_id' => ! empty($output['assetVersionId']) ? (int) $output['assetVersionId'] : null,
+                    'asset_version_id' => !empty($output['assetVersionId']) ? (int) $output['assetVersionId'] : null,
                 ];
                 $exactKey = DamRelationRole::contextKey((string) $stage['id'], (string) $output['id'], null);
                 $exact = $asset->relations()

@@ -46,11 +46,13 @@ final class FreePlanActivator
     public function __construct(
         private readonly SubscriptionService $subscriptions,
         private readonly SubscriptionOwnerResolver $owners,
-    ) {}
+    )
+    {
+    }
 
     public function activateForPersonalWorkspace(User $user, Workspace $workspace, string $correlation): string
     {
-        if ($workspace->organization_id !== null || ! $workspace->isPersonal()
+        if ($workspace->organization_id !== null || !$workspace->isPersonal()
             || (int) $workspace->owner_user_id !== (int) $user->id) {
             return self::INVALID;
         }

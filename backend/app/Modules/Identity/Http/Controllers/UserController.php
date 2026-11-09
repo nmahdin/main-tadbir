@@ -61,7 +61,7 @@ class UserController extends Controller
                 $access->authorizeRole($request->user()->fresh(), Role::findOrFail($attributes['role_id']));
             }
 
-            if (! empty($attributes['department_id'])) {
+            if (!empty($attributes['department_id'])) {
                 abort_unless($request->user()->hasPermission('departments.manage_members'), 403);
             }
 
@@ -82,7 +82,7 @@ class UserController extends Controller
             $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             abort_unless($actor->is($user) || $actor->hasAnyPermission(['users.edit', 'users.status']), 403);
             $data = $request->validated();
-            if ($actor->is($user) && ! $actor->isAdmin()) {
+            if ($actor->is($user) && !$actor->isAdmin()) {
                 abort_if((isset($data['role']) && $data['role'] !== $user->role?->key)
                     || (isset($data['roleId']) && (string) $data['roleId'] !== (string) $user->role_id), 403);
             }
@@ -95,7 +95,7 @@ class UserController extends Controller
             $selfFields = ['name', 'username', 'password', 'phone', 'location', 'bio', 'skills'];
             foreach (array_keys($changes) as $field) {
                 if (in_array($field, ['role_id', 'role_key'], true)) {
-                    abort_unless(! $actor->is($user) || $actor->isAdmin(), 403);
+                    abort_unless(!$actor->is($user) || $actor->isAdmin(), 403);
                     abort_unless($actor->isAdmin() || $actor->hasPermission('users.edit'), 403);
                     $access->authorizeRole($actor, $user->role ?? Role::findOrFail($attributes['role_id']));
                     $access->authorizeRole($actor, Role::findOrFail($attributes['role_id']));
@@ -216,13 +216,13 @@ class UserController extends Controller
         $role = null;
         if (array_key_exists('roleId', $data) && $data['roleId'] !== null) {
             $role = is_numeric($data['roleId']) ? Role::whereKey((int) $data['roleId'])->lockForUpdate()->first() : null;
-            if (! $role) {
+            if (!$role) {
                 throw ValidationException::withMessages(['roleId' => 'نقش انتخاب‌شده معتبر نیست.']);
             }
         }
         if (isset($data['role'])) {
             $byKey = Role::where('key', $data['role'])->lockForUpdate()->first();
-            if (! $byKey || ($role && ! $role->is($byKey))) {
+            if (!$byKey || ($role && !$role->is($byKey))) {
                 throw ValidationException::withMessages(['role' => 'کلید و شناسه نقش باید به یک نقش معتبر اشاره کنند.']);
             }
             $role = $byKey;

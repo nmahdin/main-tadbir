@@ -54,7 +54,7 @@ final class TaskAssets
             $task = $this->authorize($user, (int) ($session->data['task_id'] ?? 0));
             $title = $session->step === 'text_asset_title';
             Validator::make(['value' => $text], ['value' => 'required|string|max:'.($title ? '255' : '3000')])->validate();
-            if (! $title && ($session->data['mode'] ?? 'text') === 'url') {
+            if (!$title && ($session->data['mode'] ?? 'text') === 'url') {
                 $this->validateUrl($text);
             }
             $session->update(['step' => $title ? 'text_asset_body' : 'text_asset_confirm', 'data' => [...$session->data, $title ? 'title' : 'body' => $text]]);

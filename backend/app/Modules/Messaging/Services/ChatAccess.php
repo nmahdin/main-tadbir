@@ -118,13 +118,13 @@ final class ChatAccess
             ])->validate();
             $payload['text'] = (string) ($payload['text'] ?? '');
             $conversation = $this->conversation($actor, (int) $payload['conversationId'], true);
-            abort_if(($conversation->payload['writePermission'] ?? 'all') === 'admins_only' && ! $this->manages($actor, $conversation), 403);
+            abort_if(($conversation->payload['writePermission'] ?? 'all') === 'admins_only' && !$this->manages($actor, $conversation), 403);
             $parentId = $conversation->id;
-            if (! empty($payload['replyToMessageId'])) {
+            if (!empty($payload['replyToMessageId'])) {
                 abort_unless(DomainRecord::where('domain', DomainRecord::DOMAIN_CHAT_MESSAGE)
                     ->where('parent_id', $parentId)->whereKey($payload['replyToMessageId'])->exists(), 422);
             }
-            if (! empty($payload['attachments'])) {
+            if (!empty($payload['attachments'])) {
                 $payload['attachments'] = collect($payload['attachments'])->map(function (array $attachment) use ($parentId): array {
                     $token = (string) $attachment['id'];
                     $path = collect(Storage::disk('local')->files('chat/'.$parentId))
@@ -148,7 +148,7 @@ final class ChatAccess
                 'timestamp' => now()->toIso8601String(), 'reactions' => []];
             $conversationPayload = $conversation->payload ?? [];
             $conversationPayload['lastMessage'] = [
-                'text' => trim((string) ($payload['text'] ?? '')) ?: (! empty($payload['attachments']) ? '[پیوست]' : (! empty($payload['taskRef']) ? '[ارجاع به وظیفه]' : '[پیام]')),
+                'text' => trim((string) ($payload['text'] ?? '')) ?: (!empty($payload['attachments']) ? '[پیوست]' : (!empty($payload['taskRef']) ? '[ارجاع به وظیفه]' : '[پیام]')),
                 'timestamp' => $payload['timestamp'],
                 'senderId' => (string) $actor->id,
                 'senderName' => $actor->name,
@@ -175,7 +175,7 @@ final class ChatAccess
                 if ($command === 'toggle_reaction') {
                     $emoji = trim((string) $data['emoji']);
                     abort_if($emoji === '', 422, 'واکنش معتبر نیست.');
-                    $reactions = collect($before['reactions'] ?? [])->filter(fn ($reaction) => is_array($reaction) && ! empty($reaction['emoji']))->keyBy('emoji');
+                    $reactions = collect($before['reactions'] ?? [])->filter(fn ($reaction) => is_array($reaction) && !empty($reaction['emoji']))->keyBy('emoji');
                     $reaction = $reactions->get($emoji, ['emoji' => $emoji, 'userIds' => []]);
                     $reactionUsers = is_array($reaction['userIds'] ?? null) ? $reaction['userIds'] : [];
                     $ids = array_values(array_unique(array_map('strval', $reactionUsers)));
@@ -189,7 +189,7 @@ final class ChatAccess
                     $before['reactions'] = $reactions->values()->all();
                 } elseif ($command === 'toggle_pin') {
                     abort_unless($this->manages($actor, $conversation) || $actor->hasPermission('messaging.pin_message'), 403);
-                    $before['isPinned'] = ! (bool) ($before['isPinned'] ?? false);
+                    $before['isPinned'] = !(bool) ($before['isPinned'] ?? false);
                 } elseif ($command === 'toggle_star') {
                     $starredBy = is_array($before['starredBy'] ?? null) ? $before['starredBy'] : [];
                     $ids = array_values(array_unique(array_map('strval', $starredBy)));
@@ -223,7 +223,7 @@ final class ChatAccess
         // Old clients send whole records. Accept unchanged metadata, never mutate
         // author/parent/read receipts/reaction aggregates through the generic PUT.
         foreach (Arr::except($data, ['id', 'createdAt', 'updatedAt', 'isMuted', 'unreadCount', 'isStarred']) as $key => $value) {
-            if (! in_array($key, $allowed, true)) {
+            if (!in_array($key, $allowed, true)) {
                 abort_if($value !== ($before[$key] ?? null), 403, 'این فیلد از مسیر ویرایش عمومی قابل تغییر نیست.');
             }
         }

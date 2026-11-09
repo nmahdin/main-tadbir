@@ -35,7 +35,9 @@ final class GoogleWorkspaceService
         private readonly GoogleDocsCodec $docsCodec,
         private readonly DamService $dam,
         private readonly DamTableRows $tableRows,
-    ) {}
+    )
+    {
+    }
 
     /** @return array<string, mixed> */
     public function settingsStatus(): array
@@ -80,7 +82,7 @@ final class GoogleWorkspaceService
         if ($link) {
             $remote = $this->remoteMetadata($client, $link->google_file_id);
             $this->assertRemoteType($remote, self::DOCUMENT_MIME);
-            if (! $force && $this->remoteChanged($link, $remote)) {
+            if (!$force && $this->remoteChanged($link, $remote)) {
                 abort(409, 'نسخه Google Docs پس از آخرین همگام‌سازی تغییر کرده است. ابتدا آخرین تغییرات را دریافت کنید یا ارسال اجباری را تأیید کنید.');
             }
             $documentId = $link->google_file_id;
@@ -137,7 +139,7 @@ final class GoogleWorkspaceService
         abort_unless($asset->type === 'content' && $asset->contentItem, 422, 'فقط دارایی متنی را می‌توان از Google Docs دریافت کرد.');
         $link = $asset->googleWorkspaceLink;
         abort_unless($link && $link->resource_type === GoogleWorkspaceLink::DOCUMENT, 422, 'این دارایی به Google Docs متصل نیست.');
-        if (! $force && $link->local_fingerprint && ! hash_equals($link->local_fingerprint, $this->assetFingerprint($asset))) {
+        if (!$force && $link->local_fingerprint && !hash_equals($link->local_fingerprint, $this->assetFingerprint($asset))) {
             abort(409, 'نسخه بومی تدبیر پس از آخرین همگام‌سازی تغییر کرده است. دریافت اجباری، آن را به‌عنوان یک نسخه جدید جایگزین می‌کند.');
         }
 
@@ -169,7 +171,7 @@ final class GoogleWorkspaceService
                 $html,
                 'دریافت تغییرات از Google Docs',
                 function (DamAsset $locked) use ($force, $expectedFingerprint): void {
-                    if (! $force && $expectedFingerprint && ! hash_equals($expectedFingerprint, $this->assetFingerprint($locked))) {
+                    if (!$force && $expectedFingerprint && !hash_equals($expectedFingerprint, $this->assetFingerprint($locked))) {
                         abort(409, 'نسخه بومی تدبیر هنگام دریافت تغییر کرد. دوباره تلاش کنید یا دریافت اجباری را تأیید کنید.');
                     }
                 },
@@ -239,7 +241,7 @@ final class GoogleWorkspaceService
         if ($link) {
             $remote = $this->remoteMetadata($client, $link->google_file_id);
             $this->assertRemoteType($remote, self::SPREADSHEET_MIME);
-            if (! $force && $this->remoteChanged($link, $remote)) {
+            if (!$force && $this->remoteChanged($link, $remote)) {
                 abort(409, 'نسخه Google Sheets پس از آخرین همگام‌سازی تغییر کرده است. ابتدا آخرین تغییرات را دریافت کنید یا ارسال اجباری را تأیید کنید.');
             }
             $spreadsheetId = $link->google_file_id;
@@ -302,7 +304,7 @@ final class GoogleWorkspaceService
         $this->assertEnabled('sheetsEnabled', 'Google Sheets');
         $link = $table->googleWorkspaceLink;
         abort_unless($link && $link->resource_type === GoogleWorkspaceLink::SPREADSHEET, 422, 'این جدول به Google Sheets متصل نیست.');
-        if (! $force && $link->local_fingerprint && ! hash_equals($link->local_fingerprint, $this->tableFingerprint($table))) {
+        if (!$force && $link->local_fingerprint && !hash_equals($link->local_fingerprint, $this->tableFingerprint($table))) {
             abort(409, 'جدول بومی تدبیر پس از آخرین همگام‌سازی تغییر کرده است. دریافت اجباری، نسخه Google Sheets را وارد می‌کند.');
         }
 
@@ -326,7 +328,7 @@ final class GoogleWorkspaceService
         $expectedFingerprint = $link->local_fingerprint;
         $summary = DB::transaction(function () use ($table, $actor, $columns, $rows, $force, $expectedFingerprint, $link, $remote, $sheetTitle, $columnIds): array {
             $locked = DamDataTable::query()->whereKey($table->id)->lockForUpdate()->firstOrFail();
-            if (! $force && $expectedFingerprint && ! hash_equals($expectedFingerprint, $this->tableFingerprint($locked))) {
+            if (!$force && $expectedFingerprint && !hash_equals($expectedFingerprint, $this->tableFingerprint($locked))) {
                 abort(409, 'جدول بومی تدبیر هنگام دریافت تغییر کرد. دوباره تلاش کنید یا دریافت اجباری را تأیید کنید.');
             }
             $existing = $locked->rows()->get()->keyBy('id');
@@ -619,7 +621,7 @@ final class GoogleWorkspaceService
      */
     private function parseSheetValues(DamDataTable $table, GoogleWorkspaceLink $link, array $values, User $actor): array
     {
-        if ($values === [] || ! is_array($values[0] ?? null)) {
+        if ($values === [] || !is_array($values[0] ?? null)) {
             throw ValidationException::withMessages(['googleWorkspace' => 'Google Sheets فاقد سطر عنوان ستون‌ها است.']);
         }
         $headers = array_values($values[0]);
@@ -662,12 +664,12 @@ final class GoogleWorkspaceService
         $usedIds = [];
         $parsed = [];
         foreach (array_slice($values, $hasIdentityRow ? 2 : 1) as $rowValues) {
-            if (! is_array($rowValues)) {
+            if (!is_array($rowValues)) {
                 continue;
             }
             $identifier = trim((string) ($rowValues[0] ?? ''));
             $rowId = preg_match('/^tadbir:(\d+)$/', $identifier, $matches) === 1 ? (int) $matches[1] : null;
-            if ($rowId !== null && (! in_array($rowId, $validExistingIds, true) || in_array($rowId, $usedIds, true))) {
+            if ($rowId !== null && (!in_array($rowId, $validExistingIds, true) || in_array($rowId, $usedIds, true))) {
                 throw ValidationException::withMessages(['googleWorkspace' => 'شناسه ردیف در Google Sheets نامعتبر یا تکراری است.']);
             }
             if ($rowId !== null) {
@@ -743,11 +745,11 @@ final class GoogleWorkspaceService
     {
         $version = isset($remote['version']) ? (string) $remote['version'] : null;
         if ($link->remote_version !== null && $version !== null) {
-            return ! hash_equals((string) $link->remote_version, $version);
+            return !hash_equals((string) $link->remote_version, $version);
         }
         $modified = isset($remote['modifiedTime']) ? CarbonImmutable::parse((string) $remote['modifiedTime']) : null;
 
-        return $link->remote_modified_at && $modified && ! $link->remote_modified_at->equalTo($modified);
+        return $link->remote_modified_at && $modified && !$link->remote_modified_at->equalTo($modified);
     }
 
     /** @param array<string, mixed> $before @param array<string, mixed> $after */
@@ -756,12 +758,12 @@ final class GoogleWorkspaceService
         $beforeVersion = isset($before['version']) ? (string) $before['version'] : null;
         $afterVersion = isset($after['version']) ? (string) $after['version'] : null;
         if ($beforeVersion !== null && $afterVersion !== null) {
-            return ! hash_equals($beforeVersion, $afterVersion);
+            return !hash_equals($beforeVersion, $afterVersion);
         }
         $beforeModified = isset($before['modifiedTime']) ? CarbonImmutable::parse((string) $before['modifiedTime']) : null;
         $afterModified = isset($after['modifiedTime']) ? CarbonImmutable::parse((string) $after['modifiedTime']) : null;
 
-        return $beforeModified && $afterModified && ! $beforeModified->equalTo($afterModified);
+        return $beforeModified && $afterModified && !$beforeModified->equalTo($afterModified);
     }
 
     private function assetFingerprint(DamAsset $asset): string
@@ -868,10 +870,10 @@ final class GoogleWorkspaceService
     private function assertEnabled(string $key, string $label): void
     {
         $settings = $this->settings();
-        if (! ($settings['driveEnabled'] ?? true) || ! ($settings[$key] ?? true)) {
+        if (!($settings['driveEnabled'] ?? true) || !($settings[$key] ?? true)) {
             throw ValidationException::withMessages(['googleWorkspace' => "اتصال {$label} در تنظیمات سامانه غیرفعال است."]);
         }
-        if (! $this->google->configured()) {
+        if (!$this->google->configured()) {
             throw ValidationException::withMessages(['googleWorkspace' => 'اتصال امن Google Workspace هنوز روی سرور آماده نشده است.']);
         }
     }

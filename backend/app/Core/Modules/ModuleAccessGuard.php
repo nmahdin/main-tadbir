@@ -40,7 +40,9 @@ final class ModuleAccessGuard
     public function __construct(
         private readonly AuthorizationService $authorization,
         private readonly SubscriptionAccessEvaluator $entitlements,
-    ) {}
+    )
+    {
+    }
 
     public function authorize(
         User $user,
@@ -106,7 +108,7 @@ final class ModuleAccessGuard
             );
         }
 
-        if (! $definition->isAvailable()) {
+        if (!$definition->isAvailable()) {
             throw new ModuleAccessDeniedException(
                 ModuleAccessDeniedException::MODULE_UNAVAILABLE,
                 "Module [{$moduleKey}] is not technically available.",
@@ -128,7 +130,7 @@ final class ModuleAccessGuard
             ->whereHas('module', fn ($query) => $query->where('key', $moduleKey))
             ->exists();
 
-        if (! $enabled) {
+        if (!$enabled) {
             throw new ModuleAccessDeniedException(
                 ModuleAccessDeniedException::MODULE_NOT_ENABLED,
                 "Module [{$moduleKey}] is not enabled in this workspace.",

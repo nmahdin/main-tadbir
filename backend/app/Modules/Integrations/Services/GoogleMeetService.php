@@ -12,7 +12,9 @@ use Throwable;
 
 final class GoogleMeetService
 {
-    public function __construct(private readonly GoogleWorkspaceClient $google) {}
+    public function __construct(private readonly GoogleWorkspaceClient $google)
+    {
+    }
 
     /**
      * Report only whether usable server credentials exist. No secret, token,
@@ -30,7 +32,7 @@ final class GoogleMeetService
     {
         $payload = $meeting->payload ?? [];
         $settings = $this->settings();
-        if (! ($settings['enabled'] ?? true)) {
+        if (!($settings['enabled'] ?? true)) {
             throw ValidationException::withMessages(['googleMeet' => 'ایجاد Google Meet در تنظیمات سامانه غیرفعال است.']);
         }
         $title = trim((string) ($meeting->title ?: ($payload['title'] ?? '')));
@@ -45,7 +47,7 @@ final class GoogleMeetService
         $validTime = preg_match('/^(\d{1,2}):(\d{2})$/', $time, $timeMatches) === 1
             && (int) $timeMatches[1] <= 23
             && (int) $timeMatches[2] <= 59;
-        if ($title === '' || ! $validDate || ! $validTime) {
+        if ($title === '' || !$validDate || !$validTime) {
             throw ValidationException::withMessages([
                 'meeting' => 'برای ایجاد Google Meet، عنوان، تاریخ و ساعت معتبر جلسه را ثبت کنید.',
             ]);

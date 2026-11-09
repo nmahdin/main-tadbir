@@ -35,7 +35,7 @@ final class OperationalMenus
         };
         $ops = app(TaskOperations::class);
         $taskId = str_starts_with($session?->step ?? '', 'asset_') ? ($session->data['task_id'] ?? null) : null;
-        if ($taskId && $action !== 'assetrows' && ! str_starts_with($action, 'assetrows:') && (str_starts_with($action, 'asset') || str_starts_with($action, 'department') || str_starts_with($action, 'confirm:') || $text !== null)) {
+        if ($taskId && $action !== 'assetrows' && !str_starts_with($action, 'assetrows:') && (str_starts_with($action, 'asset') || str_starts_with($action, 'department') || str_starts_with($action, 'confirm:') || $text !== null)) {
             $ops->ownForBale($user, $taskId);
         }
         if (preg_match('/^edit:(\d{1,18})$/', $action, $m)) {
@@ -92,7 +92,7 @@ final class OperationalMenus
             if ($action === 'assetrows') {
                 $taskId = null;
             }
-            if (! empty($taskMatch)) {
+            if (!empty($taskMatch)) {
                 $taskId = $ops->ownForBale($user, $taskMatch[1])->id;
             }
             $session = $this->session($link, 'asset_context', ['task_id' => $taskId]);
@@ -130,7 +130,7 @@ final class OperationalMenus
                 $parts = explode(':', $action);
                 abort_unless(count($parts) === 3 && hash_equals($session->nonce, $parts[1]) && ($column['type'] ?? '') === 'select' && ctype_digit($parts[2]) && isset($column['options'][(int) $parts[2]]), 409);
                 $value = $column['options'][(int) $parts[2]];
-            } elseif ($text === '-' && ! ($column['required'] ?? false)) {
+            } elseif ($text === '-' && !($column['required'] ?? false)) {
                 $value = null;
             }
             Validator::make(['value' => $value], ['value' => app(DamTableRows::class)->rules($column)])->validate();

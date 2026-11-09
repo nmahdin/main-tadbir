@@ -18,7 +18,7 @@ final class ProjectTemplateApplication
 {
     public function apply(User $actor, Project $project): void
     {
-        if (! $project->template_id) {
+        if (!$project->template_id) {
             return;
         }
         $template = ProjectTemplate::whereKey($project->template_id)->lockForUpdate()->firstOrFail();
@@ -40,10 +40,10 @@ final class ProjectTemplateApplication
         }
         abort_unless($actor->hasPermission('tasks.create'), 403);
         $assignee = $project->project_manager_id;
-        if (! $assignee) {
+        if (!$assignee) {
             throw ValidationException::withMessages(['projectManagerId' => 'برای ساخت تسک‌های الگو، مدیر پروژه را مشخص کنید.']);
         }
-        abort_if((int) $assignee !== (int) $actor->id && ! $actor->hasPermission('tasks.assign'), 403);
+        abort_if((int) $assignee !== (int) $actor->id && !$actor->hasPermission('tasks.assign'), 403);
         $start = $project->start_date ?? today();
         foreach ($data['tasks'] as $row) {
             $task = Task::create([

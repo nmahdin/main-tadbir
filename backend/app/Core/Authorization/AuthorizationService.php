@@ -88,7 +88,7 @@ final class AuthorizationService
     {
         PermissionCatalog::assertKnownKeysForScope([$permissionKey], PermissionCatalog::SCOPE_WORKSPACE);
 
-        if (! $context->hasPermission($permissionKey)) {
+        if (!$context->hasPermission($permissionKey)) {
             throw new AuthorizationDeniedException(
                 AuthorizationDeniedException::PERMISSION_MISSING,
                 "The workspace role does not hold permission [{$permissionKey}].",

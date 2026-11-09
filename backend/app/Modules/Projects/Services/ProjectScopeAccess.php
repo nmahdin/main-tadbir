@@ -10,7 +10,7 @@ final class ProjectScopeAccess
 {
     public function canView(?User $user, Project $project): bool
     {
-        if (! $user?->isActive() || ! $user->hasPermission('projects.view')) {
+        if (!$user?->isActive() || !$user->hasPermission('projects.view')) {
             return false;
         }
         if ($user->role?->key === 'admin' || (int) $project->project_manager_id === (int) $user->id) {
@@ -22,7 +22,7 @@ final class ProjectScopeAccess
 
     public function canEdit(?User $user, Project $project): bool
     {
-        if (! $user?->isActive() || ! $user->hasPermission('projects.edit')) {
+        if (!$user?->isActive() || !$user->hasPermission('projects.edit')) {
             return false;
         }
 

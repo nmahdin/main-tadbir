@@ -53,7 +53,7 @@ final class DepartmentConsolidation
             if ($phase === 'permissions') {
                 foreach (self::PERMISSIONS as $old => $targets) {
                     $oldId = DB::table('permissions')->where('key', $old)->value('id');
-                    if (! $oldId) {
+                    if (!$oldId) {
                         continue;
                     }
                     foreach ($targets as $key) {
@@ -123,7 +123,7 @@ final class DepartmentConsolidation
     private function mapped(mixed $id): string
     {
         $result = Department::where('legacy_team_id', $id)->value('id');
-        if (! $result) {
+        if (!$result) {
             throw ValidationException::withMessages(['migration' => 'ارجاع به تیم بدون مقصد وجود دارد؛ شناسهٔ قدیمی: '.mb_substr((string) $id, 0, 80)]);
         }
 
@@ -138,7 +138,7 @@ final class DepartmentConsolidation
             }
         }
         foreach (['teamId' => 'departmentId', 'toTeamId' => 'toDepartmentId', 'team_id' => 'department_id'] as $old => $new) {
-            if (! array_key_exists($old, $value)) {
+            if (!array_key_exists($old, $value)) {
                 continue;
             }
             $id = $value[$old];
@@ -149,7 +149,7 @@ final class DepartmentConsolidation
                 continue;
             }
             $mapped = $this->mapped($id);
-            if (! empty($value[$new]) && (string) $value[$new] !== $mapped) {
+            if (!empty($value[$new]) && (string) $value[$new] !== $mapped) {
                 $value['departmentIds'] = array_values(array_unique([...(array) ($value['departmentIds'] ?? []), (string) $value[$new], $mapped]));
             } else {
                 $value[$new] = $old === 'team_id' ? (int) $mapped : $mapped;

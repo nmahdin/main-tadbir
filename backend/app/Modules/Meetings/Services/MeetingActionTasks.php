@@ -27,7 +27,7 @@ final class MeetingActionTasks
             $index = collect($items)->search(fn ($item) => is_array($item) && (string) ($item['id'] ?? '') === $actionId);
             abort_if($index === false, 404, 'اقدام جلسه پیدا نشد.');
             $item = $items[$index];
-            if (! empty($item['convertedTaskId'])) {
+            if (!empty($item['convertedTaskId'])) {
                 $task = app(TaskOperations::class)->visibleTo($actor)->whereKey($item['convertedTaskId'])->first();
                 abort_unless($task, 409, 'تسک مرتبط حذف شده یا در دسترس نیست؛ ابتدا ارتباط اقدام را بررسی کنید.');
 

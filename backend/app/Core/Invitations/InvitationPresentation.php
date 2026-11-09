@@ -39,7 +39,9 @@ final readonly class InvitationPresentation
         public ?array $intendedOrganizationRole,
         public ?array $intendedWorkspaceRole,
         public ?string $message,
-    ) {}
+    )
+    {
+    }
 
     /**
      * @return array<string, mixed>

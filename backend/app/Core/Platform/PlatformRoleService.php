@@ -35,7 +35,9 @@ final class PlatformRoleService
         private readonly PlatformAuthorizer $authorizer,
         private readonly PlatformControlLock $controlLock,
         private readonly AuditWriter $audit,
-    ) {}
+    )
+    {
+    }
 
     /**
      * @param  list<string>  $permissionKeys
@@ -177,7 +179,7 @@ final class PlatformRoleService
 
     private function assertCanManageRoles(User $actor): void
     {
-        if (! $this->authorizer->allows($actor, 'platform.admins.manage')) {
+        if (!$this->authorizer->allows($actor, 'platform.admins.manage')) {
             throw new PlatformAuthorizationException(
                 'Platform role management requires platform.admins.manage.',
             );

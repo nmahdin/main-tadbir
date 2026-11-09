@@ -61,7 +61,7 @@ final class ContentCreator
                 'series_sequence' => $options['series_sequence'] ?? null,
                 'period_key' => $options['period_key'] ?? null,
                 'planned_start_at' => $options['planned_start_at'] ?? null,
-                'series_activated_at' => ($options['materialize_tasks'] ?? true) && ! empty($options['series_id']) ? now() : null,
+                'series_activated_at' => ($options['materialize_tasks'] ?? true) && !empty($options['series_id']) ? now() : null,
                 'payload' => Arr::except($payload, [
                     'id', 'comments', 'createdAt', 'updatedAt', 'publicationVersion', 'reviewVersion',
                     'reviewableStageIds', 'access', 'isWatched',
@@ -77,7 +77,7 @@ final class ContentCreator
             app(ContentAssetRelations::class)->sync($actor, $content->refresh());
             foreach (collect($content->payload['assetIds'] ?? [])->filter(fn ($id) => is_numeric($id))->unique() as $assetId) {
                 $asset = DamAsset::query()->find((int) $assetId);
-                if (! $asset || ! app(DamAssetAccess::class)->canView($actor, $asset)) {
+                if (!$asset || !app(DamAssetAccess::class)->canView($actor, $asset)) {
                     throw ValidationException::withMessages([
                         'assetIds' => 'یکی از دارایی‌های مرجع انتخاب‌شده در دسترس نیست.',
                     ]);

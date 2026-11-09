@@ -35,7 +35,9 @@ final class WorkspaceRoleService
         private readonly MembershipPermissions $permissions,
         private readonly FinalManagerGuard $finalManagerGuard,
         private readonly RoleProvisioner $roleProvisioner,
-    ) {}
+    )
+    {
+    }
 
     public function assignRole(User $actor, WorkspaceMembership $membership, ScopedRole $role): WorkspaceMembership
     {
@@ -192,14 +194,14 @@ final class WorkspaceRoleService
             throw new RbacValidationException('An ended membership cannot be assigned a role; rejoining creates a new membership.');
         }
 
-        if (! $role->isWorkspaceScoped() || (int) $role->workspace_id !== (int) $membership->workspace_id) {
+        if (!$role->isWorkspaceScoped() || (int) $role->workspace_id !== (int) $membership->workspace_id) {
             throw new RbacValidationException('Role scope or workspace does not match the membership workspace.');
         }
     }
 
     private function assertCustomRoleOfWorkspace(ScopedRole $role): void
     {
-        if (! $role->isWorkspaceScoped() || $role->workspace === null) {
+        if (!$role->isWorkspaceScoped() || $role->workspace === null) {
             throw new RbacValidationException('Role is not a workspace role.');
         }
 
@@ -218,7 +220,7 @@ final class WorkspaceRoleService
         }
 
         $keys = $this->permissions->workspacePermissionKeys($actor, $workspace);
-        if (! in_array('workspace.roles.manage', $keys, true)) {
+        if (!in_array('workspace.roles.manage', $keys, true)) {
             throw new RbacAuthorizationException('The actor lacks workspace.roles.manage in this workspace.');
         }
 

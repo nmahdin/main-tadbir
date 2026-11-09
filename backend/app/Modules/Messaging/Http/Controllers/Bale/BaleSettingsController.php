@@ -19,7 +19,9 @@ use Illuminate\Support\Facades\Schema;
 
 final class BaleSettingsController extends Controller
 {
-    public function __construct(private Settings $settings, private RuntimeLock $lock, private BaleClient $client) {}
+    public function __construct(private Settings $settings, private RuntimeLock $lock, private BaleClient $client)
+    {
+    }
 
     public function show(Request $request): JsonResponse
     {
@@ -46,7 +48,7 @@ final class BaleSettingsController extends Controller
         if ($request->isMethod('put')) {
             $this->lock->run(fn () => $automations->save($request->user(), $request->all()));
         }
-        $tables = ! Schema::hasTable('dam_data_table_department') ? collect() : DamDataTable::with(['departments' => fn ($query) => $query->where('departments.status', 'active')])
+        $tables = !Schema::hasTable('dam_data_table_department') ? collect() : DamDataTable::with(['departments' => fn ($query) => $query->where('departments.status', 'active')])
             ->whereHas('departments')->orderBy('name')->get(['id', 'name'])->map(fn ($table) => [
                 'id' => $table->id, 'name' => $table->name,
                 'departments' => $table->departments->map(fn ($department) => ['id' => $department->id, 'name' => $department->name])->all(),
@@ -106,7 +108,7 @@ final class BaleSettingsController extends Controller
 
         foreach (BaleOutbox::query()->orderByDesc('id')->limit(200)->get() as $message) {
             $id = $message->payload['_automation']['id'] ?? null;
-            if (! is_string($id) || ! isset($allowed[$id]) || isset($result[$id])) {
+            if (!is_string($id) || !isset($allowed[$id]) || isset($result[$id])) {
                 continue;
             }
             $result[$id] = [

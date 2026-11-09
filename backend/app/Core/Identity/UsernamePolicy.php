@@ -41,10 +41,10 @@ final class UsernamePolicy
         if ($length > self::MAX_LENGTH) {
             return 'نام کاربری نمی‌تواند بیش از ۳۲ کاراکتر باشد.';
         }
-        if (! preg_match('/^[a-z0-9._-]+$/', $normalized)) {
+        if (!preg_match('/^[a-z0-9._-]+$/', $normalized)) {
             return 'نام کاربری فقط می‌تواند شامل حروف انگلیسی کوچک، عدد، نقطه، خط تیره و زیرخط باشد.';
         }
-        if (! preg_match('/^[a-z0-9]/', $normalized) || ! preg_match('/[a-z0-9]$/', $normalized)) {
+        if (!preg_match('/^[a-z0-9]/', $normalized) || !preg_match('/[a-z0-9]$/', $normalized)) {
             return 'نام کاربری باید با حرف یا عدد شروع و تمام شود.';
         }
         if (preg_match('/[._-]{2,}/', $normalized)) {

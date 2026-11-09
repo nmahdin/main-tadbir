@@ -45,7 +45,9 @@ final class SubscriptionEntitlementEvaluator implements ModuleEntitlementGate, S
 {
     public function __construct(
         private readonly SubscriptionService $subscriptions,
-    ) {}
+    )
+    {
+    }
 
     public function isEntitled(Workspace $workspace, string $moduleKey): bool
     {
@@ -63,7 +65,7 @@ final class SubscriptionEntitlementEvaluator implements ModuleEntitlementGate, S
     {
         $definition = ModuleCatalog::get($moduleKey);
 
-        if ($definition === null || ! $definition->isAvailable()) {
+        if ($definition === null || !$definition->isAvailable()) {
             return ModuleAccessLevel::Denied;
         }
 
@@ -73,7 +75,7 @@ final class SubscriptionEntitlementEvaluator implements ModuleEntitlementGate, S
             return ModuleAccessLevel::Denied; // ambiguous/corrupt ownership fails closed
         }
 
-        if ($snapshot->plan === null || ! $snapshot->plan->allowsModule($moduleKey)) {
+        if ($snapshot->plan === null || !$snapshot->plan->allowsModule($moduleKey)) {
             return ModuleAccessLevel::Denied;
         }
 
@@ -81,7 +83,7 @@ final class SubscriptionEntitlementEvaluator implements ModuleEntitlementGate, S
         // evidence of a genuine, consistent period history; an
         // Active-looking row without recorded periods is corrupt
         // state and fails closed, exactly like the expired case.
-        if (! $this->hasCommencedValidHistory($snapshot)) {
+        if (!$this->hasCommencedValidHistory($snapshot)) {
             return ModuleAccessLevel::Denied;
         }
 

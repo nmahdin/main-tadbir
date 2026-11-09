@@ -28,7 +28,7 @@ final class PlannedOccurrenceActivator
         foreach ($ids as $id) {
             DB::transaction(function () use ($id, $through, &$activated): void {
                 $content = Content::whereKey($id)->lockForUpdate()->first();
-                if (! $content || $content->series_activated_at) {
+                if (!$content || $content->series_activated_at) {
                     return;
                 }
                 app(ContentStageTaskSync::class)->sync($content);

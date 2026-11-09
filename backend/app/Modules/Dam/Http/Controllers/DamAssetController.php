@@ -113,15 +113,15 @@ class DamAssetController extends Controller
             'page' => 'sometimes|integer|between:1,100000',
         ]);
 
-        $content = ! empty($data['content_id']) ? Content::query()->find((int) $data['content_id']) : null;
+        $content = !empty($data['content_id']) ? Content::query()->find((int) $data['content_id']) : null;
         $this->permittedCollection($request, $content);
-        if (! empty($data['project_id'])) {
+        if (!empty($data['project_id'])) {
             app(ProjectScopeAccess::class)->assertView($request->user(), Project::findOrFail((int) $data['project_id']));
         }
-        if (! empty($data['idea_id'])) {
+        if (!empty($data['idea_id'])) {
             $this->guardWorkspaceContext($request, 'idea', (int) $data['idea_id']);
         }
-        if (! empty($data['meeting_id'])) {
+        if (!empty($data['meeting_id'])) {
             $this->guardWorkspaceContext($request, 'meeting', (int) $data['meeting_id']);
         }
         $deleted = ($data['status'] ?? null) === 'deleted';
@@ -130,10 +130,10 @@ class DamAssetController extends Controller
             'owner:id,name,username,avatar,title', 'creator:id,name,username,avatar,title',
         ])->withMax('latestFile', 'file_size')->withMax('versions', 'version_number');
 
-        if (! empty($data['type'])) {
+        if (!empty($data['type'])) {
             $query->where('type', $data['type']);
         }
-        if (! empty($data['search'])) {
+        if (!empty($data['search'])) {
             $term = '%'.addcslashes($data['search'], '%_\\').'%';
             $query->where(fn (Builder $assets) => $assets
                 ->where('title', 'like', $term)
@@ -149,7 +149,7 @@ class DamAssetController extends Controller
         }
 
         foreach (['project', 'task', 'department', 'content', 'idea', 'meeting'] as $type) {
-            if (! empty($data[$type.'_id'])) {
+            if (!empty($data[$type.'_id'])) {
                 $query->whereHas('relations', fn (Builder $relations) => $relations
                     ->where('related_type', $type)
                     ->where('related_id', $data[$type.'_id']));
@@ -157,7 +157,7 @@ class DamAssetController extends Controller
         }
 
         foreach (['category_id', 'owner_id', 'status', 'confidentiality'] as $field) {
-            if (isset($data[$field]) && ! ($field === 'status' && $deleted)) {
+            if (isset($data[$field]) && !($field === 'status' && $deleted)) {
                 $query->where($field, $data[$field]);
             }
         }
@@ -269,46 +269,46 @@ class DamAssetController extends Controller
         if ($request->hasFile('file') && $this->isDisallowedFilename($request->file('file')->getClientOriginalName())) {
             abort(422, 'این نوع فایل برای بارگذاری مجاز نیست.');
         }
-        if (! empty($data['project_id'])) {
+        if (!empty($data['project_id'])) {
             $this->permitted($request, 'projects.view');
             $linkedProject = app(ActiveProjectGuard::class)->project((int) $data['project_id']);
             app(ProjectScopeAccess::class)->assertView($request->user(), $linkedProject);
         }
-        if (! empty($data['task_id'])) {
+        if (!empty($data['task_id'])) {
             $this->permitted($request, 'tasks.view');
             $linkedTask = Task::findOrFail((int) $data['task_id']);
             app(ActiveProjectGuard::class)->project($linkedTask->project_id);
         }
-        if (! empty($data['department_id'])) {
+        if (!empty($data['department_id'])) {
             $this->permitted($request, 'departments.view');
         }
-        if (! empty($data['content_id'])) {
+        if (!empty($data['content_id'])) {
             $linkedContent = Content::findOrFail($data['content_id']);
             app(ActiveProjectGuard::class)->project($linkedContent->project_id);
             abort_unless(app(ContentAccess::class)->canView($request->user(), $linkedContent), 403);
             $this->guardWorkflowContext($linkedContent, $data['stage_id'] ?? null, $data['output_id'] ?? null);
-        } elseif (! empty($data['stage_id']) || ! empty($data['output_id'])) {
+        } elseif (!empty($data['stage_id']) || !empty($data['output_id'])) {
             throw ValidationException::withMessages(['content_id' => 'مرحله و خروجی فقط همراه محتوای مرتبط معتبر است.']);
         }
-        if (! empty($data['idea_id'])) {
+        if (!empty($data['idea_id'])) {
             $linkedIdea = $this->guardWorkspaceContext($request, 'idea', (int) $data['idea_id']);
             app(ActiveProjectGuard::class)->project($linkedIdea->project_id);
-        } elseif (! empty($data['idea_key'])) {
+        } elseif (!empty($data['idea_key'])) {
             abort_unless($request->user()->hasPermission('thinktank.create_idea'), 403);
         }
-        if (! empty($data['meeting_id'])) {
+        if (!empty($data['meeting_id'])) {
             $linkedMeeting = $this->guardWorkspaceContext($request, 'meeting', (int) $data['meeting_id']);
             app(ActiveProjectGuard::class)->project($linkedMeeting->project_id);
         }
-        if (! empty($data['task_id']) && ! empty($data['project_id'])) {
+        if (!empty($data['task_id']) && !empty($data['project_id'])) {
             abort_unless(Task::find($data['task_id'])?->project_id === (int) $data['project_id'], 422, 'وظیفه متعلق به پروژه انتخابی نیست.');
         }
-        if (! empty($data['status']) && $data['status'] !== 'draft') {
+        if (!empty($data['status']) && $data['status'] !== 'draft') {
             abort_unless($request->user()->isAdmin() || $request->user()->hasPermission('assets.manage_access'), 403);
         }
 
         abort_if($request->hasFile('file') && $request->filled('body'), 422, 'فایل و متن را جداگانه ثبت کنید.');
-        abort_if(! $request->hasFile('file') && DamRichText::plainText($data['body'] ?? '') === '', 422, 'متن نمی‌تواند خالی باشد.');
+        abort_if(!$request->hasFile('file') && DamRichText::plainText($data['body'] ?? '') === '', 422, 'متن نمی‌تواند خالی باشد.');
         $data['department_id'] ??= $request->user()->department_id;
         $data['status'] ??= in_array('approved', $this->allowedStatuses(), true) ? 'approved' : $this->allowedStatuses()[0];
 
@@ -431,7 +431,7 @@ class DamAssetController extends Controller
         if (array_intersect(array_keys($data), ['owner_id', 'status', 'confidentiality', 'access_grants'])) {
             abort_unless($request->user()->isAdmin() || $request->user()->hasPermission('assets.manage_access'), 403);
         }
-        if (array_key_exists('folder_id', $data) && ! $request->user()->hasPermission('assets.move')) {
+        if (array_key_exists('folder_id', $data) && !$request->user()->hasPermission('assets.move')) {
             abort(403);
         }
 
@@ -514,7 +514,7 @@ class DamAssetController extends Controller
             'tags.*' => 'required|string|max:50',
             'status' => ['sometimes', Rule::in($this->allowedStatuses())],
         ]);
-        abort_if(! array_key_exists('tags', $data) && ! array_key_exists('status', $data), 422, 'حداقل یک تغییر دسته‌ای لازم است.');
+        abort_if(!array_key_exists('tags', $data) && !array_key_exists('status', $data), 422, 'حداقل یک تغییر دسته‌ای لازم است.');
         if (array_key_exists('tags', $data)) {
             abort_unless($request->user()->hasPermission('assets.edit_info'), 403);
         }
@@ -666,8 +666,8 @@ class DamAssetController extends Controller
             abort_unless(app(ContentAccess::class)->canView($request->user(), $relatedContent), 403);
             $this->guardWorkflowContext($relatedContent, $data['stage_id'] ?? null, $data['output_id'] ?? null);
         } else {
-            abort_if(! empty($data['stage_id']) || ! empty($data['output_id']), 422, 'اطلاعات مرحله فقط برای ارتباط محتوا معتبر است.');
-            if (! in_array($data['related_type'], ['idea', 'meeting'], true)) {
+            abort_if(!empty($data['stage_id']) || !empty($data['output_id']), 422, 'اطلاعات مرحله فقط برای ارتباط محتوا معتبر است.');
+            if (!in_array($data['related_type'], ['idea', 'meeting'], true)) {
                 $this->permitted($request, $contextPermission);
             }
             if ($data['related_type'] === 'project') {
@@ -677,7 +677,7 @@ class DamAssetController extends Controller
                 $this->guardWorkspaceContext($request, $data['related_type'], (int) $data['related_id']);
             }
         }
-        if (! empty($data['asset_version_id'])) {
+        if (!empty($data['asset_version_id'])) {
             abort_unless($asset->versions()->whereKey($data['asset_version_id'])->exists(), 422, 'نسخه انتخابی متعلق به این دارایی نیست.');
         }
         $model = match ($data['related_type']) {
@@ -813,7 +813,7 @@ class DamAssetController extends Controller
     {
         $versionId = $data['asset_version_id'] ?? $asset->versions()->orderByDesc('version_number')->value('id');
         foreach (['project', 'task', 'department', 'content', 'idea', 'meeting'] as $type) {
-            if (! empty($data[$type.'_id'])) {
+            if (!empty($data[$type.'_id'])) {
                 $service->relate($asset, $type, (int) $data[$type.'_id'], $request->user(), [
                     'relation_role' => $data['relation_role'] ?? DamRelationRole::ATTACHMENT,
                     'stage_id' => $data['stage_id'] ?? null,
@@ -850,10 +850,10 @@ class DamAssetController extends Controller
         $stage = collect($content->payload['stages'] ?? [])->first(
             fn ($candidate) => is_array($candidate) && (string) ($candidate['id'] ?? '') === $stageId,
         );
-        if (! is_array($stage)) {
+        if (!is_array($stage)) {
             throw ValidationException::withMessages(['stage_id' => 'مرحله انتخابی متعلق به این محتوا نیست.']);
         }
-        if ($outputId !== '' && ! collect($stage['outputs'] ?? [])->contains(
+        if ($outputId !== '' && !collect($stage['outputs'] ?? [])->contains(
             fn ($output) => is_array($output) && (string) ($output['id'] ?? '') === $outputId,
         )) {
             throw ValidationException::withMessages(['output_id' => 'خروجی انتخابی متعلق به مرحله مشخص‌شده نیست.']);

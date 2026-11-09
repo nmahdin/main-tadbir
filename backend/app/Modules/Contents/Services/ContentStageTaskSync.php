@@ -44,7 +44,7 @@ class ContentStageTaskSync
         $seenKeys = [];
 
         foreach ($stages as $stage) {
-            if (! is_array($stage) || empty($stage['id'])) {
+            if (!is_array($stage) || empty($stage['id'])) {
                 continue;
             }
 
@@ -94,7 +94,7 @@ class ContentStageTaskSync
                     sprintf('تأیید ارزیاب «%s»: %s', $stage['title'] ?? 'بدون عنوان', $content->title),
                     'مسئول مرحله کار را انجام داده است. این تسک برای بررسی و تأیید ارزیاب ایجاد شده است.',
                 );
-                if (! in_array($reviewTask->status, ['completed', 'archived'], true)) {
+                if (!in_array($reviewTask->status, ['completed', 'archived'], true)) {
                     $reviewTask->update([
                         'status' => 'backlog',
                         'assignee_id' => $reviewerId,
@@ -135,7 +135,7 @@ class ContentStageTaskSync
         $finished = $stages->filter(fn ($stage) => in_array($stage['status'] ?? '', ['approved', 'completed', 'skipped'], true))->count();
         $payload['progress'] = $stages->isEmpty() ? 0 : (int) round(($finished / $stages->count()) * 100);
 
-        if (! in_array($content->status, ['published', 'archived', 'cancelled', 'suspended'], true)) {
+        if (!in_array($content->status, ['published', 'archived', 'cancelled', 'suspended'], true)) {
             $statuses = $stages->pluck('status');
             $status = match (true) {
                 $stages->isEmpty() => match ($content->status) {
@@ -180,7 +180,7 @@ class ContentStageTaskSync
         if ($existing && in_array($existing->status, ['completed', 'archived'], true)) {
             return $existing;
         }
-        if (! $existing) {
+        if (!$existing) {
             app(ActiveProjectGuard::class)->project($projectId);
         }
 
@@ -262,7 +262,7 @@ class ContentStageTaskSync
             ->get()
             ->each(function (Task $task) use ($seenKeys): void {
                 $key = $this->key((int) $task->content_id, (string) $task->content_stage_id, (string) $task->kind);
-                if (! in_array($key, $seenKeys, true) && $task->kind === 'content_review') {
+                if (!in_array($key, $seenKeys, true) && $task->kind === 'content_review') {
                     $task->update(['status' => 'archived']);
                 }
             });

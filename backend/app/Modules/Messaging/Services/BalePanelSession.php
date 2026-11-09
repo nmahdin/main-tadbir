@@ -14,18 +14,18 @@ final class BalePanelSession
 
     public function issue(BaleUserLink $link): ?string
     {
-        if (! Schema::hasTable('bale_panel_sessions')) {
+        if (!Schema::hasTable('bale_panel_sessions')) {
             return null;
         }
         $user = User::find($link->user_id);
-        if (! $user?->isActive()) {
+        if (!$user?->isActive()) {
             return null;
         }
 
         $token = bin2hex(random_bytes(32));
         $issued = DB::transaction(function () use ($link, $user, $token): bool {
             $currentLink = BaleUserLink::whereKey($link->id)->where('user_id', $user->id)->lockForUpdate()->first();
-            if (! $currentLink) {
+            if (!$currentLink) {
                 return false;
             }
             DB::table('bale_panel_sessions')->where('expires_at', '<=', now())->delete();
@@ -45,12 +45,12 @@ final class BalePanelSession
 
     public function consume(#[\SensitiveParameter] string $token): User
     {
-        if (! Schema::hasTable('bale_panel_sessions')) {
+        if (!Schema::hasTable('bale_panel_sessions')) {
             throw ValidationException::withMessages(['token' => 'ورود مستقیم پنل هنوز روی سرور نصب نشده است.']);
         }
         $user = DB::transaction(function () use ($token): ?User {
             $session = DB::table('bale_panel_sessions')->where('token_hash', $this->hash($token))->lockForUpdate()->first();
-            if (! $session) {
+            if (!$session) {
                 return null;
             }
             DB::table('bale_panel_sessions')->where('id', $session->id)->delete();
@@ -63,7 +63,7 @@ final class BalePanelSession
             return $link && (int) $link->user_id === (int) $session->user_id && $user?->isActive() ? $user : null;
         });
 
-        if (! $user) {
+        if (!$user) {
             throw ValidationException::withMessages(['token' => 'پیوند ورود نامعتبر، منقضی یا قبلاً استفاده شده است. از جدیدترین منوی ربات وارد شوید.']);
         }
 

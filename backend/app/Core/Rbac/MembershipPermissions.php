@@ -24,7 +24,7 @@ final class MembershipPermissions
     /** @return list<string> */
     public function workspacePermissionKeys(User $user, Workspace $workspace): array
     {
-        if (! $workspace->isActive()) {
+        if (!$workspace->isActive()) {
             return [];
         }
 
@@ -38,11 +38,11 @@ final class MembershipPermissions
         }
 
         if ($workspace->isOrganizational()
-            && ($workspace->organization === null || ! $workspace->organization->isActive())) {
+            && ($workspace->organization === null || !$workspace->organization->isActive())) {
             return [];
         }
 
-        if ($workspace->isOrganizational() && ! $this->hasActiveOrganizationMembership($user, (int) $workspace->organization_id)) {
+        if ($workspace->isOrganizational() && !$this->hasActiveOrganizationMembership($user, (int) $workspace->organization_id)) {
             return [];
         }
 
@@ -52,7 +52,7 @@ final class MembershipPermissions
     /** @return list<string> */
     public function organizationPermissionKeys(User $user, Organization $organization): array
     {
-        if (! $organization->isActive()) {
+        if (!$organization->isActive()) {
             return [];
         }
 

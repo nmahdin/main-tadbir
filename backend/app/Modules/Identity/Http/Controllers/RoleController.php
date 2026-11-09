@@ -61,7 +61,7 @@ class RoleController extends Controller
             $keyChanged = $data['key'] !== $role->key;
             abort_if($role->is_system && $keyChanged, 403, 'تغییر کلید نقش سیستمی مجاز نیست.');
             abort_if(($role->is_system || in_array($role->key, ['admin', 'content_manager'], true)
-                || in_array($data['key'], ['admin', 'content_manager'], true)) && ! $actor->isAdmin(), 403);
+                || in_array($data['key'], ['admin', 'content_manager'], true)) && !$actor->isAdmin(), 403);
             abort_if($role->key === 'admin' && ($data['isActive'] ?? true) === false, 422, 'نقش مدیر سیستم نباید غیرفعال شود.');
             $currentKeys = $role->permissions->pluck('key')->sort()->values()->all();
             $incomingKeys = collect($data['permissions'] ?? $currentKeys)->sort()->values()->all();
@@ -78,7 +78,7 @@ class RoleController extends Controller
                 'color' => $data['color'] ?? $role->color];
             $candidate = clone $role;
             $candidate->fill($metadata);
-            abort_if($candidate->isDirty() && ! ($actor->isAdmin() || $actor->hasPermission('roles.edit')), 403);
+            abort_if($candidate->isDirty() && !($actor->isAdmin() || $actor->hasPermission('roles.edit')), 403);
             $role->update([...$metadata, 'is_active' => $data['isActive'] ?? $role->is_active]);
             if ($keyChanged) {
                 $role->users()->update(['role_key' => $data['key']]);
@@ -136,7 +136,7 @@ class RoleController extends Controller
             }
 
             foreach ($roles as $role) {
-                if (! array_key_exists($role->id, $changed)) {
+                if (!array_key_exists($role->id, $changed)) {
                     continue;
                 }
                 $this->syncPermissions($role, $changed[$role->id]);
@@ -154,7 +154,7 @@ class RoleController extends Controller
         DB::transaction(function () use ($request, $role): void {
             $role = Role::whereKey($role->id)->lockForUpdate()->firstOrFail();
             abort_if($role->is_system || $role->key === 'admin', 403, 'حذف نقش سیستمی مجاز نیست.');
-            abort_if($role->key === 'content_manager' && ! $request->user()->isAdmin(), 403);
+            abort_if($role->key === 'content_manager' && !$request->user()->isAdmin(), 403);
             abort_if($role->users()->exists(), 422, 'ابتدا نقش کاربران منتسب را تغییر دهید.');
             $this->audit($request, $role, 'role_deleted');
             $role->delete();

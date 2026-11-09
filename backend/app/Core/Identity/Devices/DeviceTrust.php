@@ -22,7 +22,7 @@ final class DeviceTrust
     public function knownDevice(Request $request, User $user): bool
     {
         $raw = $request->cookie(self::COOKIE);
-        if (! is_string($raw) || $raw === '') {
+        if (!is_string($raw) || $raw === '') {
             return false;
         }
 

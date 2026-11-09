@@ -13,7 +13,9 @@ final readonly class StoredSettingValue
         public bool $exists,
         public mixed $value,
         public ?int $version = null,
-    ) {}
+    )
+    {
+    }
 
     public static function absent(): self
     {

@@ -13,7 +13,7 @@ final class PanelLinks
     {
         $base = trim((string) config('bale.panel_url'));
         $parts = parse_url($base);
-        if (! filter_var($base, FILTER_VALIDATE_URL) || ! is_array($parts) || ($parts['scheme'] ?? '') !== 'https'
+        if (!filter_var($base, FILTER_VALIDATE_URL) || !is_array($parts) || ($parts['scheme'] ?? '') !== 'https'
             || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])) {
             return null;
         }
@@ -23,7 +23,7 @@ final class PanelLinks
 
     public function panelButtons(BaleUserLink $link): array
     {
-        if (! $this->base()) {
+        if (!$this->base()) {
             return [];
         }
 
@@ -35,11 +35,11 @@ final class PanelLinks
 
     public function assetButtons(BaleUserLink $link, int $taskId = 0, string $kind = 'file'): array
     {
-        if (! $this->base() || $taskId < 0 || ! in_array($kind, ['create', 'file', 'text', 'row', 'link'], true)) {
+        if (!$this->base() || $taskId < 0 || !in_array($kind, ['create', 'file', 'text', 'row', 'link'], true)) {
             return [];
         }
         $target = $taskId > 0 ? 'asset:'.$taskId.':'.$kind : ($kind === 'file' ? 'asset-file' : null);
-        if (! $target) {
+        if (!$target) {
             return [];
         }
 
@@ -51,7 +51,7 @@ final class PanelLinks
 
     public function buttons(?BaleUserLink $link, ?string $subject = null, ?int $id = null): array
     {
-        if (! $link || ! $this->base() || $subject !== 'task' || ! $id || $id < 1) {
+        if (!$link || !$this->base() || $subject !== 'task' || !$id || $id < 1) {
             return [];
         }
 
@@ -65,21 +65,21 @@ final class PanelLinks
     public function materialize(array $payload, ?BaleUserLink $link): array
     {
         $rows = $payload['reply_markup']['inline_keyboard'] ?? null;
-        if (! is_array($rows)) {
+        if (!is_array($rows)) {
             return $payload;
         }
         $token = null;
         $materialized = [];
         foreach ($rows as $row) {
-            if (! is_array($row)) {
+            if (!is_array($row)) {
                 continue;
             }
             $buttons = [];
             foreach ($row as $button) {
-                if (! is_array($button)) {
+                if (!is_array($button)) {
                     continue;
                 }
-                if (! isset($button[self::MARKER])) {
+                if (!isset($button[self::MARKER])) {
                     $buttons[] = $button;
 
                     continue;
@@ -87,11 +87,11 @@ final class PanelLinks
                 $marker = $button[self::MARKER];
                 $query = is_array($marker) ? $this->query((string) ($marker['target'] ?? '')) : null;
                 $mode = is_array($marker) ? ($marker['mode'] ?? null) : null;
-                if (! $link || $query === false || ! in_array($mode, ['mini_app', 'browser'], true)) {
+                if (!$link || $query === false || !in_array($mode, ['mini_app', 'browser'], true)) {
                     continue;
                 }
                 $token ??= app(BalePanelSession::class)->issue($link);
-                if (! $token || ! ($url = $this->url($token, $query))) {
+                if (!$token || !($url = $this->url($token, $query))) {
                     continue;
                 }
                 unset($button[self::MARKER]);

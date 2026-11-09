@@ -46,7 +46,7 @@ final class FinalManagerGuard
 
     public function assertWorkspaceMembershipRetainsManager(WorkspaceMembership $membership): void
     {
-        if (! $membership->isActive() || $membership->role_id === null) {
+        if (!$membership->isActive() || $membership->role_id === null) {
             return;
         }
 
@@ -65,14 +65,14 @@ final class FinalManagerGuard
             ->whereKeyNot($membership->id)
             ->exists();
 
-        if (! $otherManagers) {
+        if (!$otherManagers) {
             throw new RbacValidationException('The final active Workspace Manager cannot be removed or demoted.');
         }
     }
 
     public function assertOrganizationMembershipRetainsManager(OrganizationMembership $membership): void
     {
-        if (! $membership->isActive() || $membership->role_id === null) {
+        if (!$membership->isActive() || $membership->role_id === null) {
             return;
         }
 
@@ -91,7 +91,7 @@ final class FinalManagerGuard
             ->whereKeyNot($membership->id)
             ->exists();
 
-        if (! $otherManagers) {
+        if (!$otherManagers) {
             throw new RbacValidationException('The final active Organization Manager cannot be removed or demoted.');
         }
     }

@@ -88,7 +88,7 @@ final class ProjectAuthorizer
      */
     public function authorizeProject(Request $request, Project $project, string $scopedPermission, string $legacyAssertion): ?WorkspaceContext
     {
-        if (! $this->isScopedRequest($request, $project)) {
+        if (!$this->isScopedRequest($request, $project)) {
             match ($legacyAssertion) {
                 'view' => $this->legacyAccess->assertView($request->user(), $project),
                 'edit' => $this->legacyAccess->assertEdit($request->user(), $project),
@@ -106,7 +106,7 @@ final class ProjectAuthorizer
         }
 
         $requested = $this->requestedWorkspaceId($request);
-        if ($requested !== null && (! is_numeric($requested) || (int) $requested !== (int) $project->workspace_id)) {
+        if ($requested !== null && (!is_numeric($requested) || (int) $requested !== (int) $project->workspace_id)) {
             abort(404);
         }
 

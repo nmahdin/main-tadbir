@@ -8,7 +8,9 @@ use Throwable;
 
 final class PollingRunner
 {
-    public function __construct(private Settings $settings, private BaleClient $client, private UpdateProcessor $processor, private Outbox $outbox) {}
+    public function __construct(private Settings $settings, private BaleClient $client, private UpdateProcessor $processor, private Outbox $outbox)
+    {
+    }
 
     /** A bounded HTTP tick, not a daemon. Caller must hold RuntimeLock. */
     public function tick(bool $external = false): array
@@ -19,11 +21,11 @@ final class PollingRunner
         $received = 0;
         try {
             $webhookOwnsInbound = ($s['transport'] ?? '') === 'webhook' || ($s['remote_webhook_present'] ?? false);
-            if (! $webhookOwnsInbound) {
+            if (!$webhookOwnsInbound) {
                 $updates = $this->client->call($this->settings->token(), 'getUpdates', [
                     'offset' => (int) ($s['offset'] ?? 0), 'limit' => 5, 'timeout' => 0,
                 ]);
-                if (! is_array($updates) || ! array_is_list($updates)) {
+                if (!is_array($updates) || !array_is_list($updates)) {
                     throw new BaleApiException('invalid_updates');
                 }
                 usort($updates, fn ($a, $b) => ($a['update_id'] ?? -1) <=> ($b['update_id'] ?? -1));
@@ -31,7 +33,7 @@ final class PollingRunner
                     if (microtime(true) + config('bale.request_timeout') >= $deadline) {
                         break;
                     }
-                    if (! is_array($update) || ! is_int($update['update_id'] ?? null) || $update['update_id'] < 0) {
+                    if (!is_array($update) || !is_int($update['update_id'] ?? null) || $update['update_id'] < 0) {
                         throw new BaleApiException('invalid_updates');
                     }
                     $id = $update['update_id'];

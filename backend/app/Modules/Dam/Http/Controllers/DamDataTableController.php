@@ -75,7 +75,7 @@ class DamDataTableController extends Controller
     {
         $normalized = [];
         foreach ($grants ?? [] as $grant) {
-            if (! is_array($grant)) {
+            if (!is_array($grant)) {
                 continue;
             }
             if (isset($grant['user_id']) && empty($grant['type'])) {
@@ -139,11 +139,11 @@ class DamDataTableController extends Controller
             'filters.*' => 'nullable|string|max:200',
         ]);
         $columns = collect(is_array($dataTable->columns) ? $dataTable->columns : [])->keyBy('id');
-        if (! empty($data['sort_column']) && ! $columns->has($data['sort_column'])) {
+        if (!empty($data['sort_column']) && !$columns->has($data['sort_column'])) {
             abort(422, 'ستون مرتب‌سازی معتبر نیست.');
         }
         foreach (array_keys($data['filters'] ?? []) as $columnId) {
-            if (! $columns->has($columnId)) {
+            if (!$columns->has($columnId)) {
                 abort(422, 'ستون فیلتر معتبر نیست.');
             }
         }
@@ -236,10 +236,10 @@ class DamDataTableController extends Controller
             ->with(['dataTable', 'creator:id,name', 'content' => fn ($q) => $q->whereIn('id', app(ContentAccess::class)->visibleTo($actor)->select('id'))->select('id', 'title')])
             ->chunkById(200, function ($chunk) use ($actor, $page, $size, &$total, &$rows, &$access) {
                 foreach ($chunk as $row) {
-                    if (! $row->dataTable) {
+                    if (!$row->dataTable) {
                         continue;
                     }
-                    if (! array_key_exists($row->table_id, $access)) {
+                    if (!array_key_exists($row->table_id, $access)) {
                         if (count($access) >= 200) {
                             unset($access[array_key_first($access)]);
                         }
@@ -247,7 +247,7 @@ class DamDataTableController extends Controller
                         $access[$row->table_id] = [$policy->canView($actor, $row->dataTable), $policy->canEdit($actor, $row->dataTable)];
                     }
                     [$view,$edit] = $access[$row->table_id];
-                    if (! $view) {
+                    if (!$view) {
                         continue;
                     }
                     $position = $total++;
@@ -293,11 +293,11 @@ class DamDataTableController extends Controller
         if (array_key_exists('cells', $data)) {
             $data['cells'] = app(DamTableRows::class)->validateCells($dataTable, $data['cells'] ?? [], $request->user());
         }
-        if (! empty($data['task_id'])) {
+        if (!empty($data['task_id'])) {
             abort_unless(app(TaskOperations::class)->visibleTo($request->user())
                 ->whereKey($data['task_id'])->exists(), 403);
         }
-        if (! empty($data['content_id'])) {
+        if (!empty($data['content_id'])) {
             abort_unless(app(ContentAccess::class)->canView(
                 $request->user(), Content::findOrFail($data['content_id']),
             ), 403);
@@ -329,7 +329,7 @@ class DamDataTableController extends Controller
                 $cellChanges[] = ['column_id' => (string) $columnId, 'from' => $beforeValue, 'to' => $afterValue];
             }
         }
-        if (! empty($changedColumns)) {
+        if (!empty($changedColumns)) {
             $this->logRowActivity($dataTable, $row, $request->user(), 'updated', [
                 'columns' => $changedColumns,
                 'changes' => $cellChanges,

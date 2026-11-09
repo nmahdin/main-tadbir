@@ -6,11 +6,13 @@ use Throwable;
 
 final class BaleClient
 {
-    public function __construct(private BaleHttp $http) {}
+    public function __construct(private BaleHttp $http)
+    {
+    }
 
     public function call(#[\SensitiveParameter] string $token, string $method, #[\SensitiveParameter] array $parameters = []): mixed
     {
-        if (! in_array($method, ['setWebhook', 'getMe', 'getWebhookInfo', 'deleteWebhook', 'getUpdates', 'sendMessage', 'deleteMessage', 'answerCallbackQuery'], true)) {
+        if (!in_array($method, ['setWebhook', 'getMe', 'getWebhookInfo', 'deleteWebhook', 'getUpdates', 'sendMessage', 'deleteMessage', 'answerCallbackQuery'], true)) {
             throw new BaleApiException('unsupported_method');
         }
         try {

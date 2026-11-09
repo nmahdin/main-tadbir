@@ -47,7 +47,9 @@ final class ResourceLimitGuard
     public function __construct(
         private readonly SubscriptionService $subscriptions,
         private readonly ResourceUsageReader $usage,
-    ) {}
+    )
+    {
+    }
 
     /**
      * Assert one more unit of $resourceKey may be created inside the

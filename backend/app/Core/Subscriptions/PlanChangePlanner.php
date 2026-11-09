@@ -32,7 +32,9 @@ final class PlanChangePlanner
         private readonly PlanProvisioner $plans,
         private readonly ModuleDependencyResolver $resolver,
         private readonly ResourceUsageReader $usage,
-    ) {}
+    )
+    {
+    }
 
     /**
      * @throws SubscriptionException on unknown/unpublished/incompatible targets
@@ -125,7 +127,7 @@ final class PlanChangePlanner
 
         $model = $plan->versions()->where('version', $version)->first();
 
-        if ($model === null || ! $model->isPublished()) {
+        if ($model === null || !$model->isPublished()) {
             throw new SubscriptionException('plan_version_not_published', "Plan [{$planKey}] version [{$version}] is not a published version.");
         }
 
@@ -225,7 +227,7 @@ final class PlanChangePlanner
             $status = 'ok';
             $excess = null;
 
-            if ($new !== null && ! $new['is_unlimited']) {
+            if ($new !== null && !$new['is_unlimited']) {
                 if ($measured === null) {
                     $status = 'unknown';
                     $blocking[] = ['code' => 'usage_unknown', 'message' => "Current usage for [{$resource}] cannot be measured, so capping it cannot be validated."];

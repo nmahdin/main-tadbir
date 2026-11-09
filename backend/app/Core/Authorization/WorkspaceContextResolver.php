@@ -39,7 +39,7 @@ final class WorkspaceContextResolver
             $user->refresh();
         }
 
-        if (! $user->isActive()) {
+        if (!$user->isActive()) {
             throw new AuthorizationDeniedException(
                 AuthorizationDeniedException::ACCOUNT_INACTIVE,
                 'The user account is not active.',
@@ -48,7 +48,7 @@ final class WorkspaceContextResolver
 
         $workspace = $this->findWorkspace($workspaceId);
 
-        if (! $workspace->isActive()) {
+        if (!$workspace->isActive()) {
             throw new AuthorizationDeniedException(
                 AuthorizationDeniedException::WORKSPACE_INACTIVE,
                 'The workspace is not active.',

@@ -36,14 +36,14 @@ final class NotificationRetention
                         continue;
                     }
 
-                    $isRead = ! empty($payload['read']);
+                    $isRead = !empty($payload['read']);
                     if ($dryRun) {
                         $stats[$isRead ? 'deleted' : 'archived']++;
 
                         continue;
                     }
                     DB::transaction(function () use ($row, $payload, $isRead, &$stats) {
-                        if (! $isRead) {
+                        if (!$isRead) {
                             DB::table('notification_archives')->insert([
                                 'user_id' => $row->user_id,
                                 'notification_key' => $row->notification_key,

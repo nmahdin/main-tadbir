@@ -107,7 +107,7 @@ class ProjectController extends Controller
      */
     public function exportXlsx(WorkspaceListRequest $request): StreamedResponse|JsonResponse
     {
-        if (! ProjectXlsxExporter::available()) {
+        if (!ProjectXlsxExporter::available()) {
             return response()->json([
                 'message' => 'خروجی Excel در این محیط در دسترس نیست؛ از CSV استفاده کنید.',
                 'code' => 'xlsx_unavailable',
@@ -278,7 +278,7 @@ class ProjectController extends Controller
         $wasTerminal = in_array($project->status, ['completed', 'cancelled', 'archived'], true) || $project->archived_at !== null;
         $targetStatus = $incoming['status'] ?? $project->status;
         $reactivationWorkspace = null;
-        if ($wasTerminal && ! in_array($targetStatus, ['completed', 'cancelled', 'archived'], true) && $project->workspace_id !== null) {
+        if ($wasTerminal && !in_array($targetStatus, ['completed', 'cancelled', 'archived'], true) && $project->workspace_id !== null) {
             $reactivationWorkspace = Workspace::find($project->workspace_id);
         }
 

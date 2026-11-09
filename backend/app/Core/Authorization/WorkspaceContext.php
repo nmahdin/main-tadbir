@@ -31,7 +31,9 @@ final readonly class WorkspaceContext
         public ?Organization $organization,
         public ?ScopedRole $role,
         public array $permissionKeys,
-    ) {}
+    )
+    {
+    }
 
     public function hasPermission(string $permissionKey): bool
     {

@@ -34,7 +34,9 @@ final class PlatformOperationService
         private readonly PlatformControlLock $controlLock,
         private readonly PlatformRoleProvisioner $provisioner,
         private readonly AuditWriter $audit,
-    ) {}
+    )
+    {
+    }
 
     public function execute(VerifiedOperation $operation): PlatformRoleAssignment
     {
@@ -219,7 +221,7 @@ final class PlatformOperationService
         }
 
         $status = AccountStatus::of($target->status);
-        if ($status === null || ! $status->allowsOperationalAccess()) {
+        if ($status === null || !$status->allowsOperationalAccess()) {
             throw new PlatformOperationException(
                 'target_not_operational',
                 'The target account does not permit operational access.',

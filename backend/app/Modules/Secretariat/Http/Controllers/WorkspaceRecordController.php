@@ -187,7 +187,7 @@ class WorkspaceRecordController extends Controller
                     ->where('kind', $kind)
                     ->where('owner_id', $request->user()->id)
                     ->first() : null;
-                if (! $record) {
+                if (!$record) {
                     throw $exception;
                 }
                 $replayed = true;
@@ -234,7 +234,7 @@ class WorkspaceRecordController extends Controller
             $existingPayload = $workspaceRecord->payload ?? [];
             $changedKeys = $this->changedKeys($existingPayload, $request->all());
             $merged = [...$existingPayload, ...$request->all()];
-            if (in_array($kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true) && ! $request->has('projectId')) {
+            if (in_array($kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true) && !$request->has('projectId')) {
                 $merged['projectId'] = $workspaceRecord->project_id;
             }
             if ($kind === WorkspaceRecord::KIND_MEETING && $request->has('actionItems')) {
@@ -242,14 +242,14 @@ class WorkspaceRecordController extends Controller
                 $incoming = $request->input('actionItems', []);
                 $incomingIds = array_column($incoming, 'id');
                 foreach ($saved as $item) {
-                    if (! empty($item['convertedTaskId']) && ! in_array($item['id'], $incomingIds, true)) {
+                    if (!empty($item['convertedTaskId']) && !in_array($item['id'], $incomingIds, true)) {
                         throw ValidationException::withMessages(['actionItems' => 'اقدام تبدیل‌شده به تسک حذف نمی‌شود؛ صورت‌جلسه را دوباره باز کنید.']);
                     }
                 }
                 $merged['actionItems'] = array_map(function ($item) use ($saved) {
                     $old = $saved->get($item['id']);
                     unset($item['convertedTaskId']);
-                    if (! empty($old['convertedTaskId'])) {
+                    if (!empty($old['convertedTaskId'])) {
                         return [...$item, 'convertedTaskId' => $old['convertedTaskId'], 'status' => 'converted'];
                     }
 
@@ -447,7 +447,7 @@ class WorkspaceRecordController extends Controller
             return $requested;
         }
         if (array_intersect($changedKeys, ['convertedProjectId', 'convertedTaskId'])
-            && (! empty($payload['convertedProjectId']) || ! empty($payload['convertedTaskId']))) {
+            && (!empty($payload['convertedProjectId']) || !empty($payload['convertedTaskId']))) {
             return 'in_progress';
         }
         if (in_array('flowStages', $changedKeys, true)) {
@@ -456,7 +456,7 @@ class WorkspaceRecordController extends Controller
                 return 'completed';
             }
         }
-        if (in_array('votes', $changedKeys, true) && ! empty($payload['votes'])
+        if (in_array('votes', $changedKeys, true) && !empty($payload['votes'])
             && in_array((string) ($idea->status ?? $requested), ['draft', 'submitted'], true)) {
             return 'under_review';
         }
@@ -505,8 +505,8 @@ class WorkspaceRecordController extends Controller
 
     private function assertProjectLink(Request $request, string $kind): void
     {
-        if (! in_array($kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true)
-            || ! $request->filled('projectId')) {
+        if (!in_array($kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true)
+            || !$request->filled('projectId')) {
             return;
         }
         $project = app(ActiveProjectGuard::class)->project((int) $request->input('projectId'));
@@ -515,7 +515,7 @@ class WorkspaceRecordController extends Controller
 
     private function logProjectRecordLink(WorkspaceRecord $record, int $actorId): void
     {
-        if (! $record->project_id || ! in_array($record->kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true)) {
+        if (!$record->project_id || !in_array($record->kind, [WorkspaceRecord::KIND_IDEA, WorkspaceRecord::KIND_MEETING], true)) {
             return;
         }
         $isIdea = $record->kind === WorkspaceRecord::KIND_IDEA;
@@ -540,7 +540,7 @@ class WorkspaceRecordController extends Controller
                 continue;
             }
 
-            if (! array_key_exists($key, $existing) || $existing[$key] !== $value) {
+            if (!array_key_exists($key, $existing) || $existing[$key] !== $value) {
                 $changed[] = $key;
             }
         }

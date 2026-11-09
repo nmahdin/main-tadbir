@@ -27,7 +27,9 @@ final class OrderService
 {
     public function __construct(
         private readonly AuditWriter $audit,
-    ) {}
+    )
+    {
+    }
 
     /**
      * Convert a quote into an order, or return the existing order on
@@ -105,7 +107,7 @@ final class OrderService
             if ($locked->status === CoreBillingQuote::STATUS_EXPIRED) {
                 return ['reject' => 'quote_expired', 'quote' => $locked];
             }
-            if (! $locked->isConvertibleAt($at)) {
+            if (!$locked->isConvertibleAt($at)) {
                 // Lazily expire inside the txn so the status update +
                 // reservation release are atomic and durable (we will
                 // commit & re-read before throwing).
@@ -146,7 +148,7 @@ final class OrderService
             if ($existingOrder !== null) {
                 return [$existingOrder, true];
             }
-            if ($locked->status !== CoreBillingQuote::STATUS_OPEN || ! $locked->isConvertibleAt($at)) {
+            if ($locked->status !== CoreBillingQuote::STATUS_OPEN || !$locked->isConvertibleAt($at)) {
                 // State changed between pre-check and inner txn: expire /
                 // supersede race; bail (outer caller should retry if wanted).
                 throw new BillingDomainException(
@@ -327,7 +329,7 @@ final class OrderService
             if (in_array($order->status, [CoreBillingOrder::STATUS_PAYABLE_PENDING, CoreBillingOrder::STATUS_PAID], true)) {
                 throw new BillingDomainException('order_payment_in_progress', 'Payment has been initiated; cannot cancel during processing.');
             }
-            if (! $order->isCancellableAt($at)) {
+            if (!$order->isCancellableAt($at)) {
                 // Expire defensively then throw.
                 $this->expireOrderLocked($order, $at);
 
@@ -498,7 +500,7 @@ final class OrderService
         if ($key === '' || strlen($key) > 80) {
             throw new BillingDomainException('order_idempotency_key_invalid', 'Idempotency key must be 1–80 characters.');
         }
-        if (! preg_match('/^[A-Za-z0-9._:\-]+$/', $key)) {
+        if (!preg_match('/^[A-Za-z0-9._:\-]+$/', $key)) {
             throw new BillingDomainException('order_idempotency_key_invalid', 'Idempotency key contains invalid characters.');
         }
     }
@@ -508,7 +510,7 @@ final class OrderService
         if ($existing->payload_hash === null) {
             return;
         }
-        if (! hash_equals((string) $existing->payload_hash, $payloadHash)) {
+        if (!hash_equals((string) $existing->payload_hash, $payloadHash)) {
             throw new BillingDomainException(
                 'order_idempotency_payload_mismatch',
                 'The idempotency key was already used with a different order.',

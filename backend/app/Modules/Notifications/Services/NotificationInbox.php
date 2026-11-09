@@ -38,7 +38,7 @@ final class NotificationInbox
         if (is_string($explicit) && in_array($explicit, self::CATEGORIES, true)) {
             return $explicit;
         }
-        $has = fn (string $field): bool => ! empty($payload[$field]);
+        $has = fn (string $field): bool => !empty($payload[$field]);
         if ($has('linkTaskId')) {
             return 'tasks';
         }
@@ -97,7 +97,7 @@ final class NotificationInbox
             $decoded = json_decode($raw, true);
             $raw = is_array($decoded) ? $decoded : [];
         }
-        if (! is_array($raw)) {
+        if (!is_array($raw)) {
             return [];
         }
 
@@ -175,7 +175,7 @@ final class NotificationInbox
             $category = $row->category_key ?: self::categoryOfPayload($payload);
             $key = $row->group_key ?: self::groupKeyOf($payload, $category);
             $isUnread = empty($payload['read']);
-            if (! isset($groups[$key])) {
+            if (!isset($groups[$key])) {
                 $groups[$key] = [
                     'group_key' => $key,
                     'category' => $category,
@@ -211,7 +211,7 @@ final class NotificationInbox
     public function query(User $user): Builder
     {
         $query = DomainRecord::where('domain', DomainRecord::DOMAIN_NOTIFICATION)->where('user_id', $user->id);
-        if (! $user->isActive()) {
+        if (!$user->isActive()) {
             return $query->whereRaw('1=0');
         }
         $subjects = [

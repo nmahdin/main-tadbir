@@ -108,11 +108,11 @@ final class SettingValueStore
     {
         $definition = $this->definition($key);
 
-        if (! $definition->workspaceOverride) {
+        if (!$definition->workspaceOverride) {
             throw new SettingValidationException('setting_override_not_supported', "Setting [{$key}] does not declare Workspace-override support.");
         }
 
-        if (! Organization::query()->whereKey($organizationId)->exists()) {
+        if (!Organization::query()->whereKey($organizationId)->exists()) {
             throw new SettingValidationException('setting_owner_not_found', "Organization [{$organizationId}] does not exist.");
         }
 
@@ -207,7 +207,7 @@ final class SettingValueStore
      */
     private function assertScopeAllowed(SettingDefinition $definition, string $ownerType): void
     {
-        if (! in_array($ownerType, $definition->allowedScopes, true)) {
+        if (!in_array($ownerType, $definition->allowedScopes, true)) {
             throw new SettingValidationException('setting_scope_not_allowed', "Setting [{$definition->key}] cannot be owned by scope [{$ownerType}].");
         }
     }
@@ -240,7 +240,7 @@ final class SettingValueStore
             default => false,
         };
 
-        if (! $exists) {
+        if (!$exists) {
             throw new SettingValidationException('setting_owner_not_found', "Setting owner [{$ownerType}:{$ownerId}] does not exist.");
         }
     }

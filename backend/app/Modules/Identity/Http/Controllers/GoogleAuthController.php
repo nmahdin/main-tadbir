@@ -33,7 +33,7 @@ class GoogleAuthController extends Controller
 
     public function redirect(Request $request): RedirectResponse|JsonResponse
     {
-        if (! $this->configured()) {
+        if (!$this->configured()) {
             return response()->json(['message' => 'ورود با Google در حال حاضر فعال نیست.', 'code' => 'google_unavailable'], 503);
         }
         $verifier = Str::random(64);
@@ -60,11 +60,11 @@ class GoogleAuthController extends Controller
     public function callback(Request $request): RedirectResponse
     {
         $spa = rtrim((string) config('app.frontend_url', config('app.url')), '/');
-        if (! $this->configured() || $request->query('error')) {
+        if (!$this->configured() || $request->query('error')) {
             return redirect($spa.'/auth/google/complete?status=error');
         }
         $stored = $request->session()->pull('google_oidc');
-        if (! $stored || ! hash_equals((string) $stored['state'], (string) $request->query('state', ''))) {
+        if (!$stored || !hash_equals((string) $stored['state'], (string) $request->query('state', ''))) {
             return redirect($spa.'/auth/google/complete?status=error');
         }
         $tokenResponse = Http::asForm()->post('https://oauth2.googleapis.com/token', [
@@ -75,7 +75,7 @@ class GoogleAuthController extends Controller
             'grant_type' => 'authorization_code',
             'code_verifier' => $stored['verifier'],
         ]);
-        if (! $tokenResponse->successful() || ! $tokenResponse->json('id_token')) {
+        if (!$tokenResponse->successful() || !$tokenResponse->json('id_token')) {
             return redirect($spa.'/auth/google/complete?status=error');
         }
         $info = Http::get('https://oauth2.googleapis.com/tokeninfo', ['id_token' => $tokenResponse->json('id_token')]);
@@ -84,8 +84,8 @@ class GoogleAuthController extends Controller
             && ($claims['aud'] ?? null) === config('services.google.client_id')
             && in_array($claims['iss'] ?? '', ['accounts.google.com', 'https://accounts.google.com'], true)
             && (int) ($claims['exp'] ?? 0) > time()
-            && ! empty($claims['sub']);
-        if (! $valid) {
+            && !empty($claims['sub']);
+        if (!$valid) {
             return redirect($spa.'/auth/google/complete?status=error');
         }
 
@@ -119,12 +119,12 @@ class GoogleAuthController extends Controller
     public function link(Request $request): JsonResponse
     {
         $pending = $request->session()->get('google_pending');
-        if (! $pending) {
+        if (!$pending) {
             return response()->json(['message' => 'نشست Google یافت نشد؛ دوباره تلاش کنید.'], 422);
         }
         $user = $request->user();
         $fresh = $user->reauthenticated_at !== null && $user->reauthenticated_at->gt(now()->subMinutes(10));
-        if (! $fresh) {
+        if (!$fresh) {
             return response()->json(['message' => 'برای پیوند حساب Google، ابتدا احراز هویت مجدد انجام دهید.', 'code' => 'reauth_required'], 403);
         }
         DB::table('user_external_identities')->insertOrIgnore([

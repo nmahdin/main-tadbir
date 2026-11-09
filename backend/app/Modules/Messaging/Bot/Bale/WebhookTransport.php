@@ -12,7 +12,9 @@ use Throwable;
 /** URL capability authentication, NOT a claim of a Bale-signed request. */
 final class WebhookTransport
 {
-    public function __construct(private Settings $settings, private BaleClient $client, private UpdateProcessor $processor, private Outbox $outbox) {}
+    public function __construct(private Settings $settings, private BaleClient $client, private UpdateProcessor $processor, private Outbox $outbox)
+    {
+    }
 
     /** Caller holds RuntimeLock. No bot token or receiving secret is returned to the browser. */
     public function activate(User $actor, bool $rotate = false): void
@@ -32,7 +34,7 @@ final class WebhookTransport
                 throw new BaleApiException('invalid_response');
             }
             $this->settings->test($this->client);
-            if (! ($this->settings->read()['remote_webhook_matches'] ?? false)) {
+            if (!($this->settings->read()['remote_webhook_matches'] ?? false)) {
                 throw new BaleApiException('webhook_mismatch');
             }
             $this->settings->write(['last_error' => null]);
@@ -46,7 +48,7 @@ final class WebhookTransport
     public function accepts(#[\SensitiveParameter] string $secret): bool
     {
         $s = $this->settings->read();
-        if (! $this->settings->ready() || ($s['transport'] ?? '') !== 'webhook' || empty($s['webhook_secret'])) {
+        if (!$this->settings->ready() || ($s['transport'] ?? '') !== 'webhook' || empty($s['webhook_secret'])) {
             return false;
         }
         try {

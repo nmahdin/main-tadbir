@@ -35,7 +35,7 @@ class DamService
             $next = (int) $locked->versions()->max('version_number') + 1;
             if ($locked->type === 'file') {
                 $file = $locked->files()->findOrFail($version->file_id);
-                if (! Storage::disk($file->storage_disk)->exists($file->storage_path)) {
+                if (!Storage::disk($file->storage_disk)->exists($file->storage_path)) {
                     throw new RuntimeException('فایل نسخه انتخابی یافت نشد.');
                 }
                 $locked->files()->where('is_latest', true)->update(['is_latest' => false]);
@@ -92,7 +92,7 @@ class DamService
                     app(ResourceLimitGuard::class)->assertStorageAvailable($actor, (int) $upload->getSize());
                     $directory = app(DamFolderStorage::class)->ensure($asset->folder_id);
                     $path = $directory.'/'.Str::uuid().'.'.$upload->extension();
-                    if (! Storage::disk('local')->putFileAs($directory, $upload, basename($path))) {
+                    if (!Storage::disk('local')->putFileAs($directory, $upload, basename($path))) {
                         throw new RuntimeException('ذخیره فایل ناموفق بود.');
                     }
                 }
@@ -153,10 +153,10 @@ class DamService
     {
         $data = $this->assignContextFolder($data, $actor);
         if (empty($data['category_id'])) {
-            $categoryName = ! empty($data['task_id']) ? 'وظایف'
-                : (! empty($data['idea_id']) || ! empty($data['idea_key']) ? 'ایده‌ها'
-                    : (! empty($data['content_id']) && (! empty($data['output_id']) || in_array(($data['relation_role'] ?? null), [DamRelationRole::STAGE_OUTPUT, DamRelationRole::FINAL_OUTPUT], true) || in_array(($data['content_bucket'] ?? null), ['outputs', 'final', 'publication'], true))
-                        ? 'خروجی محتوا' : (! empty($data['content_id']) ? 'محتوا' : null)));
+            $categoryName = !empty($data['task_id']) ? 'وظایف'
+                : (!empty($data['idea_id']) || !empty($data['idea_key']) ? 'ایده‌ها'
+                    : (!empty($data['content_id']) && (!empty($data['output_id']) || in_array(($data['relation_role'] ?? null), [DamRelationRole::STAGE_OUTPUT, DamRelationRole::FINAL_OUTPUT], true) || in_array(($data['content_bucket'] ?? null), ['outputs', 'final', 'publication'], true))
+                        ? 'خروجی محتوا' : (!empty($data['content_id']) ? 'محتوا' : null)));
             if ($categoryName) {
                 $data['category_id'] = DamCategory::firstOrCreate(['name' => $categoryName])->id;
             }
@@ -172,7 +172,7 @@ class DamService
                     app(ResourceLimitGuard::class)->assertStorageAvailable($actor, (int) $upload->getSize());
                     $directory = app(DamFolderStorage::class)->ensure(isset($data['folder_id']) ? (int) $data['folder_id'] : null);
                     $path = $directory.'/'.Str::uuid().'.'.$upload->extension();
-                    if (! Storage::disk('local')->putFileAs($directory, $upload, basename($path))) {
+                    if (!Storage::disk('local')->putFileAs($directory, $upload, basename($path))) {
                         throw new RuntimeException('ذخیره فایل ناموفق بود.');
                     }
                 }
@@ -222,7 +222,7 @@ class DamService
                 }
 
                 foreach (['project', 'task', 'department', 'content', 'idea', 'meeting'] as $type) {
-                    if (! empty($data[$type.'_id'])) {
+                    if (!empty($data[$type.'_id'])) {
                         $this->relate($asset, $type, (int) $data[$type.'_id'], $actor, [
                             'relation_role' => $data['relation_role'] ?? DamRelationRole::ATTACHMENT,
                             'stage_id' => $data['stage_id'] ?? null,
@@ -311,23 +311,23 @@ class DamService
     /** @param array<string, mixed> $data */
     private function assignContextFolder(array $data, User $actor): array
     {
-        if (! empty($data['folder_id'])) {
+        if (!empty($data['folder_id'])) {
             return $data;
         }
-        if (! empty($data['content_id'])) {
+        if (!empty($data['content_id'])) {
             return $this->assignContentFolder($data, $actor);
         }
-        if (! empty($data['idea_id']) || (! empty($data['idea_key']) && ! empty($data['idea_title']))) {
+        if (!empty($data['idea_id']) || (!empty($data['idea_key']) && !empty($data['idea_title']))) {
             return $this->assignIdeaFolder($data, $actor);
         }
-        if (! empty($data['meeting_id'])) {
+        if (!empty($data['meeting_id'])) {
             return $this->assignWorkspaceFolder($data, $actor, WorkspaceRecord::KIND_MEETING, 'جلسات', 'meetings-root', 'meeting');
         }
         // A task attachment belongs in the stable task tree even when the task is
         // also linked to a project. An explicit folder_id above remains the only
         // opt-in override, so users can choose another location without changing
         // the task/project relations.
-        if (! empty($data['task_id']) && Task::query()->whereKey($data['task_id'])->exists()) {
+        if (!empty($data['task_id']) && Task::query()->whereKey($data['task_id'])->exists()) {
             $root = $this->managedFolder('وظایف', null, 'tasks-root', $actor);
             $taskId = (int) $data['task_id'];
             $record = $this->managedFolder((string) $taskId, $root->id, 'task:'.$taskId, $actor);
@@ -335,7 +335,7 @@ class DamService
 
             return $data;
         }
-        if (! empty($data['project_id'])) {
+        if (!empty($data['project_id'])) {
             $project = Project::query()->find($data['project_id']);
             if ($project) {
                 $root = $this->managedFolder('پروژه‌ها', null, 'projects-root', $actor);
@@ -357,7 +357,7 @@ class DamService
     {
         $id = $data[$recordPrefix.'_id'] ?? null;
         $workspace = $id ? WorkspaceRecord::query()->where('kind', $kind)->find($id) : null;
-        if (! $workspace) {
+        if (!$workspace) {
             return $data;
         }
         $root = $this->managedFolder($rootName, null, $rootKey, $actor);
@@ -375,7 +375,7 @@ class DamService
     /** @param array<string, mixed> $data */
     private function assignIdeaFolder(array $data, User $actor): array
     {
-        $idea = ! empty($data['idea_id'])
+        $idea = !empty($data['idea_id'])
             ? WorkspaceRecord::query()->where('kind', WorkspaceRecord::KIND_IDEA)->find($data['idea_id'])
             : null;
         $title = trim((string) ($idea ? $idea->id : ($data['idea_title'] ?? '')));
@@ -400,14 +400,14 @@ class DamService
     private function movePrecreatedIdeaAsset(DamAsset $asset, int $ideaId, User $actor): void
     {
         $idea = WorkspaceRecord::query()->where('kind', WorkspaceRecord::KIND_IDEA)->find($ideaId);
-        if (! $idea) {
+        if (!$idea) {
             return;
         }
         $temporaryKey = trim((string) $idea->client_request_id);
         $currentFolder = $asset->folder()->first();
         if (
             $temporaryKey === ''
-            || ! $currentFolder
+            || !$currentFolder
             || $currentFolder->system_key !== 'idea:'.$temporaryKey.':files'
         ) {
             // Existing library assets can have many simultaneous relations; only an
@@ -415,7 +415,7 @@ class DamService
             return;
         }
         $target = $this->assignIdeaFolder(['idea_id' => $ideaId], $actor)['folder_id'] ?? null;
-        if (! $target || (int) $target === (int) $asset->folder_id) {
+        if (!$target || (int) $target === (int) $asset->folder_id) {
             return;
         }
         app(DamFolderStorage::class)->moveAsset($asset, (int) $target);
@@ -426,7 +426,7 @@ class DamService
     private function assignContentFolder(array $data, User $actor): array
     {
         $content = Content::query()->with('series:id,name,code_prefix')->find($data['content_id']);
-        if (! $content) {
+        if (!$content) {
             return $data;
         }
 
@@ -475,10 +475,10 @@ class DamService
     private function managedFolder(string $name, ?int $parentId, string $key, User $actor): DamFolder
     {
         $folder = DamFolder::query()->where('system_key', $key)->first();
-        if (! $folder) {
+        if (!$folder) {
             $folder = DamFolder::query()->whereNull('system_key')->where('name', $name)->where('parent_id', $parentId)->first();
         }
-        if (! $folder) {
+        if (!$folder) {
             $folder = DamFolder::query()->create([
                 'name' => $name,
                 'parent_id' => $parentId,

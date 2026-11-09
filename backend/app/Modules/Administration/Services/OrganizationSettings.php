@@ -112,7 +112,7 @@ final class OrganizationSettings
     public function hydrate(string $key, mixed $value): array
     {
         $default = self::DEFAULTS[$key] ?? [];
-        if (! is_array($value)) {
+        if (!is_array($value)) {
             return $default;
         }
 
@@ -140,7 +140,7 @@ final class OrganizationSettings
             $normalized = [];
             $seen = [];
             foreach ($value as $status) {
-                if (! is_array($status)) {
+                if (!is_array($status)) {
                     continue;
                 }
                 $id = strtolower(trim((string) ($status['id'] ?? '')));
@@ -172,7 +172,7 @@ final class OrganizationSettings
                 if (is_string($status)) {
                     $status = ['label' => $status];
                 }
-                if (! is_array($status)) {
+                if (!is_array($status)) {
                     continue;
                 }
                 $fallbackId = is_string($legacyId) ? $legacyId : '';

@@ -25,13 +25,13 @@ final class BaleTransportController extends Controller
     public function receive(Request $request, #[\SensitiveParameter] string $secret, WebhookTransport $webhook, Settings $settings): JsonResponse
     {
         try {
-            if (! $webhook->accepts($secret)) {
+            if (!$webhook->accepts($secret)) {
                 return response()->json(['ok' => false], 404);
             }
             if ((int) $request->header('Content-Length', 0) > 65536 || strlen($request->getContent()) > 65536) {
                 return response()->json(['ok' => false], 413);
             }
-            if (! $request->isJson()) {
+            if (!$request->isJson()) {
                 return response()->json(['ok' => false], 415);
             }
             try {
@@ -39,19 +39,19 @@ final class BaleTransportController extends Controller
             } catch (JsonException) {
                 return response()->json(['ok' => false], 400);
             }
-            if (! is_array($update) || ! is_int($update['update_id'] ?? null) || $update['update_id'] < 0 || $update['update_id'] === PHP_INT_MAX) {
+            if (!is_array($update) || !is_int($update['update_id'] ?? null) || $update['update_id'] < 0 || $update['update_id'] === PHP_INT_MAX) {
                 return response()->json(['ok' => false], 400);
             }
             $kinds = array_intersect(['message', 'edited_message', 'callback_query', 'pre_checkout_query'], array_keys($update));
-            if (count($kinds) !== 1 || ! is_array($update[reset($kinds)])) {
+            if (count($kinds) !== 1 || !is_array($update[reset($kinds)])) {
                 return response()->json(['ok' => false], 400);
             }
             $lock = Cache::lock('bale:runtime', 90);
-            if (! $lock->get()) {
+            if (!$lock->get()) {
                 return response()->json(['ok' => false], 503)->header('Retry-After', '2');
             }
             try {
-                if (! $webhook->accepts($secret)) {
+                if (!$webhook->accepts($secret)) {
                     return response()->json(['ok' => false], 404);
                 }
                 $webhook->receive($update);

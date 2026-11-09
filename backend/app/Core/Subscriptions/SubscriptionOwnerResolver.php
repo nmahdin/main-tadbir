@@ -35,7 +35,7 @@ final class SubscriptionOwnerResolver
             return new SubscriptionOwner('organization', $organization, null);
         }
 
-        if (! $workspace->isPersonal()) {
+        if (!$workspace->isPersonal()) {
             throw new SubscriptionException(
                 'subscription_owner_invalid',
                 'The workspace is neither organization-owned nor a personal workspace.',
@@ -68,7 +68,7 @@ final class SubscriptionOwnerResolver
 
     public function subscriptionForPersonalWorkspace(Workspace $workspace): ?CoreSubscription
     {
-        if ($workspace->organization_id !== null || ! $workspace->isPersonal()) {
+        if ($workspace->organization_id !== null || !$workspace->isPersonal()) {
             throw new SubscriptionException(
                 'subscription_owner_invalid',
                 'A personal subscription can only belong to a real personal workspace.',

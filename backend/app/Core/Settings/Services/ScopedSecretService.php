@@ -62,7 +62,9 @@ final class ScopedSecretService
         private readonly MembershipPermissions $permissions,
         private readonly ModuleActivationPlanner $modulePlanner,
         private readonly AuditWriter $audit,
-    ) {}
+    )
+    {
+    }
 
     // -- Organization secrets --------------------------------------
 
@@ -168,7 +170,7 @@ final class ScopedSecretService
      */
     public function consumeForOrganization(Organization $organization, string $key): ?string
     {
-        if (! $organization->isActive()) {
+        if (!$organization->isActive()) {
             throw new SettingServiceException('setting_organization_unavailable', 'The organization is not operational, so its secrets cannot be used.');
         }
         $this->secretDefinition($key, SettingDefinition::SCOPE_ORGANIZATION);
@@ -188,7 +190,7 @@ final class ScopedSecretService
     {
         if ($workspace->organization_id !== null) {
             $organization = $workspace->organization()->first();
-            if ($organization !== null && ! $organization->isActive()) {
+            if ($organization !== null && !$organization->isActive()) {
                 throw new SettingServiceException('setting_organization_unavailable', 'The organization is not operational, so its workspace secrets cannot be used.');
             }
         }
@@ -207,7 +209,7 @@ final class ScopedSecretService
     private function storeSecret(User $actor, string $ownerType, int $ownerId, SettingDefinition $definition, string $plaintext, ?int $expectedVersion, string $auditScopeType, int $auditScopeId): array
     {
         $normalized = SettingValueValidator::validate($definition, $plaintext);
-        if (! is_string($normalized) || $normalized === '') {
+        if (!is_string($normalized) || $normalized === '') {
             throw new SettingValidationException('setting_secret_empty', 'A secret value must be a non-empty string.');
         }
 
@@ -335,7 +337,7 @@ final class ScopedSecretService
             throw new SettingValidationException('setting_not_secret', "Setting [{$key}] is not a secret setting.");
         }
 
-        if (! in_array($scope, $definition->allowedScopes, true)) {
+        if (!in_array($scope, $definition->allowedScopes, true)) {
             throw new SettingValidationException('setting_scope_not_allowed', "Setting [{$key}] cannot be stored in scope [{$scope}].");
         }
 
@@ -349,11 +351,11 @@ final class ScopedSecretService
         }
 
         $module = ModuleCatalog::get($definition->owner);
-        if ($module === null || ! $module->isAvailable()) {
+        if ($module === null || !$module->isAvailable()) {
             throw new SettingServiceException('setting_module_unavailable', "Module [{$definition->owner}] is not available, so its secrets cannot be used.");
         }
 
-        if ($workspace !== null && ! in_array($definition->owner, $this->modulePlanner->enabledModuleKeys($workspace), true)) {
+        if ($workspace !== null && !in_array($definition->owner, $this->modulePlanner->enabledModuleKeys($workspace), true)) {
             throw new SettingServiceException('setting_module_disabled', "Module [{$definition->owner}] is disabled for this workspace, so its secrets cannot be used.");
         }
     }
@@ -374,28 +376,28 @@ final class ScopedSecretService
 
     private function assertOperational(User $actor): void
     {
-        if (! (AccountStatus::of($actor->status)?->allowsOperationalAccess() ?? false)) {
+        if (!(AccountStatus::of($actor->status)?->allowsOperationalAccess() ?? false)) {
             throw new SettingServiceException('setting_forbidden', 'The actor is not an active account.');
         }
     }
 
     private function assertOrganizationOperational(Organization $organization): void
     {
-        if (! $organization->isActive()) {
+        if (!$organization->isActive()) {
             throw new SettingServiceException('setting_organization_unavailable', 'The organization is not operational, so its secrets cannot be changed.');
         }
     }
 
     private function assertOrganizationPermission(User $actor, Organization $organization): void
     {
-        if (! $this->permissions->userHasOrganizationPermission($actor, $organization, self::ORGANIZATION_SECRETS)) {
+        if (!$this->permissions->userHasOrganizationPermission($actor, $organization, self::ORGANIZATION_SECRETS)) {
             throw new SettingServiceException('setting_forbidden', 'The actor lacks secret-administration authority in this organization.');
         }
     }
 
     private function assertWorkspacePermission(User $actor, Workspace $workspace): void
     {
-        if (! $this->permissions->userHasWorkspacePermission($actor, $workspace, self::WORKSPACE_SECRETS)) {
+        if (!$this->permissions->userHasWorkspacePermission($actor, $workspace, self::WORKSPACE_SECRETS)) {
             throw new SettingServiceException('setting_forbidden', 'The actor lacks secret-administration authority in this workspace.');
         }
     }

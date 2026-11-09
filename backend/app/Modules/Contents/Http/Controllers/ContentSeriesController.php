@@ -103,7 +103,7 @@ class ContentSeriesController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $this->validated($request);
-        $project = ! empty($data['projectId']) ? Project::findOrFail((int) $data['projectId']) : null;
+        $project = !empty($data['projectId']) ? Project::findOrFail((int) $data['projectId']) : null;
         abort_unless(app(SeriesAccess::class)->canCreate($request->user(), $project), 403);
         if (($data['recurrenceType'] ?? null) === 'project_based' && empty($data['projectId'])) {
             throw ValidationException::withMessages(['projectId' => 'برای برنامه‌ریزی پروژه‌محور انتخاب پروژه الزامی است.']);
@@ -111,7 +111,7 @@ class ContentSeriesController extends Controller
         $canonical = app(SeriesConfigurationService::class)->canonicalize($data);
         $this->validateReferenceAssets($request, $canonical['defaultContentPayload']);
         $series = DB::transaction(function () use ($request, $data, $canonical): ContentSeries {
-            if (! empty($data['projectId'])) {
+            if (!empty($data['projectId'])) {
                 app(ActiveProjectGuard::class)->project((int) $data['projectId']);
             }
             $series = ContentSeries::create([
@@ -152,7 +152,7 @@ class ContentSeriesController extends Controller
             $targetDepartmentId = array_key_exists('departmentId', $data) ? $data['departmentId'] : $series->department_id;
             $targetOwnerId = $data['ownerId'] ?? $series->owner_id;
             $targetProject = $targetProjectId ? Project::findOrFail((int) $targetProjectId) : null;
-            abort_unless(! $targetProject || app(ProjectScopeAccess::class)->canEdit($request->user(), $targetProject), 403);
+            abort_unless(!$targetProject || app(ProjectScopeAccess::class)->canEdit($request->user(), $targetProject), 403);
             if ($targetProject) {
                 app(ActiveProjectGuard::class)->project($targetProject->id);
             }
@@ -160,7 +160,7 @@ class ContentSeriesController extends Controller
             abort_if($projectChanged && $series->contents()->exists(), 409,
                 'پس از ایجاد نخستین پروندهٔ محتوا، پروژه مجموعه برای حفظ یکپارچگی پرونده‌های موجود تغییر نمی‌کند.');
             if (($data['recurrenceType'] ?? $series->recurrence_type) === 'project_based'
-                && ! $targetProjectId) {
+                && !$targetProjectId) {
                 throw ValidationException::withMessages(['projectId' => 'برای برنامه‌ریزی پروژه‌محور انتخاب پروژه الزامی است.']);
             }
             $canonical = app(SeriesConfigurationService::class)->canonicalize($data, $series);
@@ -487,7 +487,7 @@ class ContentSeriesController extends Controller
     {
         foreach (collect($payload['assetIds'] ?? [])->unique() as $assetId) {
             $asset = DamAsset::query()->find((int) $assetId);
-            if (! $asset || ! app(DamAssetAccess::class)->canView($request->user(), $asset)) {
+            if (!$asset || !app(DamAssetAccess::class)->canView($request->user(), $asset)) {
                 throw ValidationException::withMessages(['defaultContentPayload.assetIds' => 'دارایی مرجع انتخاب‌شده در دسترس نیست.']);
             }
         }

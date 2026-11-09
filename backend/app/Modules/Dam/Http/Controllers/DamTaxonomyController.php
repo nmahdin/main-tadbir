@@ -75,7 +75,7 @@ class DamTaxonomyController extends Controller
     public function destroyFolder(Request $request, DamFolder $folder, DamFolderStorage $storage)
     {
         abort_unless($request->user()->hasAnyPermission(['assets.delete', 'assets.manage_access']), 403);
-        abort_if($folder->isSystemManaged() && ! ($request->user()->isAdmin() || $request->user()->hasPermission('assets.manage_access')), 403,
+        abort_if($folder->isSystemManaged() && !($request->user()->isAdmin() || $request->user()->hasPermission('assets.manage_access')), 403,
             'پوشه سیستمی توسط کاربر عادی قابل حذف نیست.');
 
         $hasChildren = DamFolder::query()->where('parent_id', $folder->id)->exists();

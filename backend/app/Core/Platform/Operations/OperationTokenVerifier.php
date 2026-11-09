@@ -17,7 +17,7 @@ final class OperationTokenVerifier
     public function verify(string $token): VerifiedOperation
     {
         $secret = config('platform.operations.secret');
-        if (! is_string($secret) || $secret === '') {
+        if (!is_string($secret) || $secret === '') {
             throw new PlatformOperationException(
                 'operations_not_configured',
                 'Platform operations secret is not configured; operations fail closed.',
@@ -31,13 +31,13 @@ final class OperationTokenVerifier
 
         [$body, $signature] = $parts;
         $expected = OperationTokenSigner::base64UrlEncode(hash_hmac('sha256', $body, $secret, true));
-        if (! hash_equals($expected, $signature)) {
+        if (!hash_equals($expected, $signature)) {
             throw new PlatformOperationException('token_signature_invalid', 'Operation token signature is invalid.');
         }
 
         $json = OperationTokenSigner::base64UrlDecode($body);
         $payload = $json === null ? null : json_decode($json, true);
-        if (! is_array($payload)) {
+        if (!is_array($payload)) {
             throw new PlatformOperationException('token_malformed', 'Operation token payload is malformed.');
         }
 
@@ -50,7 +50,7 @@ final class OperationTokenVerifier
     private function validate(array $payload): VerifiedOperation
     {
         $operation = $payload['op'] ?? null;
-        if (! in_array($operation, ['bootstrap', 'recovery'], true)) {
+        if (!in_array($operation, ['bootstrap', 'recovery'], true)) {
             throw new PlatformOperationException('token_malformed', 'Unknown operation type.');
         }
 
@@ -63,7 +63,7 @@ final class OperationTokenVerifier
 
         $issuedAt = $payload['iat'] ?? null;
         $expiresAt = $payload['exp'] ?? null;
-        if (! is_int($issuedAt) || ! is_int($expiresAt)) {
+        if (!is_int($issuedAt) || !is_int($expiresAt)) {
             throw new PlatformOperationException('token_malformed', 'Operation token lacks validity timestamps.');
         }
 

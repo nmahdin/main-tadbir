@@ -15,7 +15,9 @@ use Illuminate\Support\Facades\DB;
 /** Organization settings backed by one authoritative schema registry. */
 class SystemSettingController extends Controller
 {
-    public function __construct(private readonly OrganizationSettings $settings) {}
+    public function __construct(private readonly OrganizationSettings $settings)
+    {
+    }
 
     /** Safe visual identity required by the login page before authentication. */
     public function publicIdentity(): JsonResponse

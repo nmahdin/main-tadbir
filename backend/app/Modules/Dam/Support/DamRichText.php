@@ -87,7 +87,7 @@ final class DamRichText
     {
         $safe = [];
         foreach (explode(';', $style) as $declaration) {
-            if (! str_contains($declaration, ':')) {
+            if (!str_contains($declaration, ':')) {
                 continue;
             }
             [$property, $value] = array_map('trim', explode(':', $declaration, 2));

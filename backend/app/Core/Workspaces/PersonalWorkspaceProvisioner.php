@@ -26,7 +26,9 @@ final class PersonalWorkspaceProvisioner
         private readonly RoleProvisioner $roles,
         private readonly WorkspaceRoleService $workspaceRoles,
         private readonly ResourceLimitGuard $limits,
-    ) {}
+    )
+    {
+    }
 
     public function ensureDefault(User $user): Workspace
     {

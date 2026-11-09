@@ -83,11 +83,11 @@ class CoreInvitation extends Model
                 default => false,
             };
 
-            if (! $shapeMatches) {
+            if (!$shapeMatches) {
                 throw new DomainException('An invitation must match the scope and role-intent shape of its type.');
             }
 
-            if (! in_array($invitation->status, [self::STATUS_PENDING, self::STATUS_ACCEPTED, self::STATUS_REVOKED], true)) {
+            if (!in_array($invitation->status, [self::STATUS_PENDING, self::STATUS_ACCEPTED, self::STATUS_REVOKED], true)) {
                 throw new DomainException('An invitation status must be pending, accepted, or revoked.');
             }
 

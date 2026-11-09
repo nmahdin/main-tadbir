@@ -13,7 +13,7 @@ final class SeriesAccess
     public function visibleTo(User $user): Builder
     {
         $query = ContentSeries::query();
-        if (! $user->isActive() || ! app(ContentAccess::class)->canEnter($user)) {
+        if (!$user->isActive() || !app(ContentAccess::class)->canEnter($user)) {
             return $query->whereRaw('1 = 0');
         }
         if ($user->role?->key === 'admin') {
@@ -40,7 +40,7 @@ final class SeriesAccess
 
     public function canView(?User $user, ContentSeries $series): bool
     {
-        if (! $user?->isActive() || ! app(ContentAccess::class)->canEnter($user)) {
+        if (!$user?->isActive() || !app(ContentAccess::class)->canEnter($user)) {
             return false;
         }
         if ($series->project_id) {
@@ -51,7 +51,7 @@ final class SeriesAccess
         if ($user->role?->key === 'admin' || (int) $series->owner_id === (int) $user->id) {
             return true;
         }
-        if (! $series->department_id) {
+        if (!$series->department_id) {
             return true;
         }
 
@@ -61,21 +61,21 @@ final class SeriesAccess
     public function canCreate(?User $user, ?Project $project = null): bool
     {
         return $user?->isActive() && $user->hasPermission('content.create')
-            && (! $project || app(ProjectScopeAccess::class)->canEdit($user, $project));
+            && (!$project || app(ProjectScopeAccess::class)->canEdit($user, $project));
     }
 
     public function canEdit(?User $user, ContentSeries $series): bool
     {
         return $user?->hasPermission('content.edit') && $this->canView($user, $series)
-            && (! $series->project || app(ProjectScopeAccess::class)->canEdit($user, $series->project));
+            && (!$series->project || app(ProjectScopeAccess::class)->canEdit($user, $series->project));
     }
 
     public function canArchive(?User $user, ContentSeries $series): bool
     {
-        if (! $user?->isActive() || ! $user->hasPermission('content.delete') || ! $this->canView($user, $series)) {
+        if (!$user?->isActive() || !$user->hasPermission('content.delete') || !$this->canView($user, $series)) {
             return false;
         }
-        if (! $series->project_id) {
+        if (!$series->project_id) {
             return true;
         }
         $project = $series->relationLoaded('project') ? $series->project : Project::find($series->project_id);

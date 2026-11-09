@@ -61,8 +61,8 @@ final class Automations
             $rule['enabled'] = (bool) $rule['enabled'];
             $rule['trigger'] = $this->normalize($rule['trigger']);
             $command = $rule['trigger_type'] === 'command';
-            if ($rule['trigger'] === '' || ($command && ! preg_match('~^/[a-z][a-z0-9_]{0,31}$~D', $rule['trigger']))
-                || (! $command && str_starts_with($rule['trigger'], '/')) || in_array($rule['trigger'], self::RESERVED, true)
+            if ($rule['trigger'] === '' || ($command && !preg_match('~^/[a-z][a-z0-9_]{0,31}$~D', $rule['trigger']))
+                || (!$command && str_starts_with($rule['trigger'], '/')) || in_array($rule['trigger'], self::RESERVED, true)
                 || isset($seen[$rule['trigger']])) {
                 throw ValidationException::withMessages(["rules.$i.trigger" => 'محرک تکراری/رزروشده یا نامعتبر است. فرمان با / و حروف انگلیسی شروع می‌شود؛ متن دقیق نباید با / شروع شود.']);
             }
@@ -73,7 +73,7 @@ final class Automations
             if ($rule['action'] === 'table_row') {
                 app(OperationsSchema::class)->require('assets');
                 $table = DamDataTable::find($rule['table_id'] ?? 0);
-                if (! $table || ! $table->departments()->where('departments.id', $rule['department_id'] ?? 0)->where('departments.status', 'active')->exists()) {
+                if (!$table || !$table->departments()->where('departments.id', $rule['department_id'] ?? 0)->where('departments.status', 'active')->exists()) {
                     throw ValidationException::withMessages(["rules.$i.table_id" => 'جدول و دپارتمان فعالِ متصل به آن را انتخاب کنید.']);
                 }
                 app(DamTableRows::class)->schema($table);
@@ -174,7 +174,7 @@ final class Automations
 
                     return true;
                 } catch (HttpException $e) {
-                    if (! in_array($e->getStatusCode(), [403, 404], true)) {
+                    if (!in_array($e->getStatusCode(), [403, 404], true)) {
                         throw $e;
                     }
 

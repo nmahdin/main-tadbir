@@ -43,7 +43,9 @@ final class ModuleActivationPreview
         public readonly array $entitlements,
         public readonly array $blockingReasons,
         public readonly string $confirmationToken,
-    ) {}
+    )
+    {
+    }
 
     public function confirmable(): bool
     {

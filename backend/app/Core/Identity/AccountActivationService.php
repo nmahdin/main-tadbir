@@ -22,7 +22,9 @@ final class AccountActivationService
     public function __construct(
         private readonly PersonalWorkspaceProvisioner $workspaces,
         private readonly FreePlanActivator $freePlans,
-    ) {}
+    )
+    {
+    }
 
     public function activate(User $user): User
     {

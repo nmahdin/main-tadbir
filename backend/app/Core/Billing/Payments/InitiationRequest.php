@@ -11,5 +11,7 @@ final class InitiationRequest
         public readonly string $callbackUrl,
         public readonly ?string $mobile = null,
         public readonly ?string $email = null,
-    ) {}
+    )
+    {
+    }
 }

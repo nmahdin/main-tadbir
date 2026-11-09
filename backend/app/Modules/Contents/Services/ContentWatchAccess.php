@@ -12,8 +12,8 @@ final class ContentWatchAccess
 {
     public function canFollow(?User $user, Content $content): bool
     {
-        if (! $user?->isActive() || ! $user->hasPermission('content.watch')
-            || ! app(ContentAccess::class)->canView($user, $content)) {
+        if (!$user?->isActive() || !$user->hasPermission('content.watch')
+            || !app(ContentAccess::class)->canView($user, $content)) {
             return false;
         }
         if ($user->isAdmin() || app(ContentAccess::class)->participant($user, $content)) {

@@ -38,7 +38,9 @@ final class OrganizationLifecycleService
     public function __construct(
         private readonly PlatformAuthorizer $platformAuthorizer,
         private readonly AuditWriter $audit,
-    ) {}
+    )
+    {
+    }
 
     /** active -> suspended */
     public function suspend(
@@ -93,7 +95,7 @@ final class OrganizationLifecycleService
         string $reason,
         ?int $expectedVersion,
     ): Organization {
-        if (! $this->platformAuthorizer->allows($actor, $permissionKey)) {
+        if (!$this->platformAuthorizer->allows($actor, $permissionKey)) {
             throw new OrganizationLifecycleException(
                 'platform_authority_required',
                 'Organization lifecycle changes require an authorized Platform administrator.',
@@ -119,7 +121,7 @@ final class OrganizationLifecycleService
                 );
             }
 
-            if ($previous === null || ! in_array($previous, $allowedSources, true)) {
+            if ($previous === null || !in_array($previous, $allowedSources, true)) {
                 throw new OrganizationLifecycleException(
                     'invalid_transition',
                     "An organization cannot transition from [{$locked->status}] to [{$target->value}] with this operation.",

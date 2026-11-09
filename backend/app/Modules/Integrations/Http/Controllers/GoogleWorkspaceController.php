@@ -15,7 +15,9 @@ use Illuminate\Support\Facades\Log;
 
 final class GoogleWorkspaceController extends Controller
 {
-    public function __construct(private readonly GoogleWorkspaceService $workspace) {}
+    public function __construct(private readonly GoogleWorkspaceService $workspace)
+    {
+    }
 
     public function status(Request $request)
     {

@@ -20,7 +20,8 @@ final class VerificationResult
         public readonly ?string $errorCode = null,
         public readonly ?string $errorMessage = null,
         public readonly array $diagnostics = [],
-    ) {}
+    ) {
+    }
 
     public static function paid(int $amount, string $currency, string $txnId, ?string $traceId = null, ?string $cardPan = null, array $diag = []): self
     {

@@ -56,7 +56,9 @@ final class SubscriptionService
         private readonly SubscriptionLifecycle $lifecycle,
         private readonly PlanProvisioner $plans,
         private readonly PlanChangePlanner $planChanges,
-    ) {}
+    )
+    {
+    }
 
     public function assignInitial(
         User $actor,
@@ -99,7 +101,7 @@ final class SubscriptionService
             (string) config('billing.free.organization_plan_key', 'organization-free'),
         ];
 
-        if (! in_array($planKey, $freeKeys, true)) {
+        if (!in_array($planKey, $freeKeys, true)) {
             throw new SubscriptionException('subscription_forbidden', 'System activation is restricted to the configured Free plans.');
         }
 
@@ -220,7 +222,7 @@ final class SubscriptionService
                 // Extend from the current expiration boundary.
                 $periodStart = $currentExpires;
 
-                if ($newStartsAt !== null && ! $newStartsAt->equalTo($periodStart)) {
+                if ($newStartsAt !== null && !$newStartsAt->equalTo($periodStart)) {
                     throw new SubscriptionException('subscription_period_invalid', 'An active subscription renews from its current expiration; a different start is ambiguous.');
                 }
 
@@ -341,11 +343,11 @@ final class SubscriptionService
 
             $preview = $this->planChanges->preview($locked, $targetPlanKey, $targetVersion, $effectiveAt);
 
-            if (! hash_equals($preview->confirmationToken, $confirmationToken)) {
+            if (!hash_equals($preview->confirmationToken, $confirmationToken)) {
                 throw new SubscriptionException('subscription_change_preview_stale', 'The plan-change preview is stale; re-preview and confirm again.');
             }
 
-            if (! $preview->confirmable()) {
+            if (!$preview->confirmable()) {
                 $first = $preview->blockingReasons[0];
 
                 throw new SubscriptionException($first['code'], $first['message']);
@@ -429,7 +431,7 @@ final class SubscriptionService
 
     private function authorize(User $actor): void
     {
-        if (! $this->platformAuthorizer->allows($actor, self::PERMISSION)) {
+        if (!$this->platformAuthorizer->allows($actor, self::PERMISSION)) {
             throw new SubscriptionException('subscription_forbidden', 'Platform subscription management permission is required.');
         }
     }
@@ -448,7 +450,7 @@ final class SubscriptionService
             return ['organization', $owner, null];
         }
 
-        if ($owner->organization_id !== null || ! $owner->isPersonal()) {
+        if ($owner->organization_id !== null || !$owner->isPersonal()) {
             throw new SubscriptionException('subscription_owner_invalid', 'A personal subscription can only belong to a real personal workspace.');
         }
 
@@ -471,7 +473,7 @@ final class SubscriptionService
 
         $model = $plan->versions()->where('version', $version)->first();
 
-        if ($model === null || ! $model->isPublished()) {
+        if ($model === null || !$model->isPublished()) {
             throw new SubscriptionException('plan_version_not_published', "Plan [{$planKey}] version [{$version}] is not a published version.");
         }
 

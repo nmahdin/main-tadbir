@@ -58,7 +58,9 @@ final class ScopedSettingService
         private readonly ModuleActivationPlanner $modulePlanner,
         private readonly AuditWriter $audit,
         private readonly SettingRevisionRecorder $revisions,
-    ) {}
+    )
+    {
+    }
 
     // -- Reads -----------------------------------------------------
 
@@ -80,7 +82,7 @@ final class ScopedSettingService
             $this->assertWorkspacePermission($actor, $workspace, self::WORKSPACE_VIEW);
         } elseif ($organization !== null) {
             $this->assertOrganizationPermission($actor, $organization, self::ORGANIZATION_VIEW);
-        } elseif (! $definition->userOverride) {
+        } elseif (!$definition->userOverride) {
             throw new SettingServiceException('setting_forbidden', 'This setting requires a scope context to read.');
         }
 
@@ -177,13 +179,13 @@ final class ScopedSettingService
             // must currently allow them (default-deny). Values stored
             // earlier are retained when policy later denies — they
             // are ignored at resolution, never deleted.
-            if (! $definition->workspaceOverride) {
+            if (!$definition->workspaceOverride) {
                 throw new SettingValidationException('setting_override_not_supported', "Setting [{$key}] does not support Workspace overrides.");
             }
             $allowed = $lockedOrganization !== null
                 ? $this->store->allowsWorkspaceOverride((int) $lockedOrganization->id, $key)
                 : $definition->workspaceOverrideDefault;
-            if (! $allowed) {
+            if (!$allowed) {
                 throw new SettingServiceException('setting_override_denied', 'The organization does not allow Workspace overrides for this setting.');
             }
 
@@ -236,7 +238,7 @@ final class ScopedSettingService
             $this->assertOperational($locked);
             $definition = $this->registry->get($key);
 
-            if (! $definition->userOverride || ! in_array(SettingDefinition::SCOPE_USER, $definition->allowedScopes, true)) {
+            if (!$definition->userOverride || !in_array(SettingDefinition::SCOPE_USER, $definition->allowedScopes, true)) {
                 throw new SettingValidationException('setting_scope_not_allowed', "Setting [{$key}] is not a user preference.");
             }
             $this->assertNotSecret($definition);
@@ -346,28 +348,28 @@ final class ScopedSettingService
 
     private function assertOperational(User $actor): void
     {
-        if (! (AccountStatus::of($actor->status)?->allowsOperationalAccess() ?? false)) {
+        if (!(AccountStatus::of($actor->status)?->allowsOperationalAccess() ?? false)) {
             throw new SettingServiceException('setting_forbidden', 'The actor is not an active account.');
         }
     }
 
     private function assertOrganizationOperational(Organization $organization): void
     {
-        if (! $organization->isActive()) {
+        if (!$organization->isActive()) {
             throw new SettingServiceException('setting_organization_unavailable', 'The organization is not operational, so its settings cannot be changed.');
         }
     }
 
     private function assertOrganizationPermission(User $actor, Organization $organization, string $permission): void
     {
-        if (! $this->permissions->userHasOrganizationPermission($actor, $organization, $permission)) {
+        if (!$this->permissions->userHasOrganizationPermission($actor, $organization, $permission)) {
             throw new SettingServiceException('setting_forbidden', 'The actor lacks settings authority in this organization.');
         }
     }
 
     private function assertWorkspacePermission(User $actor, Workspace $workspace, string $permission): void
     {
-        if (! $this->permissions->userHasWorkspacePermission($actor, $workspace, $permission)) {
+        if (!$this->permissions->userHasWorkspacePermission($actor, $workspace, $permission)) {
             throw new SettingServiceException('setting_forbidden', 'The actor lacks settings authority in this workspace.');
         }
     }
@@ -382,7 +384,7 @@ final class ScopedSettingService
     {
         $definition = $this->registry->get($key);
 
-        if (! in_array($scope, $definition->allowedScopes, true)) {
+        if (!in_array($scope, $definition->allowedScopes, true)) {
             throw new SettingValidationException('setting_scope_not_allowed', "Setting [{$key}] cannot be written in scope [{$scope}].");
         }
 
@@ -414,11 +416,11 @@ final class ScopedSettingService
         }
 
         $module = ModuleCatalog::get($definition->owner);
-        if ($module === null || ! $module->isAvailable()) {
+        if ($module === null || !$module->isAvailable()) {
             throw new SettingServiceException('setting_module_unavailable', "Module [{$definition->owner}] is not available, so its settings cannot be edited.");
         }
 
-        if ($workspace !== null && ! in_array($definition->owner, $this->modulePlanner->enabledModuleKeys($workspace), true)) {
+        if ($workspace !== null && !in_array($definition->owner, $this->modulePlanner->enabledModuleKeys($workspace), true)) {
             throw new SettingServiceException('setting_module_disabled', "Module [{$definition->owner}] is disabled for this workspace, so its settings cannot be edited.");
         }
     }
@@ -569,7 +571,7 @@ final class ScopedSettingService
 
         if ($ownerType === SettingDefinition::SCOPE_WORKSPACE) {
             // Current override policy and definition gates apply.
-            if (! $definition->workspaceOverride) {
+            if (!$definition->workspaceOverride) {
                 throw new SettingValidationException('setting_override_not_supported', "Setting [{$key}] does not support Workspace overrides.");
             }
             $organization = $workspaceContext?->organization_id !== null
@@ -578,7 +580,7 @@ final class ScopedSettingService
             $allowed = $organization !== null
                 ? $this->store->allowsWorkspaceOverride((int) $organization->id, $key)
                 : $definition->workspaceOverrideDefault;
-            if (! $allowed && $revision->new_present) {
+            if (!$allowed && $revision->new_present) {
                 throw new SettingServiceException('setting_override_denied', 'The organization does not currently allow Workspace overrides for this setting.');
             }
         }

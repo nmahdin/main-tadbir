@@ -33,7 +33,7 @@ trait MembershipLifecycle
 
     public function transitionTo(MembershipStatus $target): static
     {
-        if (! $this->status->canTransitionTo($target)) {
+        if (!$this->status->canTransitionTo($target)) {
             throw new DomainException(
                 "Membership cannot transition from [{$this->status->value}] to [{$target->value}]."
             );

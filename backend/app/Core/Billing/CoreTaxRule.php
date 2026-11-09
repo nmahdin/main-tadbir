@@ -68,7 +68,7 @@ class CoreTaxRule extends Model
 
     public function isApplicableAt(CarbonInterface $at): bool
     {
-        if (! $this->is_active) {
+        if (!$this->is_active) {
             return false;
         }
         if ($this->valid_from !== null && $at->lt($this->valid_from)) {

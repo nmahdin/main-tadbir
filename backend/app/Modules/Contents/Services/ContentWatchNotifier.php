@@ -15,7 +15,7 @@ final class ContentWatchNotifier
         $sent = 0;
         $content->watchers()->with('role')->where('users.id', '!=', $actor->id)->get()->each(
             function (User $recipient) use ($content, $eventKey, $message, &$sent): void {
-                if (! app(ContentWatchAccess::class)->canFollow($recipient, $content)) {
+                if (!app(ContentWatchAccess::class)->canFollow($recipient, $content)) {
                     return;
                 }
                 $attributes = [

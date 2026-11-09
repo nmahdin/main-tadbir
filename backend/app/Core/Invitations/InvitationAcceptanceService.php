@@ -76,7 +76,9 @@ final class InvitationAcceptanceService
         private readonly OrganizationRoleService $organizationRoles,
         private readonly WorkspaceRoleService $workspaceRoles,
         private readonly AuditWriter $audit,
-    ) {}
+    )
+    {
+    }
 
     /**
      * @throws InvitationException
@@ -100,7 +102,7 @@ final class InvitationAcceptanceService
                 InvitationState::Expired => throw new InvitationException('invitation_expired', 'The invitation has expired.'),
             };
 
-            if (! (AccountStatus::of($accepter->status)?->allowsOperationalAccess() ?? false)) {
+            if (!(AccountStatus::of($accepter->status)?->allowsOperationalAccess() ?? false)) {
                 throw new InvitationException('invitation_forbidden', 'The account is not eligible to accept invitations.');
             }
 
@@ -129,7 +131,7 @@ final class InvitationAcceptanceService
                 $organization ??= $owningOrganization;
             }
 
-            if ($organization !== null && ! $organization->isActive()) {
+            if ($organization !== null && !$organization->isActive()) {
                 throw new InvitationException('invitation_organization_unavailable', 'The organization is not operational, so the invitation cannot be accepted.');
             }
 
@@ -179,14 +181,14 @@ final class InvitationAcceptanceService
     {
         $inviter = User::query()->find($invitation->invited_by_user_id);
 
-        if ($inviter === null || ! (AccountStatus::of($inviter->status)?->allowsOperationalAccess() ?? false)) {
+        if ($inviter === null || !(AccountStatus::of($inviter->status)?->allowsOperationalAccess() ?? false)) {
             throw new InvitationException('invitation_inviter_authority_lost', 'The inviter no longer holds valid authority for this invitation.');
         }
 
         if ($invitation->intended_organization_role_id !== null) {
             $keys = $organization !== null ? $this->permissions->organizationPermissionKeys($inviter, $organization) : [];
 
-            if (! in_array(InvitationService::ORGANIZATION_INVITE_PERMISSION, $keys, true)) {
+            if (!in_array(InvitationService::ORGANIZATION_INVITE_PERMISSION, $keys, true)) {
                 throw new InvitationException('invitation_inviter_authority_lost', 'The inviter no longer holds organization invitation authority.');
             }
 
@@ -196,7 +198,7 @@ final class InvitationAcceptanceService
         if ($invitation->intended_workspace_role_id !== null) {
             $keys = $workspace !== null ? $this->permissions->workspacePermissionKeys($inviter, $workspace) : [];
 
-            if (! in_array(InvitationService::WORKSPACE_INVITE_PERMISSION, $keys, true)) {
+            if (!in_array(InvitationService::WORKSPACE_INVITE_PERMISSION, $keys, true)) {
                 throw new InvitationException('invitation_inviter_authority_lost', 'The inviter no longer holds workspace invitation authority.');
             }
 
@@ -231,7 +233,7 @@ final class InvitationAcceptanceService
      */
     private function ensureOrganizationMembership(CoreInvitation $invitation, User $accepter, ?Organization $organization): array
     {
-        if (! $invitation->willCreateOrganizationMembership() || $organization === null) {
+        if (!$invitation->willCreateOrganizationMembership() || $organization === null) {
             return [false, false];
         }
 
@@ -294,8 +296,8 @@ final class InvitationAcceptanceService
         // membership: their prerequisite must already hold.
         if ($invitation->type === CoreInvitation::TYPE_WORKSPACE
             && $workspace->organization_id !== null
-            && ! $createdOrganizationMembership
-            && ! $this->hasActiveOrganizationMembership($accepter, (int) $workspace->organization_id)) {
+            && !$createdOrganizationMembership
+            && !$this->hasActiveOrganizationMembership($accepter, (int) $workspace->organization_id)) {
             throw new InvitationException('invitation_prerequisite_missing', 'Organization membership is required before accepting this workspace invitation.');
         }
 

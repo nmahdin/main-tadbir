@@ -42,7 +42,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class PlanPricePublisher
 {
-    public function __construct(private readonly AuditWriter $audit) {}
+    public function __construct(private readonly AuditWriter $audit)
+    {
+    }
 
     /**
      * Create a new DRAFT price revision for a plan version. The
@@ -192,7 +194,7 @@ final class PlanPricePublisher
                 $hadAnyPointer = true;
             }
 
-            if (! $hadAnyPointer) {
+            if (!$hadAnyPointer) {
                 throw new BillingDomainException(
                     'price_period_required',
                     'At least one period price is required to publish.',
@@ -368,7 +370,7 @@ final class PlanPricePublisher
 
     private function assertValidPeriod(string $period): void
     {
-        if (! in_array($period, CorePlanPrice::PERIODS, true)) {
+        if (!in_array($period, CorePlanPrice::PERIODS, true)) {
             throw new BillingDomainException(
                 'price_period_invalid',
                 "Billing period [{$period}] is not supported.",

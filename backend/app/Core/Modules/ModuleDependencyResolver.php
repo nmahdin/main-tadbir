@@ -44,7 +44,7 @@ final class ModuleDependencyResolver
 
         foreach ($this->edges as $key => $dependencies) {
             foreach ($dependencies as $dependency) {
-                if (! array_key_exists($dependency, $this->edges)) {
+                if (!array_key_exists($dependency, $this->edges)) {
                     throw new ModuleDependencyException(
                         'missing_dependency',
                         "Module [{$key}] requires unknown module [{$dependency}].",
@@ -89,7 +89,7 @@ final class ModuleDependencyResolver
         $closure = [];
         $visit = function (string $current) use (&$visit, &$closure): void {
             foreach ($this->edges[$current] as $dependency) {
-                if (! isset($closure[$dependency])) {
+                if (!isset($closure[$dependency])) {
                     $closure[$dependency] = true;
                     $visit($dependency);
                 }
@@ -193,7 +193,7 @@ final class ModuleDependencyResolver
 
     private function assertKnown(string $key): void
     {
-        if (! $this->has($key)) {
+        if (!$this->has($key)) {
             throw new ModuleDependencyException('unknown_module', "Module [{$key}] is not in the registry.");
         }
     }

@@ -22,7 +22,9 @@ final class OrganizationRoleService
     public function __construct(
         private readonly MembershipPermissions $permissions,
         private readonly FinalManagerGuard $finalManagerGuard,
-    ) {}
+    )
+    {
+    }
 
     public function assignRole(User $actor, OrganizationMembership $membership, ScopedRole $role): OrganizationMembership
     {
@@ -35,7 +37,7 @@ final class OrganizationRoleService
             $this->assertAssignable($membership, $role);
 
             $actorKeys = $this->permissions->organizationPermissionKeys($actor, $organization);
-            if (! in_array('organization.roles.manage', $actorKeys, true)) {
+            if (!in_array('organization.roles.manage', $actorKeys, true)) {
                 throw new RbacAuthorizationException('The actor lacks organization.roles.manage in this organization.');
             }
 
@@ -72,7 +74,7 @@ final class OrganizationRoleService
             throw new RbacValidationException('An ended membership cannot be assigned a role; rejoining creates a new membership.');
         }
 
-        if (! $role->isOrganizationScoped() || (int) $role->organization_id !== (int) $membership->organization_id) {
+        if (!$role->isOrganizationScoped() || (int) $role->organization_id !== (int) $membership->organization_id) {
             throw new RbacValidationException('Role scope or organization does not match the membership organization.');
         }
     }

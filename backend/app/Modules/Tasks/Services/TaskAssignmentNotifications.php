@@ -13,7 +13,7 @@ final class TaskAssignmentNotifications
     public function created(Task $task): ?DomainRecord
     {
         $recipient = User::find($task->assignee_id);
-        if (! $recipient?->isActive()) {
+        if (!$recipient?->isActive()) {
             return null;
         }
         $attributes = [
@@ -24,7 +24,7 @@ final class TaskAssignmentNotifications
                 'linkTaskId' => (string) $task->id, 'read' => false, 'timestamp' => now()->toIso8601String()],
         ];
         // Preserve internal notifications on older installations as well.
-        if (! Schema::hasColumn('domain_records', 'notification_key')) {
+        if (!Schema::hasColumn('domain_records', 'notification_key')) {
             return DomainRecord::create($attributes);
         }
 

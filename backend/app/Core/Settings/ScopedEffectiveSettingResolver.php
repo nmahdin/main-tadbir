@@ -49,21 +49,23 @@ final class ScopedEffectiveSettingResolver implements EffectiveSettingResolver
     public function __construct(
         private readonly SettingsRegistry $registry,
         private readonly SettingValueStore $store,
-    ) {}
+    )
+    {
+    }
 
     public function resolve(string $key, ?Organization $organization = null, ?Workspace $workspace = null, ?User $user = null): array
     {
         $definition = $this->registry->get($key);
         $effectiveOrganization = $this->effectiveOrganization($organization, $workspace);
 
-        if (! $definition->mandatory && $definition->userOverride && $user !== null) {
+        if (!$definition->mandatory && $definition->userOverride && $user !== null) {
             $stored = $this->store->get(SettingDefinition::SCOPE_USER, (int) $user->id, $key);
             if ($stored->exists) {
                 return $this->result($stored->value, SettingLayer::UserPreference, $definition, 'user', (int) $user->id, false);
             }
         }
 
-        if (! $definition->mandatory && $definition->workspaceOverride && $workspace !== null) {
+        if (!$definition->mandatory && $definition->workspaceOverride && $workspace !== null) {
             $allowed = $effectiveOrganization !== null
                 ? $this->store->allowsWorkspaceOverride((int) $effectiveOrganization->id, $key)
                 : $definition->workspaceOverrideDefault;
@@ -119,14 +121,14 @@ final class ScopedEffectiveSettingResolver implements EffectiveSettingResolver
     private function legacyPublicValue(SettingDefinition $definition, Organization $organization): ?string
     {
         $legacySource = $definition->constraints['legacy_source'] ?? null;
-        if (! is_string($legacySource) || ! str_starts_with($legacySource, 'organizations.settings.')) {
+        if (!is_string($legacySource) || !str_starts_with($legacySource, 'organizations.settings.')) {
             return null;
         }
 
         $path = explode('.', substr($legacySource, strlen('organizations.settings.')));
         $value = $organization->settings;
         foreach ($path as $segment) {
-            if (! is_array($value) || ! array_key_exists($segment, $value)) {
+            if (!is_array($value) || !array_key_exists($segment, $value)) {
                 return null;
             }
             $value = $value[$segment];

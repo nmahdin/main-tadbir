@@ -12,7 +12,9 @@ final class InitiationResult
         public readonly ?string $errorCode = null,
         public readonly ?string $errorMessage = null,
         public readonly array $diagnostics = [],
-    ) {}
+    )
+    {
+    }
 
     public static function redirect(string $url, string $providerPaymentId, ?string $authority, array $diag = []): self
     {

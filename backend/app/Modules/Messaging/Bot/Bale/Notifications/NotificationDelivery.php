@@ -35,14 +35,14 @@ final class NotificationDelivery
         }
         try {
             $settings = app(Settings::class);
-            if (! $settings->ready()) {
+            if (!$settings->ready()) {
                 return;
             }
             $link = BaleUserLink::where('user_id', $record->user_id)->first();
             $user = User::find($record->user_id);
-            if (! $link || ! $link->notifications_enabled || ! $user
-                || ! app(NotificationCatalog::class)->allows($link, $record)
-                || ! app(NotificationAccess::class)->canDeliver($user, $record)) {
+            if (!$link || !$link->notifications_enabled || !$user
+                || !app(NotificationCatalog::class)->allows($link, $record)
+                || !app(NotificationAccess::class)->canDeliver($user, $record)) {
                 return;
             }
             $message = app(Outbox::class)->enqueue('notification:'.($record->notification_key ?? $record->id).':'.$link->id, $link->chat_id, [
@@ -65,7 +65,7 @@ final class NotificationDelivery
             return 0;
         }
         $lock = Cache::lock('bale:runtime', 90);
-        if (! $lock->get()) {
+        if (!$lock->get()) {
             return 0;
         } // A poll already holding the lock will drain pending work.
         try {

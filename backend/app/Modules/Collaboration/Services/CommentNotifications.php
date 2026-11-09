@@ -71,7 +71,7 @@ final class CommentNotifications
     private function contentRecipients(int $contentId): array
     {
         $content = Content::query()->find($contentId);
-        if (! $content) {
+        if (!$content) {
             return [];
         }
         $payload = $content->payload ?? [];

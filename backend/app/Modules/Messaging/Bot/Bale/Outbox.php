@@ -24,7 +24,9 @@ use Illuminate\Support\Facades\Schema;
 
 final class Outbox
 {
-    public function __construct(private Settings $settings, private BaleClient $client) {}
+    public function __construct(private Settings $settings, private BaleClient $client)
+    {
+    }
 
     public function enqueue(string $key, string $chatId, array $payload, ?BaleUserLink $link = null, ?string $subjectType = null, ?int $subjectId = null): BaleOutbox
     {
@@ -55,10 +57,10 @@ final class Outbox
         BaleOutbox::where('status', 'sending')->where('updated_at', '<', now()->subMinutes(2))
             ->update(['status' => 'unknown', 'error_code' => 'worker_interrupted']);
         foreach (BaleOutbox::where('status', 'pending')->when($onlyIds !== null, fn ($q) => $q->whereIn('id', $onlyIds))->where('available_at', '<=', now())->orderBy('id')->limit(10)->get() as $message) {
-            if (microtime(true) + config('bale.request_timeout') >= $deadline || ! $this->settings->ready()) {
+            if (microtime(true) + config('bale.request_timeout') >= $deadline || !$this->settings->ready()) {
                 break;
             }
-            if (! $this->authorized($message)) {
+            if (!$this->authorized($message)) {
                 $message->update(['status' => 'cancelled', 'error_code' => 'access_revoked']);
 
                 continue;
@@ -73,17 +75,17 @@ final class Outbox
             $cleanup = ($message->payload['_method'] ?? null) === 'deleteMessage' && ($message->payload['_ui_cleanup'] ?? false) === true;
             try {
                 $outbound = Arr::except($message->payload, ['_method', '_ui_cleanup', '_subject_ids', '_department_id', '_task_id', '_asset_text', '_automation']);
-                if (! $cleanup) {
+                if (!$cleanup) {
                     $outbound = app(PanelLinks::class)->materialize($outbound, $message->link_id ? BaleUserLink::find($message->link_id) : null);
                 }
                 $result = $cleanup
                     ? $this->client->call($this->settings->token(), 'deleteMessage', ['chat_id' => $message->chat_id, 'message_id' => $message->payload['message_id']])
                     : $this->client->call($this->settings->token(), 'sendMessage', ['chat_id' => $message->chat_id, ...$outbound]);
-                if (($cleanup && $result !== true) || (! $cleanup && (! is_array($result) || ! isset($result['message_id'])))) {
+                if (($cleanup && $result !== true) || (!$cleanup && (!is_array($result) || !isset($result['message_id'])))) {
                     throw new BaleApiException('response_unknown');
                 }
                 $message->update(['status' => 'sent', 'remote_message_id' => $cleanup ? null : (string) $result['message_id'], 'error_code' => null]);
-                if (! $cleanup) {
+                if (!$cleanup) {
                     $this->settings->write(['last_sent_at' => now()->toIso8601String()]);
                     $sent++;
                 }
@@ -115,12 +117,12 @@ final class Outbox
         if ($message->bot_id !== (string) ($this->settings->read()['bot_id'] ?? '')) {
             return false;
         }
-        if (! $message->requires_link) {
+        if (!$message->requires_link) {
             return true; // Only fixed, non-sensitive connection/help responses use this path.
         }
         $link = BaleUserLink::find($message->link_id);
         $user = $link ? User::find($link->user_id) : null;
-        if (! $user?->isActive() || $link->chat_id !== $message->chat_id) {
+        if (!$user?->isActive() || $link->chat_id !== $message->chat_id) {
             return false;
         }
         $permissions = app(UserPermissionGate::class);
@@ -129,39 +131,39 @@ final class Outbox
             return false;
         }
         $organization = app(DepartmentConsolidation::class)->status();
-        if (! $organization['installed'] || $organization['phase'] !== 'done') {
+        if (!$organization['installed'] || $organization['phase'] !== 'done') {
             return false;
         }
-        if (isset($message->payload['_automation']) && ! app(Automations::class)->valid($message->payload['_automation'], $user)) {
+        if (isset($message->payload['_automation']) && !app(Automations::class)->valid($message->payload['_automation'], $user)) {
             return false;
         }
-        if (($message->payload['_asset_text'] ?? false) && ! $permissions->all($user, ['assets.view', 'assets.upload'])) {
+        if (($message->payload['_asset_text'] ?? false) && !$permissions->all($user, ['assets.view', 'assets.upload'])) {
             return false;
         }
         if ($taskId = ($message->payload['_task_id'] ?? null)) {
-            if (! app(TaskOperations::class)->visibleTo($user)->whereKey($taskId)->where('assignee_id', $user->id)->exists()) {
+            if (!app(TaskOperations::class)->visibleTo($user)->whereKey($taskId)->where('assignee_id', $user->id)->exists()) {
                 return false;
             }
         }
-        if (str_starts_with($message->subject_type ?? '', 'asset_') && ! Schema::hasTable('dam_data_table_department')) {
+        if (str_starts_with($message->subject_type ?? '', 'asset_') && !Schema::hasTable('dam_data_table_department')) {
             return false;
         }
 
-        if (in_array($message->subject_type, ['task', 'tasks'], true) && ! $permissions->any($user, 'tasks.view')) {
+        if (in_array($message->subject_type, ['task', 'tasks'], true) && !$permissions->any($user, 'tasks.view')) {
             return false;
         }
-        if (in_array($message->subject_type, ['project', 'projects'], true) && ! $permissions->any($user, 'projects.view')) {
+        if (in_array($message->subject_type, ['project', 'projects'], true) && !$permissions->any($user, 'projects.view')) {
             return false;
         }
 
         if (in_array($message->subject_type, ['meeting', 'meetings'], true)) {
             $ids = $message->subject_type === 'meeting' ? [$message->subject_id] : ($message->payload['_subject_ids'] ?? []);
-            if (! $permissions->any($user, 'meetings.view')) {
+            if (!$permissions->any($user, 'meetings.view')) {
                 return false;
             }
             foreach ($ids as $id) {
                 $meeting = WorkspaceRecord::find($id);
-                if (! $meeting || ! app(NotificationAccess::class)->meetingMember($user, $meeting)) {
+                if (!$meeting || !app(NotificationAccess::class)->meetingMember($user, $meeting)) {
                     return false;
                 }
             }
@@ -174,11 +176,11 @@ final class Outbox
             return $link->notifications_enabled && $record && app(NotificationAccess::class)->canDeliver($user, $record);
         }
         if ($message->subject_type === 'asset_departments') {
-            if (! $permissions->any($user, 'assets.view')) {
+            if (!$permissions->any($user, 'assets.view')) {
                 return false;
             }
             foreach (($message->payload['_subject_ids'] ?? []) as $id) {
-                if (! Department::whereKey($id)->where('departments.status', 'active')->forMember($user)->exists()) {
+                if (!Department::whereKey($id)->where('departments.status', 'active')->forMember($user)->exists()) {
                     return false;
                 }
             }
@@ -187,12 +189,12 @@ final class Outbox
         }
         if ($message->subject_type === 'asset_tables') {
             $department = (int) ($message->payload['_department_id'] ?? 0);
-            if (! $permissions->any($user, 'assets.view') || ! Department::whereKey($department)->where('departments.status', 'active')->forMember($user)->exists()) {
+            if (!$permissions->any($user, 'assets.view') || !Department::whereKey($department)->where('departments.status', 'active')->forMember($user)->exists()) {
                 return false;
             }
             foreach (($message->payload['_subject_ids'] ?? []) as $id) {
                 $table = DamDataTable::find($id);
-                if (! $table || ! app(DamTableAccess::class)->botAllowed($user, $table, $department)) {
+                if (!$table || !app(DamTableAccess::class)->botAllowed($user, $table, $department)) {
                     return false;
                 }
             }

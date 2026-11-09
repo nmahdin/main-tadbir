@@ -29,7 +29,7 @@ class AccountSecurityController extends Controller
     {
         $user = $request->user();
         $fresh = $user->reauthenticated_at !== null && $user->reauthenticated_at->gt(now()->subMinutes(10));
-        if (! $fresh) {
+        if (!$fresh) {
             throw ValidationException::withMessages([
                 'reauth' => 'برای این کار، ابتدا دوباره وارد حساب خود شوید (احراز هویت مجدد لازم است).',
             ]);
@@ -46,7 +46,7 @@ class AccountSecurityController extends Controller
     {
         $data = $request->validate(['password' => ['required', 'string']]);
         $user = $request->user();
-        if (! Hash::check($data['password'], $user->password)) {
+        if (!Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages(['password' => 'رمز عبور نادرست است.']);
         }
         $user->forceFill(['reauthenticated_at' => now()])->save();
@@ -65,7 +65,7 @@ class AccountSecurityController extends Controller
             'invalidate_others' => ['sometimes', 'boolean'],
         ]);
         $user = $request->user();
-        if (! Hash::check($data['current_password'], $user->password)) {
+        if (!Hash::check($data['current_password'], $user->password)) {
             throw ValidationException::withMessages(['current_password' => 'رمز عبور فعلی نادرست است.']);
         }
         $user->forceFill(['password' => Hash::make($data['password'])])->save();
@@ -103,7 +103,7 @@ class AccountSecurityController extends Controller
             ->where('user_id', $user->id)
             ->whereNull('consumed_at')
             ->first();
-        if (! $challenge || $challenge->expires_at <= now()) {
+        if (!$challenge || $challenge->expires_at <= now()) {
             return response()->json(['message' => 'کد تأیید نامعتبر یا منقضی شده است.'], 422);
         }
         $old = $user->email;
@@ -129,7 +129,7 @@ class AccountSecurityController extends Controller
         $this->requireReauth($request);
         $data = $request->validate(['phone' => ['required', 'string', 'max:20']]);
         $result = $otp->challenge($data['phone'], 'mobile_change', (string) $request->ip(), $request->user()->id);
-        if (! $result['sent']) {
+        if (!$result['sent']) {
             return response()->json(['message' => 'در حال حاضر ارسال پیامک ممکن نیست؛ چند دقیقه دیگر تلاش کنید.', 'code' => $result['reason']], 429);
         }
 
@@ -145,7 +145,7 @@ class AccountSecurityController extends Controller
         } catch (Throwable) {
             return response()->json(['message' => 'این شماره قبلاً به حساب دیگری تعلق دارد.'], 422);
         }
-        if (! $result['ok']) {
+        if (!$result['ok']) {
             return response()->json(['message' => 'کد تأیید نادرست یا منقضی شده است.'], 422);
         }
         $this->audit($user, 'auth.mobile_changed', 'شماره موبایل تغییر کرد و تأیید شد');
@@ -209,7 +209,7 @@ class AccountSecurityController extends Controller
         $this->requireReauth($request);
         $data = $request->validate(['password' => ['required', 'string']]);
         $user = $request->user();
-        if (! Hash::check($data['password'], $user->password)) {
+        if (!Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages(['password' => 'رمز عبور نادرست است.']);
         }
         // Ownership guard: never orphan shared organizational records.

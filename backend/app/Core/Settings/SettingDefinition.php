@@ -79,7 +79,9 @@ final readonly class SettingDefinition
         public bool $nullable = false,
         public string $sensitivity = self::SENSITIVITY_INTERNAL,
         public int $version = 1,
-    ) {}
+    )
+    {
+    }
 
     /**
      * Deterministic fingerprint over every semantic field
@@ -118,11 +120,11 @@ final readonly class SettingDefinition
      */
     public function assertStructurallyValid(): void
     {
-        if (! preg_match('/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/', $this->key)) {
+        if (!preg_match('/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/', $this->key)) {
             throw new SettingRegistryException('setting_key_invalid', "Setting key [{$this->key}] must be dotted lowercase segments.");
         }
 
-        if (! in_array($this->type, self::TYPES, true)) {
+        if (!in_array($this->type, self::TYPES, true)) {
             throw new SettingRegistryException('setting_type_unsupported', "Setting [{$this->key}] declares unsupported type [{$this->type}].");
         }
 
@@ -130,16 +132,16 @@ final readonly class SettingDefinition
             throw new SettingRegistryException('setting_scope_unsupported', "Setting [{$this->key}] declares an unsupported owner scope.");
         }
 
-        if (! in_array($this->inheritance, [self::INHERITANCE_NONE, self::INHERITANCE_ORGANIZATION_TO_WORKSPACE], true)) {
+        if (!in_array($this->inheritance, [self::INHERITANCE_NONE, self::INHERITANCE_ORGANIZATION_TO_WORKSPACE], true)) {
             throw new SettingRegistryException('setting_inheritance_unsupported', "Setting [{$this->key}] declares unsupported inheritance.");
         }
 
         if ($this->inheritance === self::INHERITANCE_ORGANIZATION_TO_WORKSPACE
-            && ! (in_array(self::SCOPE_ORGANIZATION, $this->allowedScopes, true) && in_array(self::SCOPE_WORKSPACE, $this->allowedScopes, true))) {
+            && !(in_array(self::SCOPE_ORGANIZATION, $this->allowedScopes, true) && in_array(self::SCOPE_WORKSPACE, $this->allowedScopes, true))) {
             throw new SettingRegistryException('setting_inheritance_unsupported', "Setting [{$this->key}] inherits organization-to-workspace but does not allow both scopes.");
         }
 
-        if (! in_array($this->sensitivity, self::SENSITIVITIES, true)) {
+        if (!in_array($this->sensitivity, self::SENSITIVITIES, true)) {
             throw new SettingRegistryException('setting_sensitivity_unsupported', "Setting [{$this->key}] declares unsupported sensitivity.");
         }
 
@@ -164,7 +166,7 @@ final readonly class SettingDefinition
             } catch (SettingValidationException $exception) {
                 throw new SettingRegistryException('setting_default_invalid', "Setting [{$this->key}] has an invalid default: {$exception->getMessage()}");
             }
-        } elseif (! $this->nullable && $this->default === null) {
+        } elseif (!$this->nullable && $this->default === null) {
             // A null default on a non-nullable definition is a
             // contradiction; require explicit nullable intent.
             throw new SettingRegistryException('setting_default_invalid', "Setting [{$this->key}] has a null default but is not declared nullable.");
