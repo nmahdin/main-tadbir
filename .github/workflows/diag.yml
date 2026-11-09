@@ -1,0 +1,31 @@
+name: diag-pint
+on:
+  push:
+    branches: [arena/582a70e5-main-tadbir]
+  workflow_dispatch:
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
+          coverage: none
+          tools: composer:v2
+      - working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: pint verbose
+        working-directory: backend
+        run: |
+          set +e
+          php vendor/bin/pint -v --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php app/Providers 2>&1 | tee /tmp/pint.txt
+          echo EXIT=${PIPESTATUS[0]} > /tmp/rc.txt
+      - name: show output
+        if: always()
+        run: tail -200 /tmp/pint.txt; echo "==="; cat /tmp/rc.txt
+      - name: exit rc
+        if: always()
+        run: exit $(grep EXIT /tmp/rc.txt | cut -d= -f2)
