@@ -153,7 +153,7 @@ final class PermissionCatalog
     public static function assertKnownKeysForScope(array $keys, string $scope): void
     {
         foreach ($keys as $key) {
-            if (!self::exists($key)) {
+            if (! self::exists($key)) {
                 throw new RbacValidationException("Unknown permission key [{$key}].");
             }
 

@@ -23,7 +23,7 @@ final class DamTableRows
         abort_unless(is_array($columns) && count($columns) > 0 && count($columns) <= 100, 422, 'تعریف ستون‌های جدول کامل نیست.');
         $ids = [];
         foreach ($columns as $column) {
-            abort_unless(is_array($column) && preg_match('/^[A-Za-z0-9_-]{1,60}$/', (string) ($column['id'] ?? '')) && !in_array($column['id'], $ids, true), 422, 'شناسه ستون نامعتبر است.');
+            abort_unless(is_array($column) && preg_match('/^[A-Za-z0-9_-]{1,60}$/', (string) ($column['id'] ?? '')) && ! in_array($column['id'], $ids, true), 422, 'شناسه ستون نامعتبر است.');
             abort_unless(in_array($column['type'] ?? 'text', [
                 'text', 'long_text', 'number', 'date', 'select', 'boolean', 'link', 'user', 'asset',
             ], true), 422, 'نوع ستون پشتیبانی نمی‌شود.');
@@ -71,12 +71,12 @@ final class DamTableRows
                     $asset = DamAsset::query()->find((int) $value);
                     // One generic validation response prevents probing private
                     // asset IDs through a structured-data cell.
-                    if (!$asset || !app(DamAssetAccess::class)->canView($actor, $asset)) {
+                    if (! $asset || ! app(DamAssetAccess::class)->canView($actor, $asset)) {
                         throw ValidationException::withMessages(['cells.'.$column['id'] => 'دارایی انتخابی در دسترس نیست.']);
                     }
                 }
                 if (($column['type'] ?? 'text') === 'user'
-                    && !User::query()->whereKey((int) $value)->where('status', 'active')->exists()) {
+                    && ! User::query()->whereKey((int) $value)->where('status', 'active')->exists()) {
                     throw ValidationException::withMessages(['cells.'.$column['id'] => 'کاربر انتخابی معتبر نیست.']);
                 }
             }
@@ -102,11 +102,11 @@ final class DamTableRows
                 abort_unless($version && hash_equals(self::version($table), $version), 409, 'تعریف فرم تغییر کرده است؛ دوباره شروع کنید.');
             }
             $cells = $this->validateCells($table, $data['cells'] ?? [], $actor);
-            if (!empty($data['task_id'])) {
+            if (! empty($data['task_id'])) {
                 $task = app(TaskOperations::class)->visibleTo($actor)->whereKey($data['task_id'])->lockForUpdate()->first();
                 abort_unless($task && ($departmentId === null || (int) $task->assignee_id === (int) $actor->id), 403);
             }
-            if (!empty($data['content_id'])) {
+            if (! empty($data['content_id'])) {
                 abort_unless(app(ContentAccess::class)->canView($actor, Content::findOrFail($data['content_id'])), 403);
             }
             $row = $table->rows()->create([

@@ -15,17 +15,17 @@ final class PersianDate
     /** Normalize stored legacy Jalali action deadlines without interpreting year 1405 as Gregorian. */
     public static function iso(?string $value): ?string
     {
-        if (!$value || !trim($value)) {
+        if (! $value || ! trim($value)) {
             return null;
         }
         $value = strtr(trim($value), array_combine(preg_split('//u', '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', -1, PREG_SPLIT_NO_EMPTY), str_split('01234567890123456789')));
         $invalid = fn () => throw ValidationException::withMessages(['deadline' => 'مهلت باید تاریخ معتبر شمسی یا میلادی باشد.']);
-        if (!preg_match('/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/D', $value, $m)) {
+        if (! preg_match('/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/D', $value, $m)) {
             $invalid();
         }
         [$y, $month, $day] = [(int) $m[1], (int) $m[2], (int) $m[3]];
         if ($y >= 1700) {
-            if (!checkdate($month, $day, $y)) {
+            if (! checkdate($month, $day, $y)) {
                 $invalid();
             }
 
@@ -69,19 +69,19 @@ final class PersianDate
     /** Gregorian date-only -> solar Hijri; no timezone conversion or extra PHP extension needed. */
     public static function format(mixed $value): string
     {
-        if (!$value) {
+        if (! $value) {
             return 'تعیین نشده';
         }
         $text = $value instanceof DateTimeInterface ? $value->format('Y-m-d') : (string) $value;
         $text = strtr($text, array_combine(preg_split('//u', '۰۱۲۳۴۵۶۷۸۹', -1, PREG_SPLIT_NO_EMPTY), str_split('0123456789')));
-        if (!preg_match('/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/D', $text, $m)) {
+        if (! preg_match('/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/D', $text, $m)) {
             return MessageText::plain(self::digits($text), 80);
         }
         [$gy, $gm, $gd] = [(int) $m[1], (int) $m[2], (int) $m[3]];
         if ($gy < 1700) {
             return self::digits(sprintf('%04d/%02d/%02d', $gy, $gm, $gd));
         } // existing Persian meeting dates
-        if (!checkdate($gm, $gd, $gy)) {
+        if (! checkdate($gm, $gd, $gy)) {
             return 'تاریخ نامعتبر';
         }
         $offsets = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];

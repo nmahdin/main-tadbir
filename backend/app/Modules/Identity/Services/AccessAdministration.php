@@ -11,9 +11,7 @@ final class AccessAdministration
 {
     public function __construct(
         private readonly LastActiveAdminGuard $lastAdminGuard,
-    )
-    {
-    }
+    ) {}
 
     public function authorizeRole(User $actor, Role $role): void
     {

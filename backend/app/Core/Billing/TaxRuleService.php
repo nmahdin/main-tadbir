@@ -18,9 +18,7 @@ use Illuminate\Support\Facades\DB;
  */
 final class TaxRuleService
 {
-    public function __construct(private readonly AuditWriter $audit)
-    {
-    }
+    public function __construct(private readonly AuditWriter $audit) {}
 
     /**
      * Create a new tax rule. If $activate is true, atomically
@@ -102,7 +100,7 @@ final class TaxRuleService
     {
         return DB::transaction(function () use ($rule, $actor): CoreTaxRule {
             $locked = CoreTaxRule::query()->lockForUpdate()->findOrFail($rule->id);
-            if (!$locked->is_active) {
+            if (! $locked->is_active) {
                 return $locked;
             }
             $locked->forceFill([

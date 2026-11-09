@@ -111,7 +111,7 @@ final class PlatformRoleProvisioner
             $role = PlatformRole::where('key', self::PRIMARY_ROLE_KEY)->firstOrFail();
         }
 
-        if (!$role->is_protected) {
+        if (! $role->is_protected) {
             throw new PlatformProvisioningException(
                 'Existing platform role [primary_administrator] is not protected; refusing to alter it silently.',
             );

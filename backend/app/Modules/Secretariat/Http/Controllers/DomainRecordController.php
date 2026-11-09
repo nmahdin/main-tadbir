@@ -142,7 +142,7 @@ class DomainRecordController extends Controller
             return DB::transaction(function () use ($request, $domain_record): DomainRecordResource {
                 $record = DomainRecord::whereKey($domain_record->id)->lockForUpdate()->firstOrFail();
                 $record->update(['payload' => app(ChatAccess::class)->updatePayload($request->user(), $record, $request->all())]);
-                if ($record->domain === DomainRecord::DOMAIN_CHAT_MESSAGE && !$request->filled('command')) {
+                if ($record->domain === DomainRecord::DOMAIN_CHAT_MESSAGE && ! $request->filled('command')) {
                     $this->syncConversationLastMessage((int) $record->parent_id);
                 }
 
@@ -290,19 +290,19 @@ class DomainRecordController extends Controller
     private function syncConversationLastMessage(int $conversationId): void
     {
         $conversation = DomainRecord::query()->where('domain', DomainRecord::DOMAIN_CONVERSATION)->find($conversationId);
-        if (!$conversation) {
+        if (! $conversation) {
             return;
         }
         $latest = DomainRecord::query()->where('domain', DomainRecord::DOMAIN_CHAT_MESSAGE)
             ->where('parent_id', $conversationId)->latest('created_at')->latest('id')->first();
         $payload = $conversation->payload ?? [];
-        if (!$latest) {
+        if (! $latest) {
             unset($payload['lastMessage']);
             $payload['updatedAt'] = now()->toIso8601String();
         } else {
             $message = $latest->payload ?? [];
             $payload['lastMessage'] = [
-                'text' => trim((string) ($message['text'] ?? '')) ?: (!empty($message['attachments']) ? '[پیوست]' : (!empty($message['taskRef']) ? '[ارجاع به وظیفه]' : '[پیام]')),
+                'text' => trim((string) ($message['text'] ?? '')) ?: (! empty($message['attachments']) ? '[پیوست]' : (! empty($message['taskRef']) ? '[ارجاع به وظیفه]' : '[پیام]')),
                 'timestamp' => $message['timestamp'] ?? $latest->created_at?->toIso8601String(),
                 'senderId' => (string) $latest->user_id,
                 'senderName' => User::query()->whereKey($latest->user_id)->value('name') ?? 'کاربر',

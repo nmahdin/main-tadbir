@@ -86,7 +86,7 @@ class ProjectContentPlanController extends Controller
 
     private function guardSeries(Project $project, mixed $seriesId): void
     {
-        if (!$seriesId) {
+        if (! $seriesId) {
             return;
         }
         abort_unless(ContentSeries::whereKey($seriesId)->where('project_id', $project->id)->exists(), 422,

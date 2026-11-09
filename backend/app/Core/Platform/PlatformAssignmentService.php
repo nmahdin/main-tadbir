@@ -36,9 +36,7 @@ final class PlatformAssignmentService
         private readonly PlatformControlLock $controlLock,
         private readonly PlatformPrimaryGuard $primaryGuard,
         private readonly AuditWriter $audit,
-    )
-    {
-    }
+    ) {}
 
     public function grant(User $actor, User $target, PlatformRole $role): PlatformRoleAssignment
     {
@@ -179,7 +177,7 @@ final class PlatformAssignmentService
 
     private function assertCanManageAdmins(User $actor): void
     {
-        if (!$this->authorizer->allows($actor, 'platform.admins.manage')) {
+        if (! $this->authorizer->allows($actor, 'platform.admins.manage')) {
             throw new PlatformAuthorizationException(
                 'Platform administrator management requires platform.admins.manage.',
             );
@@ -201,7 +199,7 @@ final class PlatformAssignmentService
             return;
         }
 
-        if (!$this->authorizer->isPrimaryAdministrator($actor)) {
+        if (! $this->authorizer->isPrimaryAdministrator($actor)) {
             throw new PlatformAuthorizationException(
                 'Only an eligible active Primary Administrator may grant the primary role.',
             );

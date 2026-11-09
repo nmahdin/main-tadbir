@@ -42,7 +42,7 @@ class AuthController extends Controller
     {
         $user = $this->authenticate($request);
 
-        if (!$request->hasSession()) {
+        if (! $request->hasSession()) {
             return response()->json([
                 'message' => 'نشست امن ورود در سرور فعال نیست. تنظیمات session را بررسی کنید.',
                 'code' => 'session_unavailable',
@@ -66,7 +66,7 @@ class AuthController extends Controller
         // AMB-04=A: unknown device + 30 days inactive => step-up
         // (password re-entry) before the session is issued.
         $devices = app(DeviceTrust::class);
-        if ($devices->stepUpRequired($request, $user) && !$request->session()->get('step_up_verified')) {
+        if ($devices->stepUpRequired($request, $user) && ! $request->session()->get('step_up_verified')) {
             $request->session()->put('step_up_user_id', $user->id);
 
             return response()->json([
@@ -108,7 +108,7 @@ class AuthController extends Controller
             'remember' => ['sometimes', 'boolean'],
         ]);
         $user = $challenges->verify($data['login'], BaleAuthChallenge::LOGIN, $data['code'], (string) $request->ip());
-        if (!$request->hasSession()) {
+        if (! $request->hasSession()) {
             return response()->json(['message' => 'نشست امن ورود در سرور فعال نیست.', 'code' => 'session_unavailable'], 503);
         }
         Auth::guard('web')->login($user, $request->boolean('remember'));
@@ -123,7 +123,7 @@ class AuthController extends Controller
         $data = $request->validate([
             'token' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/D'],
         ]);
-        if (!$request->hasSession()) {
+        if (! $request->hasSession()) {
             return response()->json(['message' => 'نشست امن ورود در سرور فعال نیست.', 'code' => 'session_unavailable'], 503);
         }
 
@@ -227,7 +227,7 @@ class AuthController extends Controller
 
         $autoLogin = (bool) config('auth.registration.auto_login', false) && $status === 'active';
         if ($autoLogin) {
-            if (!$request->hasSession()) {
+            if (! $request->hasSession()) {
                 return response()->json([
                     'message' => 'حساب ساخته شد، اما نشست امن ورود در سرور فعال نیست.',
                     'code' => 'session_unavailable',
@@ -293,7 +293,7 @@ class AuthController extends Controller
 
         $user = $this->findByLogin($credentials['login']);
 
-        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             RateLimiter::hit($throttleKey, 60);
 
             throw ValidationException::withMessages([

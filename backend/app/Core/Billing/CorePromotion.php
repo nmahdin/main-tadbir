@@ -100,7 +100,7 @@ class CorePromotion extends Model
 
     public function isValidAt(CarbonInterface $at): bool
     {
-        if (!$this->is_active) {
+        if (! $this->is_active) {
             return false;
         }
         if ($this->starts_at !== null && $at->lt($this->starts_at)) {

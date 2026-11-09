@@ -36,7 +36,7 @@ final class MeetingBrowser
         $body .= '🗓 تاریخ: '.PersianDate::format($p['date'] ?? null)."\n🕒 ساعت: ".MessageText::plain(PersianDate::digits($p['time'] ?? 'نامشخص'), 30);
         $body .= "\n⏱ مدت: ".MessageText::plain(PersianDate::digits($p['duration'] ?? 'نامشخص'), 80)."\n📍 محل: ".MessageText::plain($p['locationDetails'] ?? 'نامشخص', 300);
         $body .= "\n👤 برگزارکننده: ".MessageText::plain($meeting->owner?->name ?? 'نامشخص', 100)."\n🏷 وضعیت: ".$status;
-        if (!empty($p['description'])) {
+        if (! empty($p['description'])) {
             $body .= "\n\n📝 *توضیحات* \n".MessageText::plain($p['description'], 900);
         }
         $items = array_slice((array) ($p['agenda'] ?? []), 0, 8);

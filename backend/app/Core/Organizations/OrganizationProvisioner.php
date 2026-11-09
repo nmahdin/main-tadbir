@@ -31,9 +31,7 @@ final class OrganizationProvisioner
         private readonly OrganizationRoleService $organizationRoles,
         private readonly WorkspaceRoleService $workspaceRoles,
         private readonly FreePlanActivator $freePlans,
-    )
-    {
-    }
+    ) {}
 
     public function create(User $creator, string $name, ?string $slug = null): Organization
     {

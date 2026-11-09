@@ -37,7 +37,7 @@ final class PlanResourceCatalog
 
     public static function assertKnown(string $key): void
     {
-        if (!self::has($key)) {
+        if (! self::has($key)) {
             throw new PlanProvisioningException(
                 'unknown_resource_key',
                 "Resource key [{$key}] is not a known plan resource.",

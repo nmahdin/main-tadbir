@@ -22,9 +22,7 @@ use Illuminate\Support\Facades\DB;
  */
 final class PromotionService
 {
-    public function __construct(private readonly AuditWriter $audit)
-    {
-    }
+    public function __construct(private readonly AuditWriter $audit) {}
 
     /**
      * Create a promotion code. Code is normalized (trim + uppercase).
@@ -123,7 +121,7 @@ final class PromotionService
         if ($promo === null) {
             throw new BillingDomainException('promo_not_found', 'Promotion code is not recognized.');
         }
-        if (!$promo->isValidAt($at)) {
+        if (! $promo->isValidAt($at)) {
             throw new BillingDomainException('promo_inactive', 'Promotion code is not active or has expired.');
         }
         if ($promo->max_redemptions !== null
@@ -144,7 +142,7 @@ final class PromotionService
     {
         return DB::transaction(function () use ($promo, $actor): CorePromotion {
             $locked = CorePromotion::query()->lockForUpdate()->findOrFail($promo->id);
-            if (!$locked->is_active) {
+            if (! $locked->is_active) {
                 return $locked;
             }
             $locked->forceFill([
@@ -185,7 +183,7 @@ final class PromotionService
         if ($code === '' || strlen($code) > 32) {
             throw new BillingDomainException('promo_code_invalid', 'Promotion code must be 1–32 characters.');
         }
-        if (!preg_match('/^[A-Z0-9_\-]+$/', $code)) {
+        if (! preg_match('/^[A-Z0-9_\-]+$/', $code)) {
             throw new BillingDomainException('promo_code_invalid', 'Promotion code may only contain A-Z, 0-9, hyphen and underscore.');
         }
     }

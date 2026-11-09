@@ -48,9 +48,7 @@ final class WorkspaceModuleService
         private readonly ModuleActivationPlanner $planner,
         private readonly ModuleDependencyResolver $resolver,
         private readonly AuditWriter $audit,
-    )
-    {
-    }
+    ) {}
 
     /**
      * Enable the target module and every not-yet-enabled
@@ -69,7 +67,7 @@ final class WorkspaceModuleService
 
             $preview = $this->planner->preview($locked, $moduleKey);
 
-            if (!hash_equals($preview->confirmationToken, $confirmationToken)) {
+            if (! hash_equals($preview->confirmationToken, $confirmationToken)) {
                 throw new ModuleActivationException(
                     'module_activation_preview_stale',
                     'The activation preview is stale; re-preview the module and confirm again.',
@@ -77,7 +75,7 @@ final class WorkspaceModuleService
                 );
             }
 
-            if (!$preview->confirmable()) {
+            if (! $preview->confirmable()) {
                 $first = $preview->blockingReasons[0];
 
                 throw new ModuleActivationException(
@@ -141,7 +139,7 @@ final class WorkspaceModuleService
 
             $row = $this->activationRow($locked, $moduleKey);
 
-            if ($row === null || !$row->isEnabled()) {
+            if ($row === null || ! $row->isEnabled()) {
                 return; // idempotent no-op; nothing was enabled
             }
 
@@ -216,7 +214,7 @@ final class WorkspaceModuleService
             $this->organizationGuard->assertOperationalAccess($locked->organization);
         }
 
-        if (!$this->permissions->userHasWorkspacePermission($actor, $locked, self::PERMISSION)) {
+        if (! $this->permissions->userHasWorkspacePermission($actor, $locked, self::PERMISSION)) {
             throw new AuthorizationDeniedException(
                 AuthorizationDeniedException::PERMISSION_MISSING,
                 'The workspace module management permission is required.',

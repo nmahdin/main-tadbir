@@ -24,9 +24,7 @@ final readonly class PlanVersionSnapshot
         public ?string $publishedAt,
         public array $entitlements,
         public array $limits,
-    )
-    {
-    }
+    ) {}
 
     public function allowsModule(string $moduleKey): bool
     {

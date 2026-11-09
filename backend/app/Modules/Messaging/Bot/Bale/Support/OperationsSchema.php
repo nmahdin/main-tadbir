@@ -13,7 +13,7 @@ final class OperationsSchema
     {
         $missing = [];
         foreach (['bale_reminder_runs', 'dam_data_table_department'] as $table) {
-            if (($only === null || in_array($table, $only, true)) && !Schema::hasTable($table)) {
+            if (($only === null || in_array($table, $only, true)) && ! Schema::hasTable($table)) {
                 $missing[] = $table;
             }
         }
@@ -23,7 +23,7 @@ final class OperationsSchema
             'domain_records.notification_key',
         ] as $qualified) {
             [$table, $column] = explode('.', $qualified, 2);
-            if (($only === null || in_array($qualified, $only, true)) && !Schema::hasColumn($table, $column)) {
+            if (($only === null || in_array($qualified, $only, true)) && ! Schema::hasColumn($table, $column)) {
                 $missing[] = $qualified;
             }
         }

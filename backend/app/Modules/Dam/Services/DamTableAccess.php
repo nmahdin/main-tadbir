@@ -28,13 +28,13 @@ final class DamTableAccess
         if (is_string($grants)) {
             $grants = json_decode($grants, true);
         }
-        if (!is_array($grants)) {
+        if (! is_array($grants)) {
             return [];
         }
 
         $normalized = [];
         foreach ($grants as $grant) {
-            if (!is_array($grant)) {
+            if (! is_array($grant)) {
                 continue;
             }
             if (isset($grant['user_id'])) {
@@ -53,7 +53,7 @@ final class DamTableAccess
 
     private function projectUserIds(int $projectId): array
     {
-        if (!array_key_exists($projectId, $this->projectMembersCache)) {
+        if (! array_key_exists($projectId, $this->projectMembersCache)) {
             $project = Project::query()->with('members:id')->find($projectId);
             $ids = [];
             if ($project) {
@@ -72,7 +72,7 @@ final class DamTableAccess
 
     private function contentUserIds(int $contentId): array
     {
-        if (!array_key_exists($contentId, $this->contentUsersCache)) {
+        if (! array_key_exists($contentId, $this->contentUsersCache)) {
             $content = Content::query()->find($contentId);
             $ids = [];
             if ($content) {
@@ -140,7 +140,7 @@ final class DamTableAccess
 
     public function canView(User $user, DamDataTable $table): bool
     {
-        if (!$this->withinDepartments($user, $table)) {
+        if (! $this->withinDepartments($user, $table)) {
             return false;
         }
         if ($user->hasAnyPermission(['assets.manage_access'])) {
@@ -159,7 +159,7 @@ final class DamTableAccess
 
     public function canEdit(User $user, DamDataTable $table): bool
     {
-        if (!$this->withinDepartments($user, $table)) {
+        if (! $this->withinDepartments($user, $table)) {
             return false;
         }
         if ($user->hasAnyPermission(['assets.manage_access'])) {
@@ -179,10 +179,10 @@ final class DamTableAccess
     private function withinDepartments(User $user, DamDataTable $table): bool
     {
         app(OperationsSchema::class)->require('assets');
-        if (!$user->isActive()) {
+        if (! $user->isActive()) {
             return false;
         }
-        if (!$table->departments()->exists()) {
+        if (! $table->departments()->exists()) {
             return true;
         } // Legacy unassigned tables remain panel-only.
 

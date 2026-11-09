@@ -49,9 +49,7 @@ final readonly class PlanChangePreview
         public array $warnings,
         public array $blockingReasons,
         public string $confirmationToken,
-    )
-    {
-    }
+    ) {}
 
     public function confirmable(): bool
     {

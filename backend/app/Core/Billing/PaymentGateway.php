@@ -39,7 +39,7 @@ interface PaymentGateway
      *
      * Returns false if the callback is forged or cannot be authenticated.
      *
-     * @param  array<string, mixed>  $query    the URL query parameters from the provider return
+     * @param  array<string, mixed>  $query  the URL query parameters from the provider return
      * @param  array<string, mixed>  $headers  request headers from the provider callback
      */
     public function verifyCallbackSignature(array $query, array $headers = []): bool;

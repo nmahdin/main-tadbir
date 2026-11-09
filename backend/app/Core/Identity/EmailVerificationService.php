@@ -61,9 +61,7 @@ final class EmailVerificationService
     public function __construct(
         private readonly EmailVerificationDelivery $delivery,
         private readonly AuditWriter $audit,
-    )
-    {
-    }
+    ) {}
 
     /**
      * Claim an address and issue a verification challenge.
@@ -141,7 +139,7 @@ final class EmailVerificationService
 
             $now = CarbonImmutable::now('UTC');
 
-            if (!CarbonImmutable::instance($challenge->expires_at)->gt($now)) {
+            if (! CarbonImmutable::instance($challenge->expires_at)->gt($now)) {
                 throw new EmailVerificationException('email_verification_expired', 'The verification code has expired; request a new one.');
             }
 

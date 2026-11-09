@@ -40,7 +40,7 @@ final class ContentPublication
     /** Create the single publication task only after the entire content flow is complete. */
     public function ensureAutomaticTask(Content $content): ?Task
     {
-        if (!self::workflowReady($content)) {
+        if (! self::workflowReady($content)) {
             Task::where('content_id', $content->id)->where('kind', self::KIND)
                 ->whereNotIn('status', ['completed', 'archived'])->update(['status' => 'archived']);
 
@@ -54,7 +54,7 @@ final class ContentPublication
             ->first(fn (User $user) => $user->hasPermission('content.publish'));
         $task = Task::where('content_id', $content->id)->where('kind', self::KIND)->where('status', '!=', 'archived')->latest('id')->first();
         if ($task) {
-            if ($assignee && !in_array($task->status, ['completed', 'archived'], true) && (int) $task->assignee_id !== (int) $assignee->id) {
+            if ($assignee && ! in_array($task->status, ['completed', 'archived'], true) && (int) $task->assignee_id !== (int) $assignee->id) {
                 $task->update(['assignee_id' => $assignee->id]);
             }
 
@@ -154,7 +154,7 @@ final class ContentPublication
         return DB::transaction(function () use ($actor, $content, $expected): Content {
             $content = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
             abort_unless(app(ContentAccess::class)->canView($actor, $content), 403);
-            if (!self::published($content)) {
+            if (! self::published($content)) {
                 return $content;
             }
             $this->checkVersion($content, $expected);
@@ -200,7 +200,7 @@ final class ContentPublication
             $payload['status'] = $nextStatus;
             $content->update(['status' => $nextStatus, 'payload' => $payload]);
             $task = $this->ensureAutomaticTask($content->refresh());
-            if ($task && !in_array($task->status, ['completed', 'archived'], true)) {
+            if ($task && ! in_array($task->status, ['completed', 'archived'], true)) {
                 $task->update(['deadline' => $payload['publishInfo']['date'] ?? $content->deadline?->toDateString()]);
             }
             $afterPublication = ['publication_date' => $payload['publishInfo']['date'] ?? null,

@@ -28,9 +28,7 @@ final class OtpChallengeService
 
     public const MAX_PER_IP_PER_DAY = 20;
 
-    public function __construct(private readonly SmsOtpDelivery $delivery)
-    {
-    }
+    public function __construct(private readonly SmsOtpDelivery $delivery) {}
 
     /**
      * @return array{sent: bool, reason: string|null}
@@ -60,7 +58,7 @@ final class OtpChallengeService
         }
 
         $code = (string) random_int(100000, 999999);
-        if (!$this->delivery->sendOtp($phone, $code, $purpose)) {
+        if (! $this->delivery->sendOtp($phone, $code, $purpose)) {
             return ['sent' => false, 'reason' => 'delivery_unavailable'];
         }
 
@@ -96,13 +94,13 @@ final class OtpChallengeService
             ->where('phone', $phone)->where('purpose', $purpose)
             ->whereNull('consumed_at')
             ->orderByDesc('id')->first();
-        if (!$row || $row->expires_at <= now()) {
+        if (! $row || $row->expires_at <= now()) {
             return ['ok' => false, 'reason' => 'expired'];
         }
         if ((int) $row->attempts >= self::MAX_ATTEMPTS) {
             return ['ok' => false, 'reason' => 'attempts_exhausted'];
         }
-        if (!Hash::check($code, $row->code_hash)) {
+        if (! Hash::check($code, $row->code_hash)) {
             DB::table('auth_otp_challenges')->where('id', $row->id)->increment('attempts');
 
             return ['ok' => false, 'reason' => 'invalid_code'];

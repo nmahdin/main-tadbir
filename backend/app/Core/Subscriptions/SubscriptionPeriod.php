@@ -2,6 +2,7 @@
 
 namespace App\Core\Subscriptions;
 
+use App\Core\Billing\CoreBillingPayment;
 use App\Core\Plans\CorePlanVersion;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -78,6 +79,6 @@ class SubscriptionPeriod extends Model
 
     public function paidByPayment(): BelongsTo
     {
-        return $this->belongsTo(\App\Core\Billing\CoreBillingPayment::class, 'paid_by_payment_id');
+        return $this->belongsTo(CoreBillingPayment::class, 'paid_by_payment_id');
     }
 }

@@ -28,8 +28,8 @@ class ActivityLogController extends Controller
             throw ValidationException::withMessages(['to' => 'تاریخ پایان باید برابر یا بعد از تاریخ شروع باشد.']);
         }
         $logs = ActivityLog::query()
-            ->when(!$request->user()->hasPermission('tasks.view'), fn ($q) => $q->whereNull('task_id'))
-            ->when(!$request->user()->hasPermission('projects.view'), fn ($q) => $q->whereNull('project_id'))
+            ->when(! $request->user()->hasPermission('tasks.view'), fn ($q) => $q->whereNull('task_id'))
+            ->when(! $request->user()->hasPermission('projects.view'), fn ($q) => $q->whereNull('project_id'))
             ->with(['user', 'task', 'project'])
             ->when($request->integer('user_id'), fn ($query, int $id) => $query->where('user_id', $id))
             ->when($request->string('type')->toString(), fn ($query, string $type) => $query->where('type', $type))
@@ -51,8 +51,8 @@ class ActivityLogController extends Controller
             'projectId' => ['sometimes', 'nullable', 'integer', 'exists:projects,id'],
         ])->validate();
 
-        abort_if(isset($data['taskId']) && !$request->user()->hasPermission('tasks.view'), 403);
-        abort_if(isset($data['projectId']) && !$request->user()->hasPermission('projects.view'), 403);
+        abort_if(isset($data['taskId']) && ! $request->user()->hasPermission('tasks.view'), 403);
+        abort_if(isset($data['projectId']) && ! $request->user()->hasPermission('projects.view'), 403);
         $log = ActivityLog::create([
             'user_id' => $request->user()?->id,
             'action' => $data['action'],

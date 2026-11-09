@@ -32,7 +32,7 @@ class ApprovalController extends Controller
         $query->with('content')->chunkById(200, function ($tasks) use ($review, $request, $offset, $size, &$total, &$rows) {
             foreach ($tasks as $task) {
                 $stage = collect($task->content->payload['stages'] ?? [])->firstWhere('id', $task->content_stage_id);
-                if (!is_array($stage) || !$review->canReview($request->user(), $task->content, $stage)) {
+                if (! is_array($stage) || ! $review->canReview($request->user(), $task->content, $stage)) {
                     continue;
                 }
                 $position = $total++;

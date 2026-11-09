@@ -120,7 +120,7 @@ class ScopedRole extends Model
             default => false,
         };
 
-        if (!$valid) {
+        if (! $valid) {
             throw new DomainException(
                 "Role scope [{$this->scope}] does not match its scope container (organization_id/workspace_id)."
             );

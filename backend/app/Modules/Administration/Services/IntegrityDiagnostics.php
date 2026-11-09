@@ -27,10 +27,10 @@ final class IntegrityDiagnostics
 
         Content::orderBy('id')->chunkById(200, function ($contents) use ($add): void {
             foreach ($contents as $content) {
-                if (!$content->owner_id) {
+                if (! $content->owner_id) {
                     $add('critical', 'content_owner_missing', 'محتوا مسئول اصلی ندارد.', 'content', (string) $content->id, '/contents/'.$content->id);
                 }
-                if (!$content->code) {
+                if (! $content->code) {
                     $add('warning', 'content_code_missing', 'کد پایدار محتوا تخصیص نیافته است.', 'content', (string) $content->id, '/contents/'.$content->id);
                 }
                 foreach (collect($content->payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage)) as $stage) {
@@ -52,8 +52,8 @@ final class IntegrityDiagnostics
                     $add('warning', 'publisher_missing', 'محتوای آماده انتشار، ناشر تعیین‌شده ندارد.', 'content', (string) $content->id, '/contents/'.$content->id);
                 }
                 foreach (collect($content->payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage)) as $stage) {
-                    foreach (collect($stage['outputs'] ?? [])->filter(fn ($output) => is_array($output) && !empty($output['assetId'])) as $output) {
-                        if (!DamAsset::whereKey($output['assetId'])->exists()) {
+                    foreach (collect($stage['outputs'] ?? [])->filter(fn ($output) => is_array($output) && ! empty($output['assetId'])) as $output) {
+                        if (! DamAsset::whereKey($output['assetId'])->exists()) {
                             $add('critical', 'stage_output_asset_missing', 'خروجی مرحله به دارایی DAM ناموجود اشاره می‌کند.', 'content', (string) $content->id, '/contents/'.$content->id);
                         }
                     }
@@ -63,7 +63,7 @@ final class IntegrityDiagnostics
 
         Content::whereNotNull('series_id')->with('series:id,project_id')->orderBy('id')->chunkById(200, function ($contents) use ($add): void {
             foreach ($contents as $content) {
-                if (!$content->series) {
+                if (! $content->series) {
                     $add('critical', 'series_parent_missing', 'پروندهٔ محتوا به مجموعه ناموجود اشاره می‌کند.', 'content', (string) $content->id, '/contents/'.$content->id);
 
                     continue;
@@ -71,7 +71,7 @@ final class IntegrityDiagnostics
                 if ((string) ($content->project_id ?? '') !== (string) ($content->series->project_id ?? '')) {
                     $add('warning', 'series_project_mismatch', 'پروژه پروندهٔ محتوا با پروژه مجموعه همسان نیست.', 'content', (string) $content->id, '/contents/'.$content->id);
                 }
-                if (!$content->period_key || !$content->series_sequence) {
+                if (! $content->period_key || ! $content->series_sequence) {
                     $add('warning', 'series_period_incomplete', 'کلید دوره یا شماره توالی پروندهٔ محتوا کامل نیست.', 'content', (string) $content->id, '/contents/'.$content->id);
                 }
             }
@@ -84,12 +84,12 @@ final class IntegrityDiagnostics
 
         Content::whereNotIn('status', ['archived', 'cancelled'])->orderBy('id')->chunkById(100, function ($contents) use ($add): void {
             foreach ($contents as $content) {
-                if (!empty($content->payload['_seriesPlanning']['activateAt']) && empty($content->payload['_seriesPlanning']['activatedAt'])) {
+                if (! empty($content->payload['_seriesPlanning']['activateAt']) && empty($content->payload['_seriesPlanning']['activatedAt'])) {
                     continue;
                 }
                 foreach (collect($content->payload['stages'] ?? [])->filter(fn ($stage) => is_array($stage)) as $stage) {
                     $stageId = (string) ($stage['id'] ?? '');
-                    if ($stageId !== '' && !Task::where('content_id', $content->id)->where('content_stage_id', $stageId)->where('kind', 'content_work')->exists()) {
+                    if ($stageId !== '' && ! Task::where('content_id', $content->id)->where('content_stage_id', $stageId)->where('kind', 'content_work')->exists()) {
                         $add('warning', 'stage_task_missing', 'برای یک مرحله فعال، تسک اجرای snapshot یافت نشد.', 'content', (string) $content->id, '/contents/'.$content->id);
 
                         break;
@@ -101,10 +101,10 @@ final class IntegrityDiagnostics
         $configuredTypes = collect(SystemSetting::where('key', 'content_types')->first()?->value ?? [])
             ->filter(fn ($row) => is_array($row))->pluck('id')->filter()->map(fn ($id) => (string) $id);
         ProjectContentPlan::with(['project:id', 'defaultSeries:id,project_id'])->each(function ($plan) use ($add, $configuredTypes): void {
-            if ($plan->default_series_id && (!$plan->project || !$plan->defaultSeries || (int) $plan->project_id !== (int) $plan->defaultSeries->project_id)) {
+            if ($plan->default_series_id && (! $plan->project || ! $plan->defaultSeries || (int) $plan->project_id !== (int) $plan->defaultSeries->project_id)) {
                 $add('warning', 'plan_series_scope_mismatch', 'مجموعه پیش‌فرض ردیف برنامه متعلق به همین پروژه نیست.', 'project', (string) $plan->project_id, '/projects/'.$plan->project_id);
             }
-            if (!$plan->content_type || ($configuredTypes->isNotEmpty() && !$configuredTypes->contains((string) $plan->content_type))) {
+            if (! $plan->content_type || ($configuredTypes->isNotEmpty() && ! $configuredTypes->contains((string) $plan->content_type))) {
                 $add('warning', 'plan_content_type_invalid', 'نوع محتوای ردیف برنامه در تنظیمات فعلی معتبر نیست.', 'project', (string) $plan->project_id, '/projects/'.$plan->project_id.'?tab=plan');
             }
         });
@@ -113,7 +113,7 @@ final class IntegrityDiagnostics
             $models = ['project' => Project::class, 'content' => Content::class, 'task' => Task::class];
             foreach ($relations as $relation) {
                 $class = $models[$relation->related_type];
-                if (!$class::whereKey($relation->related_id)->exists()) {
+                if (! $class::whereKey($relation->related_id)->exists()) {
                     $add('warning', 'dam_relation_orphan', 'یک رابطه DAM به رکورد ناموجود اشاره می‌کند.', 'asset', (string) $relation->asset_id, '/dam?asset='.$relation->asset_id);
                 }
             }

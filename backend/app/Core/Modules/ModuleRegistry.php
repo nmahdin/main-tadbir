@@ -47,7 +47,7 @@ final class ModuleRegistry
 
     public function get(string $id): ModuleManifest
     {
-        if (!isset($this->modules[$id])) {
+        if (! isset($this->modules[$id])) {
             throw new InvalidArgumentException("Module [{$id}] is not registered.");
         }
 

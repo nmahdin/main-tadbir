@@ -32,9 +32,7 @@ final class QuoteService
         private readonly TaxRuleService $tax,
         private readonly PromotionService $promos,
         private readonly AuditWriter $audit,
-    )
-    {
-    }
+    ) {}
 
     /**
      * Create (or idempotently replay) a quote.
@@ -455,7 +453,7 @@ final class QuoteService
                 'The requested plan and billing period is not currently available for purchase.',
             );
         }
-        if (!$price->is_published) {
+        if (! $price->is_published) {
             // Defensive: pointer should only point at published rows.
             throw new BillingDomainException('price_unavailable', 'The requested price is not published.');
         }
@@ -465,7 +463,7 @@ final class QuoteService
 
     private function assertValidPeriod(string $period): void
     {
-        if (!in_array($period, CorePlanPrice::PERIODS, true)) {
+        if (! in_array($period, CorePlanPrice::PERIODS, true)) {
             throw new BillingDomainException('period_invalid', 'Billing period must be monthly, quarterly or annual.');
         }
     }
@@ -475,7 +473,7 @@ final class QuoteService
         if ($key === '' || strlen($key) > 80) {
             throw new BillingDomainException('quote_idempotency_key_invalid', 'Idempotency key must be 1–80 characters.');
         }
-        if (!preg_match('/^[A-Za-z0-9._:\-]+$/', $key)) {
+        if (! preg_match('/^[A-Za-z0-9._:\-]+$/', $key)) {
             throw new BillingDomainException('quote_idempotency_key_invalid', 'Idempotency key contains invalid characters.');
         }
     }
@@ -507,7 +505,7 @@ final class QuoteService
         if ($existing->payload_hash === null) {
             return;
         }
-        if (!hash_equals((string) $existing->payload_hash, $payloadHash)) {
+        if (! hash_equals((string) $existing->payload_hash, $payloadHash)) {
             throw new BillingDomainException(
                 'quote_idempotency_payload_mismatch',
                 'The idempotency key was already used with a different request payload.',

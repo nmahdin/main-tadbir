@@ -77,7 +77,7 @@ final class ContentReview
         return ($stage['reviewRequired'] ?? true) !== false
             && $this->assignedReviewer($actor, $content, $stage)
             && in_array($stage['status'] ?? '', self::WAITING, true)
-            && !in_array($content->status, ['published', 'archived', 'completed', 'cancelled', 'suspended'], true);
+            && ! in_array($content->status, ['published', 'archived', 'completed', 'cancelled', 'suspended'], true);
     }
 
     /**
@@ -102,28 +102,28 @@ final class ContentReview
                 ->contains(fn ($stage) => is_array($stage) && in_array($stage['status'] ?? '', self::WAITING, true));
             foreach (['approverId' => $content->payload['approverId'] ?? null, 'ownerId' => $content->owner_id] as $field => $oldValue) {
                 if (array_key_exists($field, $input) && (string) ($input[$field] ?? '') !== (string) ($oldValue ?? '')
-                    && ($hasOpenReview || (!$canConfigure && $field === 'approverId'))) {
+                    && ($hasOpenReview || (! $canConfigure && $field === 'approverId'))) {
                     abort(403, 'مسئولان محتوای در حال بررسی با ویرایش عمومی تغییر نمی‌کنند.');
                 }
             }
         }
-        if (!isset($input['stages'])) {
+        if (! isset($input['stages'])) {
             return;
         }
         $old = collect($content?->payload['stages'] ?? [])->keyBy('id');
         $incoming = collect($input['stages'])->keyBy('id');
         foreach ($old as $id => $stage) {
-            abort_if(!$canConfigure && !$incoming->has($id), 403, 'حذف مرحله نیازمند مجوز مدیریت گردش کار است.');
-            if (in_array($stage['status'] ?? '', [...self::WAITING, 'approved', 'revisions_needed', 'needs_revision'], true) && !$incoming->has($id)) {
+            abort_if(! $canConfigure && ! $incoming->has($id), 403, 'حذف مرحله نیازمند مجوز مدیریت گردش کار است.');
+            if (in_array($stage['status'] ?? '', [...self::WAITING, 'approved', 'revisions_needed', 'needs_revision'], true) && ! $incoming->has($id)) {
                 throw ValidationException::withMessages(['stages' => 'مرحلهٔ دارای تصمیم یا بررسی باز را نمی‌توان حذف کرد.']);
             }
             $hasForwardedOutput = collect($stage['outputs'] ?? [])->contains(
-                fn ($output) => is_array($output) && !empty($output['forwardedToStageId']),
+                fn ($output) => is_array($output) && ! empty($output['forwardedToStageId']),
             );
             $hasForwardedInput = collect($stage['inputs'] ?? [])->contains(
-                fn ($input) => is_array($input) && !empty($input['sourceOutputId']),
+                fn ($input) => is_array($input) && ! empty($input['sourceOutputId']),
             );
-            if (!$incoming->has($id) && ($hasForwardedOutput || $hasForwardedInput)) {
+            if (! $incoming->has($id) && ($hasForwardedOutput || $hasForwardedInput)) {
                 throw ValidationException::withMessages(['stages' => 'مرحله‌ای که خروجی ارجاع‌شده دارد قابل حذف نیست.']);
             }
         }
@@ -135,7 +135,7 @@ final class ContentReview
                     abort_if((string) ($stage[$field] ?? '') !== (string) ($before[$field] ?? ''), 403, 'ارزیاب چرخهٔ بررسی باز با ویرایش عمومی تغییر نمی‌کند.');
                 }
             }
-            if ($content && !$canConfigure) {
+            if ($content && ! $canConfigure) {
                 abort_unless($old->has($id), 403, 'افزودن مرحله نیازمند مجوز مدیریت گردش کار است.');
                 foreach (self::STRUCTURAL_FIELDS as $field) {
                     abort_if((string) ($stage[$field] ?? '') !== (string) ($before[$field] ?? ''), 403, 'تغییر ساختار یا مسئول مرحله نیازمند مجوز مدیریت گردش کار است.');
@@ -151,7 +151,7 @@ final class ContentReview
                 && ($before['reviewRequired'] ?? true) !== false
                 && in_array($before['status'] ?? '', $reviewOnlyStatuses, true)
                 && in_array($stage['status'] ?? '', ['in_progress', 'completed'], true);
-            if ($changed && !$normalizingDisabledReview && (in_array($before['status'] ?? '', [...self::WAITING, 'approved'], true) || in_array($stage['status'] ?? '', ['approved', 'revisions_needed', 'needs_revision'], true))) {
+            if ($changed && ! $normalizingDisabledReview && (in_array($before['status'] ?? '', [...self::WAITING, 'approved'], true) || in_array($stage['status'] ?? '', ['approved', 'revisions_needed', 'needs_revision'], true))) {
                 throw ValidationException::withMessages(['stages' => 'تأیید یا رد را از فرمان بررسی مرحله انجام دهید.']);
             }
             foreach (['approvedBy', 'approvedAt', 'approvalNotes', 'rejectionReason', '_reviewDecision'] as $field) {
@@ -168,14 +168,14 @@ final class ContentReview
         $beforeOutputs = collect($before['outputs'] ?? [])->filter(fn ($output) => is_array($output))->keyBy('id');
         $incomingOutputs = collect($incoming['outputs'] ?? [])->filter(fn ($output) => is_array($output))->keyBy('id');
         foreach ($beforeOutputs as $id => $output) {
-            if (!empty($output['forwardedToStageId']) && !$incomingOutputs->has($id)) {
+            if (! empty($output['forwardedToStageId']) && ! $incomingOutputs->has($id)) {
                 throw ValidationException::withMessages(['stages' => 'خروجی ارجاع‌شده را نمی‌توان با ویرایش عمومی حذف کرد.']);
             }
         }
         foreach ($incomingOutputs as $id => $output) {
             $oldOutput = $beforeOutputs->get($id, []);
             $fields = $protectedOutputFields;
-            if (!empty($oldOutput['forwardedToStageId']) || !empty($output['forwardedToStageId'])) {
+            if (! empty($oldOutput['forwardedToStageId']) || ! empty($output['forwardedToStageId'])) {
                 $fields = [...$fields, 'name', 'type', 'fileType', 'isRequired', 'value', 'url', 'assetId', 'assetVersionId', 'assetVersionNumber', 'fileName', 'fileSize', 'isDelivered', 'uploadedAt', 'uploadedBy', 'deliveredAt', 'deliveredBy'];
             }
             foreach ($fields as $field) {
@@ -189,14 +189,14 @@ final class ContentReview
         $beforeInputs = collect($before['inputs'] ?? [])->filter(fn ($input) => is_array($input))->keyBy('id');
         $incomingInputs = collect($incoming['inputs'] ?? [])->filter(fn ($input) => is_array($input))->keyBy('id');
         foreach ($beforeInputs as $id => $input) {
-            if (!empty($input['sourceOutputId']) && !$incomingInputs->has($id)) {
+            if (! empty($input['sourceOutputId']) && ! $incomingInputs->has($id)) {
                 throw ValidationException::withMessages(['stages' => 'ورودی ارجاع‌شده را نمی‌توان با ویرایش عمومی حذف کرد.']);
             }
         }
         foreach ($incomingInputs as $id => $input) {
             $oldInput = $beforeInputs->get($id, []);
             $fields = $protectedInputFields;
-            if (!empty($oldInput['sourceOutputId']) || !empty($input['sourceOutputId'])) {
+            if (! empty($oldInput['sourceOutputId']) || ! empty($input['sourceOutputId'])) {
                 $fields = [...$fields, 'title', 'type', 'description', 'isReady', 'contentRef'];
             }
             foreach ($fields as $field) {
@@ -224,7 +224,7 @@ final class ContentReview
             )->values();
             $stagePosition = $orderedIndexes->search($stageIndex, true);
             $nextStageIndex = $stagePosition === false ? null : $orderedIndexes->get($stagePosition + 1);
-            abort_if($nextStageIndex === null || !isset($stages[$nextStageIndex]) || !is_array($stages[$nextStageIndex]), 422, 'برای آخرین مرحله، مرحلهٔ بعدی وجود ندارد.');
+            abort_if($nextStageIndex === null || ! isset($stages[$nextStageIndex]) || ! is_array($stages[$nextStageIndex]), 422, 'برای آخرین مرحله، مرحلهٔ بعدی وجود ندارد.');
 
             $stage = $stages[$stageIndex];
             $nextStage = $stages[$nextStageIndex];
@@ -234,7 +234,7 @@ final class ContentReview
             abort_if($outputIndex === false, 404, 'خروجی مرحله پیدا نشد.');
             $output = $stage['outputs'][$outputIndex];
             $delivered = ($output['isDelivered'] ?? false) === true
-                || collect(['value', 'url', 'assetId', 'fileName'])->contains(fn ($field) => !empty($output[$field]));
+                || collect(['value', 'url', 'assetId', 'fileName'])->contains(fn ($field) => ! empty($output[$field]));
             abort_unless($delivered, 422, 'فقط خروجی تحویل‌شده قابل ارجاع است.');
 
             $reviewer = $this->reviewerId($fresh, $stage);
@@ -252,7 +252,7 @@ final class ContentReview
                 return $fresh;
             }
             abort_unless(hash_equals(self::version($fresh), $expectedVersion), 409, 'اطلاعات خروجی تغییر کرده است؛ محتوا را دوباره باز کنید.');
-            abort_if(!empty($output['forwardedToStageId']), 409, 'این خروجی قبلاً به یک مرحله ارجاع شده است.');
+            abort_if(! empty($output['forwardedToStageId']), 409, 'این خروجی قبلاً به یک مرحله ارجاع شده است.');
 
             $time = now()->toIso8601String();
             $event = [
@@ -369,9 +369,9 @@ final class ContentReview
                 $payload['status'] = $status;
             }
             $fresh->update(['payload' => $payload, 'status' => $status]);
-            if (!$approved) {
+            if (! $approved) {
                 $correctionAssignee = null;
-                if (!empty($data['correctionAssigneeId'])) {
+                if (! empty($data['correctionAssigneeId'])) {
                     $correctionAssignee = User::whereKey((int) $data['correctionAssigneeId'])->where('status', 'active')->first();
                     abort_unless($correctionAssignee && $this->validCorrectionAssignee($correctionAssignee, $fresh), 422,
                         'مسئول اصلاح باید کاربر فعال و عضو دامنه همین محتوا یا پروژه باشد.');
@@ -389,14 +389,14 @@ final class ContentReview
 
     private function validCorrectionAssignee(User $assignee, Content $content): bool
     {
-        if (!$assignee->isActive() || !app(ContentAccess::class)->canView($assignee, $content)) {
+        if (! $assignee->isActive() || ! app(ContentAccess::class)->canView($assignee, $content)) {
             return false;
         }
-        if (!$content->project_id) {
+        if (! $content->project_id) {
             return true;
         }
         $project = Project::find($content->project_id);
-        if (!$project) {
+        if (! $project) {
             return false;
         }
 

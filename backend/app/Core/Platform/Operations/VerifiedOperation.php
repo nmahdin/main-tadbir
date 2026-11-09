@@ -26,9 +26,7 @@ final readonly class VerifiedOperation
         public array $evidenceReferences,
         public ?string $verificationMethod,
         public ?string $verificationReference,
-    )
-    {
-    }
+    ) {}
 
     public function isBootstrap(): bool
     {

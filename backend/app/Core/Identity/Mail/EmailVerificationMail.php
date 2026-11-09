@@ -20,9 +20,7 @@ final class EmailVerificationMail extends Mailable
         public readonly string $verificationUrl,
         public readonly int $expiresInMinutes,
         public readonly ?string $recipientName = null,
-    )
-    {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {

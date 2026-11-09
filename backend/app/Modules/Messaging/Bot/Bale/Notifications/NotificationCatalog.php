@@ -63,16 +63,16 @@ final class NotificationCatalog
         if (array_key_exists($explicit, self::CATEGORIES)) {
             return $explicit;
         }
-        if (!empty($payload['linkTaskId'])) {
+        if (! empty($payload['linkTaskId'])) {
             return 'tasks';
         }
-        if (!empty($payload['linkContentId'])) {
+        if (! empty($payload['linkContentId'])) {
             return 'content';
         }
-        if (!empty($payload['linkMeetingId']) || !empty($payload['linkIdeaId'])) {
+        if (! empty($payload['linkMeetingId']) || ! empty($payload['linkIdeaId'])) {
             return 'meetings';
         }
-        if (!empty($payload['linkLetterId']) || !empty($payload['linkResolutionId'])) {
+        if (! empty($payload['linkLetterId']) || ! empty($payload['linkResolutionId'])) {
             return 'secretariat';
         }
         if (in_array((string) ($payload['type'] ?? ''), ['comment', 'mention', 'reply'], true)) {
@@ -86,7 +86,7 @@ final class NotificationCatalog
     public function enabledFor(BaleUserLink $link): array
     {
         $preferences = $link->notification_preferences;
-        if (!is_array($preferences) || !isset($preferences['enabled_categories']) || !is_array($preferences['enabled_categories'])) {
+        if (! is_array($preferences) || ! isset($preferences['enabled_categories']) || ! is_array($preferences['enabled_categories'])) {
             return $this->all();
         }
 

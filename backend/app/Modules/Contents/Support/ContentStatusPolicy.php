@@ -29,11 +29,11 @@ final class ContentStatusPolicy
      */
     public static function guardTransition(?string $current, mixed $incoming): void
     {
-        if (!is_string($incoming) || $incoming === '') {
+        if (! is_string($incoming) || $incoming === '') {
             return;
         }
         $same = $current !== null && $incoming === $current;
-        if ($same || !self::isDerived($incoming)) {
+        if ($same || ! self::isDerived($incoming)) {
             return;
         }
 

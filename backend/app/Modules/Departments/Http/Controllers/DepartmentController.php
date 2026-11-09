@@ -119,7 +119,7 @@ class DepartmentController extends Controller
                     }
                     $seen[] = $parent;
                     $node = Department::whereKey($parent)->lockForUpdate()->first();
-                    if (!$node) {
+                    if (! $node) {
                         throw ValidationException::withMessages(['parentId' => 'دپارتمان والد حذف شده است؛ فهرست را تازه کنید.']);
                     }
                     $parent = (int) $node->parent_id;

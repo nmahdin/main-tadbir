@@ -27,7 +27,7 @@ final class ContentCodePolicy
     /** Normalize a requested code; returns null when the shape is not acceptable. */
     public static function normalize(mixed $value): ?string
     {
-        if (!is_string($value)) {
+        if (! is_string($value)) {
             return null;
         }
         // Internal whitespace is a typing artefact, not a different code.
@@ -159,7 +159,7 @@ final class ContentCodePolicy
         $rows = Content::query()->whereNotNull('code')->where('code', 'like', $like)
             ->pluck('code');
         foreach ($rows as $code) {
-            if (!is_string($code)) {
+            if (! is_string($code)) {
                 continue;
             }
             $suffix = substr($code, strlen($prefix));

@@ -53,7 +53,7 @@ final class ContentCodeAllocator
             if (mb_strlen($candidate) > ContentCodePolicy::MAX_LENGTH) {
                 $candidate = mb_substr($candidate, 0, ContentCodePolicy::MAX_LENGTH);
             }
-            if (!Content::query()->where('code', $candidate)->exists()) {
+            if (! Content::query()->where('code', $candidate)->exists()) {
                 return $candidate;
             }
         }
@@ -70,7 +70,7 @@ final class ContentCodeAllocator
     public function resolve(Content $content, mixed $requested, array $payload = []): string
     {
         $normalized = ContentCodePolicy::normalize($requested);
-        if ($normalized !== null && !Content::query()->where('code', $normalized)->whereKeyNot($content->id)->exists()) {
+        if ($normalized !== null && ! Content::query()->where('code', $normalized)->whereKeyNot($content->id)->exists()) {
             return $normalized;
         }
 
@@ -97,7 +97,7 @@ final class ContentCodeAllocator
 
                 return $code;
             } catch (QueryException $exception) {
-                if (!$this->isUniqueViolation($exception)) {
+                if (! $this->isUniqueViolation($exception)) {
                     throw $exception;
                 }
                 // The requested code is taken; fall back to the series sequence.
@@ -127,7 +127,7 @@ final class ContentCodeAllocator
                 DB::transaction(function () use ($id, &$done): void {
                     /** @var Content $content */
                     $content = Content::whereKey($id)->lockForUpdate()->first();
-                    if (!$content || $content->code !== null && $content->code !== '') {
+                    if (! $content || $content->code !== null && $content->code !== '') {
                         return;
                     }
                     $content->update(['code' => $this->allocateGeneral()]);

@@ -29,7 +29,7 @@ final class PlanProvisioner
             throw new PlanProvisioningException('plan_key_invalid', "Plan key [{$key}] must be a stable lower-case identifier.");
         }
 
-        if (!in_array($audience, CorePlan::AUDIENCES, true)) {
+        if (! in_array($audience, CorePlan::AUDIENCES, true)) {
             throw new PlanProvisioningException('plan_audience_invalid', "Plan audience [{$audience}] is not supported.");
         }
 
@@ -64,7 +64,7 @@ final class PlanProvisioner
             default => [],
         };
 
-        if (!in_array($status, $allowed, true)) {
+        if (! in_array($status, $allowed, true)) {
             throw new PlanProvisioningException('plan_status_invalid', "Plan [{$key}] cannot move from [{$plan->status}] to [{$status}].");
         }
 

@@ -78,12 +78,12 @@ final class GoogleWorkspaceClient
         $raw = $path !== '' && is_readable($path)
             ? file_get_contents($path)
             : (config('google_workspace.credentials_json') ?: config('google_calendar.credentials_json'));
-        if (!is_string($raw) || trim($raw) === '') {
+        if (! is_string($raw) || trim($raw) === '') {
             return null;
         }
 
         $decoded = json_decode($raw, true);
-        if (!is_array($decoded)) {
+        if (! is_array($decoded)) {
             $base64 = base64_decode($raw, true);
             $decoded = is_string($base64) ? json_decode($base64, true) : null;
         }
@@ -116,7 +116,7 @@ final class GoogleWorkspaceClient
 
         $unsigned = $this->base64Url(json_encode(['alg' => 'RS256', 'typ' => 'JWT'], JSON_THROW_ON_ERROR))
             .'.'.$this->base64Url(json_encode($claims, JSON_THROW_ON_ERROR));
-        if (!openssl_sign($unsigned, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
+        if (! openssl_sign($unsigned, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
             throw ValidationException::withMessages(['googleWorkspace' => 'امضای اعتبارنامه Google Workspace ناموفق بود.']);
         }
 

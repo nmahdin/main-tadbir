@@ -18,7 +18,5 @@ final readonly class IssuedEmailChallenge
         public string $normalizedEmail,
         public string $rawToken,
         public CarbonImmutable $expiresAt,
-    )
-    {
-    }
+    ) {}
 }

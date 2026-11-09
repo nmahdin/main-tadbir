@@ -16,7 +16,7 @@ final class MeetingNotifications
         $p = $meeting->payload ?? [];
         $ids = array_unique([$meeting->owner_id, ...($p['attendeeIds'] ?? [])]);
         foreach (User::whereIn('id', $ids)->get() as $user) {
-            if (!app(NotificationAccess::class)->meetingMember($user, $meeting)) {
+            if (! app(NotificationAccess::class)->meetingMember($user, $meeting)) {
                 continue;
             }
             $title = 'جلسه جدید';

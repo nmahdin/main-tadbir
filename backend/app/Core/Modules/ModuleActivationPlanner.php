@@ -21,9 +21,7 @@ final class ModuleActivationPlanner
     public function __construct(
         private readonly ModuleDependencyResolver $resolver,
         private readonly ModuleEntitlementGate $entitlements,
-    )
-    {
-    }
+    ) {}
 
     /**
      * @throws ModuleActivationException when the target is unknown
@@ -62,7 +60,7 @@ final class ModuleActivationPlanner
             $toEnable[] = $key;
             $entitlements[$key] = $this->entitlements->isEntitled($workspace, $key);
 
-            if (!$availability[$key]) {
+            if (! $availability[$key]) {
                 $blocking[] = ['module' => $key, 'code' => 'module_unavailable', 'message' => "Module [{$key}] is not technically available."];
             }
 
@@ -70,7 +68,7 @@ final class ModuleActivationPlanner
                 $blocking[] = ['module' => $key, 'code' => 'organization_policy_denied', 'message' => "Organization policy denies module [{$key}]."];
             }
 
-            if (!$entitlements[$key]) {
+            if (! $entitlements[$key]) {
                 $blocking[] = ['module' => $key, 'code' => 'entitlement_missing', 'message' => "No valid entitlement for module [{$key}]."];
             }
         }

@@ -35,7 +35,7 @@ class AuthExtController extends Controller
             'token' => ['required', 'string', 'max:200'],
         ]);
         $user = User::find($data['user_id']);
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'کد تأیید نامعتبر است.'], 422);
         }
         try {
@@ -56,7 +56,7 @@ class AuthExtController extends Controller
         $userId = $request->session()->get('step_up_user_id');
         $data = $request->validate(['password' => ['required', 'string']]);
         $user = $userId ? User::find($userId) : null;
-        if (!$user || !Hash::check($data['password'], $user->password)) {
+        if (! $user || ! Hash::check($data['password'], $user->password)) {
             return response()->json(['message' => 'رمز عبور نادرست است.'], 422);
         }
         $request->session()->forget('step_up_user_id');
@@ -78,14 +78,14 @@ class AuthExtController extends Controller
         if ($purpose === 'login') {
             $phone = PhoneNumber::normalize($data['phone']);
             $user = $phone ? User::where('phone', $phone)->whereNotNull('phone_verified_at')->first() : null;
-            if (!$user) {
+            if (! $user) {
                 // Enumeration resistance: identical outward response,
                 // no SMS dispatched for unknown numbers.
                 return response()->json(['data' => ['sent' => true, 'expires_in_seconds' => OtpChallengeService::CODE_TTL_SECONDS]]);
             }
         }
         $result = $otp->challenge($data['phone'], $purpose, (string) $request->ip(), $user?->id);
-        if (!$result['sent']) {
+        if (! $result['sent']) {
             $message = $result['reason'] === 'delivery_unavailable'
                 ? 'در حال حاضر ارسال پیامک ممکن نیست؛ لطفاً چند دقیقه دیگر دوباره تلاش کنید یا از روش دیگری وارد شوید.'
                 : ($result['reason'] === 'invalid_phone' ? 'این شماره موبایل معتبر نیست.' : 'تلاش‌های مجاز تمام شد؛ چند دقیقه دیگر دوباره تلاش کنید.');
@@ -105,11 +105,11 @@ class AuthExtController extends Controller
         ]);
         $phone = PhoneNumber::normalize($data['phone']);
         $user = $phone ? User::where('phone', $phone)->whereNotNull('phone_verified_at')->first() : null;
-        if (!$user) {
+        if (! $user) {
             throw ValidationException::withMessages(['code' => 'کد تأیید نادرست است.']);
         }
         $result = $otp->verify($data['phone'], 'login', $data['code'], $user);
-        if (!$result['ok']) {
+        if (! $result['ok']) {
             $message = $result['reason'] === 'expired'
                 ? 'کد تأیید منقضی شده است؛ کد تازه درخواست کنید.'
                 : 'کد تأیید نادرست است.';
@@ -164,8 +164,8 @@ class AuthExtController extends Controller
         ]);
         $email = strtolower(trim($data['email']));
         $row = DB::table('auth_password_reset_tokens')->where('email', $email)->first();
-        $expired = !$row || now()->diffInMinutes($row->created_at) > 60;
-        if ($expired || !Hash::check($data['token'], $row->token)) {
+        $expired = ! $row || now()->diffInMinutes($row->created_at) > 60;
+        if ($expired || ! Hash::check($data['token'], $row->token)) {
             return response()->json(['message' => 'پیوند بازیابی نامعتبر یا منقضی شده است.'], 422);
         }
         $user = User::where('email', $email)->firstOrFail();

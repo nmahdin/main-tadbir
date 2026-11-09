@@ -44,7 +44,7 @@ final class SettingsRegistry
         $definition->assertStructurallyValid();
 
         if ($definition->owner !== SettingDefinition::OWNER_CORE
-            && !in_array($definition->owner, ModuleCatalog::keys(), true)) {
+            && ! in_array($definition->owner, ModuleCatalog::keys(), true)) {
             throw new SettingRegistryException('setting_owner_unknown', "Setting [{$definition->key}] is owned by unknown module [{$definition->owner}].");
         }
 
@@ -59,7 +59,7 @@ final class SettingsRegistry
      */
     public function registerForModule(string $moduleKey, SettingDefinition $definition): void
     {
-        if (!in_array($moduleKey, ModuleCatalog::keys(), true)) {
+        if (! in_array($moduleKey, ModuleCatalog::keys(), true)) {
             throw new SettingRegistryException('setting_owner_unknown', "Unknown module [{$moduleKey}] cannot register settings.");
         }
 

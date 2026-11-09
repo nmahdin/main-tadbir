@@ -17,7 +17,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CoreBillingPaymentEvent extends Model
 {
     public const ACTOR_USER = 'user';
+
     public const ACTOR_SYSTEM = 'system';
+
     public const ACTOR_PROVIDER = 'provider';
 
     protected $table = 'core_billing_payment_events';

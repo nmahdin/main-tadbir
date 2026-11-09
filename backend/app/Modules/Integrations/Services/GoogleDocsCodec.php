@@ -14,7 +14,7 @@ final class GoogleDocsCodec
     public function encode(string $html): array
     {
         $html = DamRichText::sanitize($html);
-        if (!class_exists(DOMDocument::class)) {
+        if (! class_exists(DOMDocument::class)) {
             return ['text' => DamRichText::plainText($html), 'formatRequests' => []];
         }
 
@@ -26,12 +26,12 @@ final class GoogleDocsCodec
         );
         libxml_clear_errors();
         libxml_use_internal_errors($previous);
-        if (!$loaded) {
+        if (! $loaded) {
             return ['text' => DamRichText::plainText($html), 'formatRequests' => []];
         }
 
         $root = $document->getElementById('tadbir-root') ?: $document->getElementsByTagName('div')->item(0);
-        if (!$root instanceof DOMElement) {
+        if (! $root instanceof DOMElement) {
             return ['text' => DamRichText::plainText($html), 'formatRequests' => []];
         }
 
@@ -112,7 +112,7 @@ final class GoogleDocsCodec
 
             return;
         }
-        if (!$node instanceof DOMElement) {
+        if (! $node instanceof DOMElement) {
             return;
         }
 
@@ -145,7 +145,7 @@ final class GoogleDocsCodec
             $this->walk($child, $nextStyle, $state);
         }
         if ($isBlock) {
-            if (!str_ends_with($state['text'], "\n")) {
+            if (! str_ends_with($state['text'], "\n")) {
                 $state['text'] .= "\n";
             }
             $state['paragraphs'][] = [
@@ -196,7 +196,7 @@ final class GoogleDocsCodec
         $content = '';
         foreach ($paragraph['elements'] ?? [] as $element) {
             $run = $element['textRun'] ?? null;
-            if (!is_array($run)) {
+            if (! is_array($run)) {
                 continue;
             }
             $text = rtrim((string) ($run['content'] ?? ''), "\n");
@@ -205,16 +205,16 @@ final class GoogleDocsCodec
             }
             $value = nl2br(htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'), false);
             $style = is_array($run['textStyle'] ?? null) ? $run['textStyle'] : [];
-            if (!empty($style['bold'])) {
+            if (! empty($style['bold'])) {
                 $value = '<strong>'.$value.'</strong>';
             }
-            if (!empty($style['italic'])) {
+            if (! empty($style['italic'])) {
                 $value = '<em>'.$value.'</em>';
             }
-            if (!empty($style['underline'])) {
+            if (! empty($style['underline'])) {
                 $value = '<u>'.$value.'</u>';
             }
-            if (!empty($style['strikethrough'])) {
+            if (! empty($style['strikethrough'])) {
                 $value = '<s>'.$value.'</s>';
             }
             $url = trim((string) ($style['link']['url'] ?? ''));

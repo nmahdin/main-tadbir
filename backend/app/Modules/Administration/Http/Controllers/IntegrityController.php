@@ -18,7 +18,7 @@ class IntegrityController extends Controller
         $all = collect($diagnostics->findings());
         $summary = ['critical' => $all->where('severity', 'critical')->count(),
             'warning' => $all->where('severity', 'warning')->count(), 'info' => $all->where('severity', 'info')->count()];
-        if (!empty($data['severity'])) {
+        if (! empty($data['severity'])) {
             $all = $all->where('severity', $data['severity'])->values();
         }
         $page = $data['page'] ?? 1;

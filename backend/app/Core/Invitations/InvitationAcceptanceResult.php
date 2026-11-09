@@ -20,9 +20,7 @@ final readonly class InvitationAcceptanceResult
         public bool $createdWorkspaceMembership,
         public bool $preservedExistingOrganizationRole,
         public bool $preservedExistingWorkspaceRole,
-    )
-    {
-    }
+    ) {}
 
     /**
      * The scope the UI should navigate to first (workspace wins:

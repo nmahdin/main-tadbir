@@ -20,9 +20,7 @@ final class SettingRevisionRecorder
 {
     public function __construct(
         private readonly SettingsRegistry $registry,
-    )
-    {
-    }
+    ) {}
 
     public function record(
         string $ownerType,

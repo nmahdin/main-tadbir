@@ -19,9 +19,7 @@ final class MoneyToman implements JsonSerializable, Stringable
 {
     public const BASIS_POINTS_DENOMINATOR = 10_000;
 
-    private function __construct(private readonly int $amountToman)
-    {
-    }
+    private function __construct(private readonly int $amountToman) {}
 
     public static function zero(): self
     {

@@ -25,7 +25,7 @@ final class ChatAttachmentController extends Controller
         abort_unless($conversation->domain === DomainRecord::DOMAIN_CONVERSATION, 404);
         $conversation = $access->conversation($request->user(), $conversation->id, true);
         abort_unless($request->user()->hasPermission('messaging.send_message'), 403);
-        abort_if(($conversation->payload['writePermission'] ?? 'all') === 'admins_only' && !$access->manages($request->user(), $conversation), 403);
+        abort_if(($conversation->payload['writePermission'] ?? 'all') === 'admins_only' && ! $access->manages($request->user(), $conversation), 403);
         $data = $request->validate(['file' => ['required', 'file', 'max:20480']]);
         $file = $data['file'];
         $extension = strtolower($file->getClientOriginalExtension());

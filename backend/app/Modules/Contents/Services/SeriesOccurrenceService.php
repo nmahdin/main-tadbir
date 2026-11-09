@@ -83,7 +83,7 @@ final class SeriesOccurrenceService
             'ownerId' => $series->owner_id ? (string) $series->owner_id : null,
             'departmentId' => $series->department_id ? (string) $series->department_id : null,
             'stageDeadlines' => $stageDeadlines,
-            'willActivateTasks' => !$this->activationAt($date, $config)->isFuture(),
+            'willActivateTasks' => ! $this->activationAt($date, $config)->isFuture(),
             'requiresManualDates' => $recurrenceType === 'manual',
             'canCreate' => $limitReason === null,
             'limitReason' => $limitReason,
@@ -176,7 +176,7 @@ final class SeriesOccurrenceService
             $this->guardVersion($series, $expectedVersion);
             abort_if($series->status !== 'active', 409, 'مجموعه برای ایجاد پروندهٔ محتوا باید فعال باشد.');
             $preview = $this->preview($series);
-            if (!hash_equals($preview['periodKey'], $expectedPeriodKey)) {
+            if (! hash_equals($preview['periodKey'], $expectedPeriodKey)) {
                 throw ValidationException::withMessages(['periodKey' => 'دوره بعدی تغییر کرده است؛ پیش‌نمایش را تازه کنید.']);
             }
             $preview = $this->applyOverrides($series, $preview, $overrides);
@@ -233,7 +233,7 @@ final class SeriesOccurrenceService
             $next = max(1, (int) ($series->next_sequence_number ?? 1));
             for ($index = 0; $index < $count; $index++) {
                 $preview = $this->preview($series, $next + $index);
-                if (!$preview['canCreate']) {
+                if (! $preview['canCreate']) {
                     throw ValidationException::withMessages(['count' => $preview['limitReason']]);
                 }
                 $existing = Content::where('series_id', $series->id)->where('period_key', $preview['periodKey'])->first();
@@ -256,7 +256,7 @@ final class SeriesOccurrenceService
         $configuration = app(SeriesConfigurationService::class)->effective($series);
         $activationAt = $this->activationAt(CarbonImmutable::parse($period['startDate']), $configuration['recurrenceConfig']);
         $future = $activationAt->isFuture();
-        $materialize = $activateNow || !$future;
+        $materialize = $activateNow || ! $future;
 
         return app(ContentCreator::class)->create($actor, $input, $input, [
             'series_id' => $series->id,
@@ -266,7 +266,7 @@ final class SeriesOccurrenceService
             'planned_start_at' => $activationAt->toDateTimeString(),
             'materialize_tasks' => $materialize,
             'prefix_title_with_code' => true,
-            'activate_at' => (!$materialize && $future) ? $activationAt->toIso8601String() : null,
+            'activate_at' => (! $materialize && $future) ? $activationAt->toIso8601String() : null,
         ]);
     }
 
@@ -296,7 +296,7 @@ final class SeriesOccurrenceService
                 unset($stage['deadline']);
             }
             $stage['inputs'] = collect($stage['inputs'] ?? [])->map(fn ($input) => is_array($input)
-                ? [...$input, 'isReady' => !$stage['dependsOnPrevious']]
+                ? [...$input, 'isReady' => ! $stage['dependsOnPrevious']]
                 : $input)->all();
 
             return $stage;
@@ -305,10 +305,10 @@ final class SeriesOccurrenceService
             ...($defaults['publishInfo'] ?? []),
             ...$configuration['defaultPublicationConfig'],
         ];
-        $publication['date'] = !empty($overrides['publicationDate'])
+        $publication['date'] = ! empty($overrides['publicationDate'])
             ? CarbonImmutable::parse($overrides['publicationDate'])->toDateString()
             : $period['startDate'];
-        $publication['time'] = !empty($overrides['publicationTime'])
+        $publication['time'] = ! empty($overrides['publicationTime'])
             ? (string) $overrides['publicationTime']
             : $this->publicationTime($configuration);
         if (array_key_exists('caption', $overrides)) {
@@ -318,7 +318,7 @@ final class SeriesOccurrenceService
         unset($publication['publisherId']);
         $overrideFields = collect([
             'workflow' => array_key_exists('processTemplateId', $overrides),
-            'stageAssignments' => !empty($overrides['stageAssignments']),
+            'stageAssignments' => ! empty($overrides['stageAssignments']),
             'publication' => array_key_exists('publicationDate', $overrides)
                 || array_key_exists('publicationTime', $overrides) || array_key_exists('caption', $overrides),
         ])->filter()->keys()->values()->all();
@@ -384,10 +384,10 @@ final class SeriesOccurrenceService
         if ($series->recurrence_type !== 'manual' || $overrides === []) {
             return $preview;
         }
-        if (!empty($overrides['startDate'])) {
+        if (! empty($overrides['startDate'])) {
             $preview['startDate'] = CarbonImmutable::parse($overrides['startDate'])->toDateString();
         }
-        if (!empty($overrides['deadline'])) {
+        if (! empty($overrides['deadline'])) {
             $preview['deadline'] = CarbonImmutable::parse($overrides['deadline'])->toDateString();
         }
         if (isset($overrides['title']) && trim((string) $overrides['title']) !== '') {
@@ -409,7 +409,7 @@ final class SeriesOccurrenceService
             return 'تعداد برنامه‌ریزی‌شده مجموعه تکمیل شده است.';
         }
         $checkDate = ($configuration['recurrenceType'] ?? null) !== 'manual' || $manualDateIsExplicit;
-        if ($checkDate && !empty($config['endDate']) && $date->startOfDay()->gt(CarbonImmutable::parse($config['endDate'])->startOfDay())) {
+        if ($checkDate && ! empty($config['endDate']) && $date->startOfDay()->gt(CarbonImmutable::parse($config['endDate'])->startOfDay())) {
             return 'تاریخ پروندهٔ محتوای بعدی پس از تاریخ پایان مجموعه است.';
         }
 

@@ -26,7 +26,7 @@ final class SettingValueValidator
     public static function validate(SettingDefinition $definition, mixed $value): mixed
     {
         if ($value === null) {
-            if (!$definition->nullable) {
+            if (! $definition->nullable) {
                 throw new SettingValidationException('setting_not_nullable', "Setting [{$definition->key}] does not accept a null value.");
             }
 
@@ -47,7 +47,7 @@ final class SettingValueValidator
 
     private static function string(SettingDefinition $definition, mixed $value): string
     {
-        if (!is_string($value)) {
+        if (! is_string($value)) {
             throw new SettingValidationException('setting_value_type_mismatch', "Setting [{$definition->key}] expects a string.");
         }
 
@@ -67,7 +67,7 @@ final class SettingValueValidator
 
     private static function boolean(SettingDefinition $definition, mixed $value): bool
     {
-        if (!is_bool($value)) {
+        if (! is_bool($value)) {
             throw new SettingValidationException('setting_value_type_mismatch', "Setting [{$definition->key}] expects a boolean.");
         }
 
@@ -76,7 +76,7 @@ final class SettingValueValidator
 
     private static function integer(SettingDefinition $definition, mixed $value): int
     {
-        if (!is_int($value)) {
+        if (! is_int($value)) {
             throw new SettingValidationException('setting_value_type_mismatch', "Setting [{$definition->key}] expects an integer.");
         }
 
@@ -91,7 +91,7 @@ final class SettingValueValidator
 
     private static function enum(SettingDefinition $definition, mixed $value): string
     {
-        if (!is_string($value) || !in_array($value, $definition->constraints['values'] ?? [], true)) {
+        if (! is_string($value) || ! in_array($value, $definition->constraints['values'] ?? [], true)) {
             throw new SettingValidationException('setting_enum_invalid', "Setting [{$definition->key}] must be one of its declared values.");
         }
 
@@ -100,7 +100,7 @@ final class SettingValueValidator
 
     private static function timezone(SettingDefinition $definition, mixed $value): string
     {
-        if (!is_string($value) || !in_array($value, DateTimeZone::listIdentifiers(), true)) {
+        if (! is_string($value) || ! in_array($value, DateTimeZone::listIdentifiers(), true)) {
             throw new SettingValidationException('setting_timezone_invalid', "Setting [{$definition->key}] must be a valid IANA timezone.");
         }
 
@@ -109,12 +109,12 @@ final class SettingValueValidator
 
     private static function locale(SettingDefinition $definition, mixed $value): string
     {
-        if (!is_string($value) || !preg_match('/^[a-z]{2,3}(-[A-Z]{2})?$/', $value)) {
+        if (! is_string($value) || ! preg_match('/^[a-z]{2,3}(-[A-Z]{2})?$/', $value)) {
             throw new SettingValidationException('setting_locale_invalid', "Setting [{$definition->key}] must be a locale like 'fa' or 'en-US'.");
         }
 
         $allowed = $definition->constraints['values'] ?? null;
-        if ($allowed !== null && !in_array($value, $allowed, true)) {
+        if ($allowed !== null && ! in_array($value, $allowed, true)) {
             throw new SettingValidationException('setting_locale_invalid', "Setting [{$definition->key}] must be one of its declared locales.");
         }
 
@@ -126,14 +126,14 @@ final class SettingValueValidator
      */
     private static function json(SettingDefinition $definition, mixed $value): array
     {
-        if (!is_array($value)) {
+        if (! is_array($value)) {
             throw new SettingValidationException('setting_json_schema_invalid', "Setting [{$definition->key}] expects an object matching its declared schema.");
         }
 
         /** @var array<string, string> $schema */
         $schema = $definition->constraints['schema'] ?? [];
         foreach ($value as $field => $fieldValue) {
-            if (!array_key_exists($field, $schema)) {
+            if (! array_key_exists($field, $schema)) {
                 throw new SettingValidationException('setting_json_schema_invalid', "Setting [{$definition->key}] does not declare field [{$field}].");
             }
             $expected = $schema[$field];
@@ -144,7 +144,7 @@ final class SettingValueValidator
                 'number' => is_int($fieldValue) || is_float($fieldValue),
                 default => false,
             };
-            if (!$ok) {
+            if (! $ok) {
                 throw new SettingValidationException('setting_json_schema_invalid', "Setting [{$definition->key}] field [{$field}] must be of type {$expected}.");
             }
         }

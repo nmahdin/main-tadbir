@@ -38,8 +38,7 @@ final class SubscriptionFulfillment
         private readonly SubscriptionOwnerResolver $owners,
         private readonly PlanProvisioner $plans,
         private readonly SubscriptionLifecycle $lifecycle,
-    ) {
-    }
+    ) {}
 
     /**
      * Fulfill an outbox event. Called from PaymentService::dispatchOutbox
@@ -275,6 +274,7 @@ final class SubscriptionFulfillment
             $subscription = CoreSubscription::query()->lockForUpdate()->find($locked->subscription_id);
             if ($subscription === null) {
                 $locked->forceFill(['cancelled_at' => $at])->save();
+
                 return false;
             }
             // Only apply at or after effective_at; only if the subscription is
@@ -340,7 +340,7 @@ final class SubscriptionFulfillment
                 return false;
             }
             $freeVersion = $plan->versions()->where('version', $freeVersionNumber)->first();
-            if ($freeVersion === null || !$freeVersion->isPublished()) {
+            if ($freeVersion === null || ! $freeVersion->isPublished()) {
                 return false;
             }
             if ((int) $locked->plan_version_id === (int) $freeVersion->id) {

@@ -23,7 +23,7 @@ final class PlatformAuthorizer
 {
     public function activeAssignment(User $user): ?PlatformRoleAssignment
     {
-        if (!$this->accountIsOperational($user)) {
+        if (! $this->accountIsOperational($user)) {
             return null;
         }
 

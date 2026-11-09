@@ -13,7 +13,7 @@ final class DamFolderStorage
     public function path(DamFolder|int|null $folder): string
     {
         $folder = is_int($folder) ? DamFolder::query()->find($folder) : $folder;
-        if (!$folder) {
+        if (! $folder) {
             return 'dam/ریشه';
         }
         $segments = [];
@@ -77,6 +77,6 @@ final class DamFolderStorage
         // label in the database while removing format characters from disk paths.
         $clean = preg_replace('/\p{C}+/u', '', $clean) ?? '';
 
-        return $clean !== '' && !in_array($clean, ['.', '..'], true) ? $clean : 'بدون نام';
+        return $clean !== '' && ! in_array($clean, ['.', '..'], true) ? $clean : 'بدون نام';
     }
 }

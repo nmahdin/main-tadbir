@@ -22,9 +22,7 @@ final readonly class SubscriptionSnapshot
         public ?string $startsAt,
         public ?string $expiresAt,
         public ?string $graceEndsAt,
-    )
-    {
-    }
+    ) {}
 
     public function isFullyEligible(): bool
     {

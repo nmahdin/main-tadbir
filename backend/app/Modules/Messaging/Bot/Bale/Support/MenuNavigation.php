@@ -14,7 +14,7 @@ final class MenuNavigation
 
     public static function rows(?BaleUserLink $link, bool $home = false): array
     {
-        if (!$link || $home) {
+        if (! $link || $home) {
             return [];
         }
         $buttons = [['text' => 'بازگشت به منو', 'callback_data' => 'home']];

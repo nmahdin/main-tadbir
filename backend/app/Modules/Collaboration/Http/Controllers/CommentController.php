@@ -89,7 +89,7 @@ class CommentController extends Controller
             while ($cursor->parent_id && $depth <= 3) {
                 $depth++;
                 $cursor = Comment::query()->find($cursor->parent_id);
-                if (!$cursor) {
+                if (! $cursor) {
                     break;
                 }
             }
@@ -97,7 +97,7 @@ class CommentController extends Controller
         }
         if ($type === 'task') {
             $comment = app(TaskOperations::class)->report($user, $subject, trim($data['text']));
-            if (isset($data['replyToId']) || !empty($data['assetIds'])) {
+            if (isset($data['replyToId']) || ! empty($data['assetIds'])) {
                 $comment->update(['parent_id' => $data['replyToId'] ?? null, 'metadata' => ['asset_ids' => $data['assetIds'] ?? []]]);
             }
         } else {

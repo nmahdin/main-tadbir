@@ -52,14 +52,14 @@ final class Settings
         $s = $this->read();
 
         return ($s['enabled'] ?? false) && ($s['connection_status'] ?? '') === 'connected'
-            && !empty($s['bot_id']) && !empty($s['token']);
+            && ! empty($s['bot_id']) && ! empty($s['token']);
     }
 
     public function save(User $actor, array $data): void
     {
         $s = $this->read();
         $changes = ['enabled' => $data['enabled']];
-        $tokenChanged = !empty($data['token']);
+        $tokenChanged = ! empty($data['token']);
         if ($tokenChanged) {
             if (BaleUserLink::exists()) {
                 throw ValidationException::withMessages(['token' => 'برای تعویض توکن ابتدا اتصال ربات را حذف کنید؛ اتصال کاربران قبلی نیز قطع می‌شود.']);
@@ -70,13 +70,13 @@ final class Settings
                 'connection_status' => 'untested', 'offset' => 0, 'last_test_at' => null, 'last_test_error' => null,
             ];
         }
-        abort_if($data['enabled'] && !$tokenChanged && empty($s['token']), 422, 'ابتدا توکن را ذخیره کنید.');
+        abort_if($data['enabled'] && ! $tokenChanged && empty($s['token']), 422, 'ابتدا توکن را ذخیره کنید.');
         DB::transaction(function () use ($actor, $changes, $tokenChanged): void {
             $this->write($changes, $actor);
             if ($tokenChanged) {
                 DB::table('bale_link_codes')->delete();
             }
-            if (!$changes['enabled'] || $tokenChanged) {
+            if (! $changes['enabled'] || $tokenChanged) {
                 BaleOutbox::where('status', 'pending')->update(['status' => 'cancelled']);
             }
             $this->audit($actor, $tokenChanged ? 'bale_token_changed' : 'bale_settings_changed');
@@ -89,7 +89,7 @@ final class Settings
             $token = $this->token();
             $me = $client->call($token, 'getMe');
             $webhook = $client->call($token, 'getWebhookInfo');
-            if (!is_array($me) || !preg_match('/^[0-9]{1,20}$/', (string) ($me['id'] ?? '')) || !is_array($webhook) || !is_string($webhook['url'] ?? null)) {
+            if (! is_array($me) || ! preg_match('/^[0-9]{1,20}$/', (string) ($me['id'] ?? '')) || ! is_array($webhook) || ! is_string($webhook['url'] ?? null)) {
                 throw new BaleApiException('invalid_response');
             }
             $expected = $this->protectedWebhookUrl();
@@ -112,7 +112,7 @@ final class Settings
     public function disconnect(User $actor, BaleClient $client, bool $localOnly = false): void
     {
         // If remote deletion fails, keep the token so an operator can try again.
-        if (!$localOnly && !empty($this->read()['token'])) {
+        if (! $localOnly && ! empty($this->read()['token'])) {
             if ($client->call($this->token(), 'deleteWebhook') !== true) {
                 throw new BaleApiException('invalid_response');
             }
@@ -136,7 +136,7 @@ final class Settings
 
         return [
             'enabled' => (bool) ($s['enabled'] ?? false),
-            'has_token' => !empty($s['token']),
+            'has_token' => ! empty($s['token']),
             'connection_status' => $s['connection_status'] ?? 'not_configured',
             'bot_username' => $s['bot_username'] ?? null,
             'last_test_at' => $s['last_test_at'] ?? null,
@@ -186,7 +186,7 @@ final class Settings
     {
         $base = rtrim((string) (config('bale.webhook_base_url') ?: config('app.url')), '/');
         $parts = parse_url($base);
-        if (!filter_var($base, FILTER_VALIDATE_URL) || !is_array($parts)
+        if (! filter_var($base, FILTER_VALIDATE_URL) || ! is_array($parts)
             || ($parts['scheme'] ?? '') !== 'https'
             || isset($parts['user']) || isset($parts['pass'])
             || isset($parts['query']) || isset($parts['fragment'])) {
@@ -204,12 +204,12 @@ final class Settings
     {
         $base = $this->webhookUrl();
         $ciphertext = $this->read()['webhook_secret'] ?? null;
-        if (!$base || !$ciphertext) {
+        if (! $base || ! $ciphertext) {
             return null;
         }
         try {
             $secret = Crypt::decryptString($ciphertext);
-            if (!preg_match('/^[a-f0-9]{64}$/D', $secret)) {
+            if (! preg_match('/^[a-f0-9]{64}$/D', $secret)) {
                 throw new RuntimeException;
             }
 

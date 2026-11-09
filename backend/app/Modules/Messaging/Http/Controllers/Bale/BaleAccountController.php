@@ -15,9 +15,7 @@ use Illuminate\Support\Carbon;
 
 final class BaleAccountController extends Controller
 {
-    public function __construct(private AccountLinker $linker, private Settings $settings, private RuntimeLock $lock)
-    {
-    }
+    public function __construct(private AccountLinker $linker, private Settings $settings, private RuntimeLock $lock) {}
 
     public function show(Request $request): JsonResponse
     {

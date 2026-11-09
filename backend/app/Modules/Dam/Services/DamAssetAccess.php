@@ -65,7 +65,7 @@ final class DamAssetAccess
 
     public function canAccessLinkedContent(User $user, DamAsset $asset): bool
     {
-        if ($asset->confidentiality === 'internal' && !$user->hasPermission('assets.view')) {
+        if ($asset->confidentiality === 'internal' && ! $user->hasPermission('assets.view')) {
             return false;
         }
 

@@ -4,7 +4,6 @@ namespace App\Core\Billing;
 
 use App\Core\Audit\AuditWriter;
 use App\Core\Billing\Payments\InitiationRequest;
-use App\Core\Billing\Payments\VerificationResult;
 use App\Core\Subscriptions\SubscriptionOwner;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -34,13 +33,12 @@ final class PaymentService
         private readonly PaymentGateway $gateway,
         private readonly AuditWriter $audit,
         private readonly OrderService $orders,
-    ) {
-    }
+    ) {}
 
     /**
      * Initiate a payment for an in_review order.
      *
-     * @param string|null $returnUrl validated redirect destination; null = internal default.
+     * @param  string|null  $returnUrl  validated redirect destination; null = internal default.
      * @return array{payment: CoreBillingPayment, redirect_url: ?string, is_replay: bool}
      */
     public function initiate(
@@ -122,7 +120,7 @@ final class PaymentService
             $result = $this->gateway->initiate($payment, $req);
             $diag = $this->gateway->redactDiagnostics($result->diagnostics);
 
-            if (!$result->ok) {
+            if (! $result->ok) {
                 $payment->forceFill([
                     'status' => CoreBillingPayment::STATUS_FAILED,
                     'failure_code' => $result->errorCode,
@@ -186,7 +184,7 @@ final class PaymentService
             // parameters alone are NOT settlement proof; server-side
             // verification below is the source of truth, but we reject
             // obviously-forged callbacks early).
-            if ($callbackQuery !== [] && !$this->gateway->verifyCallbackSignature($callbackQuery, $headers)) {
+            if ($callbackQuery !== [] && ! $this->gateway->verifyCallbackSignature($callbackQuery, $headers)) {
                 $this->recordEvent($locked, 'callback_rejected', $locked->status, $locked->status, ['reason' => 'bad_signature'], $actor);
                 throw new BillingDomainException('payment_callback_invalid', 'Callback signature/token is invalid.');
             }
@@ -218,7 +216,7 @@ final class PaymentService
                 return ['payment' => $locked, 'outcome' => 'pending', 'is_replay' => false];
             }
 
-            if (!$result->isPaid()) {
+            if (! $result->isPaid()) {
                 $locked->forceFill([
                     'status' => CoreBillingPayment::STATUS_FAILED,
                     'failure_code' => $result->errorCode ?? 'payment_failed',
@@ -531,7 +529,7 @@ final class PaymentService
             $this->orders->expireReviewOrders($at);
             throw new BillingDomainException('order_review_expired', 'Order review period has expired.');
         }
-        if (!in_array($order->status, [CoreBillingOrder::STATUS_IN_REVIEW, CoreBillingOrder::STATUS_PAYABLE_PENDING], true)) {
+        if (! in_array($order->status, [CoreBillingOrder::STATUS_IN_REVIEW, CoreBillingOrder::STATUS_PAYABLE_PENDING], true)) {
             throw new BillingDomainException('order_invalid', 'Order cannot be paid in its current state.');
         }
     }
@@ -548,6 +546,7 @@ final class PaymentService
         if ($p->status === CoreBillingPayment::STATUS_ZERO_SETTLED || $p->status === CoreBillingPayment::STATUS_PAID || $p->status === CoreBillingPayment::STATUS_FULFILLED || $p->status === CoreBillingPayment::STATUS_FAILED) {
             return null;
         }
+
         // In real adapters the redirect_url is stored on initiation; the
         // sandbox rebuilds from authority. For testing/other providers
         // we stash on diagnostics via an event; here return a generic

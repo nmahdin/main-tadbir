@@ -18,7 +18,7 @@ final class SeriesConfigurationService
         $contentType = (string) ($data['contentType'] ?? $existing?->content_type ?? '');
         $configuredTypes = collect(SystemSetting::query()->where('key', 'content_types')->value('value') ?? [])
             ->filter(fn ($item) => is_array($item))->pluck('id')->map(fn ($id) => (string) $id);
-        if ($configuredTypes->isNotEmpty() && !$configuredTypes->contains($contentType)) {
+        if ($configuredTypes->isNotEmpty() && ! $configuredTypes->contains($contentType)) {
             throw ValidationException::withMessages(['contentType' => 'نوع محتوای انتخاب‌شده در تنظیمات فعال سازمان وجود ندارد.']);
         }
 
@@ -28,17 +28,17 @@ final class SeriesConfigurationService
         $templates = collect(SystemSetting::query()->where('key', 'process_templates')->value('value') ?? [])
             ->filter(fn ($item) => is_array($item));
         $template = $templateId ? $templates->first(fn ($item) => (string) ($item['id'] ?? '') === (string) $templateId) : null;
-        if ($templateId && $templates->isNotEmpty() && !$template) {
+        if ($templateId && $templates->isNotEmpty() && ! $template) {
             throw ValidationException::withMessages(['processTemplateId' => 'قالب فرایند انتخاب‌شده دیگر معتبر نیست.']);
         }
-        if ($template && !empty($template['type']) && (string) $template['type'] !== $contentType) {
+        if ($template && ! empty($template['type']) && (string) $template['type'] !== $contentType) {
             throw ValidationException::withMessages(['processTemplateId' => 'نوع محتوای قالب فرایند با نوع محتوای مجموعه سازگار نیست.']);
         }
 
         $defaults = array_key_exists('defaultContentPayload', $data)
             ? $this->contentDefaults((array) $data['defaultContentPayload'])
             : ($existing?->default_content_payload ?? []);
-        if (!empty($data['applyTemplate']) && $template) {
+        if (! empty($data['applyTemplate']) && $template) {
             $defaults['stages'] = $this->mergeStageAssignments(
                 $this->templateStages((array) ($template['stages'] ?? [])),
                 (array) ($defaults['stages'] ?? []),
@@ -108,10 +108,10 @@ final class SeriesConfigurationService
                 $templates = collect(SystemSetting::query()->where('key', 'process_templates')->value('value') ?? [])
                     ->filter(fn ($item) => is_array($item));
                 $template = $templates->first(fn ($item) => (string) ($item['id'] ?? '') === (string) $templateId);
-                if (!$template) {
+                if (! $template) {
                     throw ValidationException::withMessages(['processTemplateId' => 'قالب فرایند انتخاب‌شده برای این پروندهٔ محتوا معتبر نیست.']);
                 }
-                if (!empty($template['type']) && (string) $template['type'] !== (string) $configuration['contentType']) {
+                if (! empty($template['type']) && (string) $template['type'] !== (string) $configuration['contentType']) {
                     throw ValidationException::withMessages(['processTemplateId' => 'نوع محتوای قالب پروندهٔ محتوا با مجموعه سازگار نیست.']);
                 }
                 $configuration['processTemplateId'] = (string) $templateId;
@@ -210,7 +210,7 @@ final class SeriesConfigurationService
         $defaults['targetAudiences'] = collect($defaults['targetAudiences'] ?? [])
             ->filter(fn ($item) => is_string($item))->map(fn ($item) => mb_substr(trim($item), 0, 80))
             ->filter()->unique()->take(30)->values()->all();
-        if ($defaults['targetAudiences'] === [] && !empty($defaults['targetAudience'])) {
+        if ($defaults['targetAudiences'] === [] && ! empty($defaults['targetAudience'])) {
             $defaults['targetAudiences'] = [mb_substr(trim((string) $defaults['targetAudience']), 0, 80)];
         }
         $defaults['targetAudience'] = $defaults['targetAudiences'][0] ?? null;
@@ -292,7 +292,7 @@ final class SeriesConfigurationService
 
         return collect($stages)->map(function (array $stage) use ($byKey): array {
             $assignment = $byKey->get((string) ($stage['stageKey'] ?? $stage['id'] ?? ''));
-            if (!is_array($assignment)) {
+            if (! is_array($assignment)) {
                 return $stage;
             }
             foreach (['assigneeId', 'reviewerId'] as $field) {
@@ -312,8 +312,8 @@ final class SeriesConfigurationService
         $safe['channels'] = collect($safe['channels'] ?? [])->filter(fn ($item) => is_string($item))->map(fn ($channel) => mb_substr($channel, 0, 80))
             ->unique()->take(30)->values()->all();
         $configured = collect(SystemSetting::query()->where('key', 'publishing_platforms')->value('value') ?? [])
-            ->filter(fn ($item) => is_array($item) && !empty($item['id']))->pluck('id')->map(fn ($id) => (string) $id);
-        if ($configured->isNotEmpty() && collect($safe['channels'])->contains(fn ($channel) => !$configured->contains($channel))) {
+            ->filter(fn ($item) => is_array($item) && ! empty($item['id']))->pluck('id')->map(fn ($id) => (string) $id);
+        if ($configured->isNotEmpty() && collect($safe['channels'])->contains(fn ($channel) => ! $configured->contains($channel))) {
             throw ValidationException::withMessages(['defaultPublicationConfig.channels' => 'یکی از کانال‌های انتشار انتخاب‌شده معتبر نیست.']);
         }
         if (isset($safe['time']) && preg_match('/^(?:[01]\\d|2[0-3]):[0-5]\\d$/', (string) $safe['time']) !== 1) {
@@ -332,10 +332,10 @@ final class SeriesConfigurationService
     private function fingerprint(array $value): string
     {
         $normalize = function (mixed $item) use (&$normalize): mixed {
-            if (!is_array($item)) {
+            if (! is_array($item)) {
                 return $item;
             }
-            if (!array_is_list($item)) {
+            if (! array_is_list($item)) {
                 ksort($item);
             }
 

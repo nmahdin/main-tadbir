@@ -34,9 +34,7 @@ final class MenuRouter
         private Settings $settings,
         private TaskOperations $tasks,
         private UserPermissionGate $permissions,
-    )
-    {
-    }
+    ) {}
 
     /** Invoked through UpdateProcessor, after transport authentication and under RuntimeLock. */
     public function handle(array $update): void
@@ -45,30 +43,30 @@ final class MenuRouter
         $message = $callback['message'] ?? $update['message'] ?? null;
         $sender = $callback['from']['id'] ?? $message['from']['id'] ?? null;
         $chat = $message['chat']['id'] ?? null;
-        if (($message['chat']['type'] ?? '') !== 'private' || !$this->validId($sender) || !$this->validId($chat)) {
+        if (($message['chat']['type'] ?? '') !== 'private' || ! $this->validId($sender) || ! $this->validId($chat)) {
             return;
         }
         $sender = (string) $sender;
         $chat = (string) $chat;
         $text = is_string($message['text'] ?? null) ? trim($message['text']) : '';
         $action = $callback ? ($callback['data'] ?? '') : '';
-        if (!is_string($action) || strlen($action) > 64 || mb_strlen($text) > 4096) {
+        if (! is_string($action) || strlen($action) > 64 || mb_strlen($text) > 4096) {
             return;
         }
         $key = $this->settings->read()['bot_id'].':'.$update['update_id'];
         $link = BaleUserLink::where('bale_user_id', $sender)->first();
-        if (!$link) {
-            if (!$callback && preg_match('/^[A-Fa-f0-9]{10}$/', $text)) {
+        if (! $link) {
+            if (! $callback && preg_match('/^[A-Fa-f0-9]{10}$/', $text)) {
                 $link = $this->linker->consume(strtoupper($text), $sender, $chat);
             }
-            if (!$link) {
+            if (! $link) {
                 $this->reply($key, $chat, null, 'برای اتصال، وارد پروفایل خود در تدبیر شوید و کد یک‌بارمصرف را اینجا ارسال کنید. کد نامعتبر، منقضی یا بیش از حد تلاش‌شده پذیرفته نمی‌شود.');
 
                 return;
             }
         }
         $user = User::find($link->user_id);
-        if (!$user?->isActive() || $link->chat_id !== $chat) {
+        if (! $user?->isActive() || $link->chat_id !== $chat) {
             return;
         }
         $callbackMessageId = $callback['message']['message_id'] ?? null;
@@ -85,18 +83,18 @@ final class MenuRouter
         try {
             app(DepartmentConsolidation::class)->requireReady();
             $automations = app(Automations::class);
-            $reserved = !$callback && in_array($automations->normalize($text), ['/start', '/menu', '/cancel'], true);
-            $continuing = !$reserved && (!$callback || preg_match('/^(confirm|assetpick|priority|choose):/', $action));
+            $reserved = ! $callback && in_array($automations->normalize($text), ['/start', '/menu', '/cancel'], true);
+            $continuing = ! $reserved && (! $callback || preg_match('/^(confirm|assetpick|priority|choose):/', $action));
             $identity = $continuing ? ($session?->data['_automation'] ?? null) : null;
             if ($identity) {
                 abort_unless($automations->valid($identity, $user), 409);
             }
-            if (!$callback && !$reserved && str_starts_with($text, '/') && MenuNavigation::drafting($session)) {
+            if (! $callback && ! $reserved && str_starts_with($text, '/') && MenuNavigation::drafting($session)) {
                 $this->reply($key, $chat, $link, 'فرم جاری باز است. ابتدا آن را تکمیل کنید یا با /cancel لغو کنید؛ سپس فرمان جدید را بفرستید.');
 
                 return;
             }
-            $rule = !$callback && !$reserved ? $automations->match($text, $user, $link, $session) : null;
+            $rule = ! $callback && ! $reserved ? $automations->match($text, $user, $link, $session) : null;
             if ($rule) {
                 $session?->delete();
                 $session = null;
@@ -114,7 +112,7 @@ final class MenuRouter
                 // Extended forms share this update transaction and outbox.
             } elseif (preg_match('/^confirm:([a-f0-9]{24})$/', $action, $m)) {
                 $this->confirm($key, $chat, $link, $user, $session, $m[1]);
-            } elseif (!$callback && $session?->step === 'report_text') {
+            } elseif (! $callback && $session?->step === 'report_text') {
                 if ($text === '' || mb_strlen($text) > 3000) {
                     $this->reply($key, $chat, $link, 'گزارش باید بین ۱ تا ۳۰۰۰ نویسه باشد؛ دوباره وارد کنید.');
 
@@ -150,7 +148,7 @@ final class MenuRouter
                     $buttons[] = [['text' => '📎 ثبت دارایی', 'callback_data' => 'taskasset:'.$task->id]];
                 }
                 // Content task state is controlled by the content-stage workflow, not an independent bot menu.
-                if (!$task->content_id && in_array($task->kind, [null, 'general'], true)) {
+                if (! $task->content_id && in_array($task->kind, [null, 'general'], true)) {
                     $buttons[] = [['text' => '🔄 تغییر وضعیت', 'callback_data' => 'status:'.$task->id]];
                 } else {
                     $body .= "\nتغییر مرحلهٔ این وظیفه محتوایی را در پنل انجام دهید.";
@@ -165,7 +163,7 @@ final class MenuRouter
                 $this->reply($key, $chat, $link, 'متن گزارش را بنویسید. قبل از ثبت، پیش‌نمایش و تأیید نمایش داده می‌شود.', [], 'task', $task->id);
             } elseif (preg_match('/^status:(\d{1,18})$/', $action, $m)) {
                 $task = $this->ownTask($user, $m[1]);
-                abort_if($task->content_id || !in_array($task->kind, [null, 'general'], true), 403);
+                abort_if($task->content_id || ! in_array($task->kind, [null, 'general'], true), 403);
                 $session = $this->session($link, 'status_select', ['task_id' => $task->id, 'expected_status' => $task->status]);
                 $rows = [];
                 foreach ($this->tasks->allowedStatuses($user, $task) as $status) {
@@ -175,12 +173,12 @@ final class MenuRouter
                 }
                 $this->reply($key, $chat, $link, 'وضعیت جدید را انتخاب کنید.', $rows, 'task', $task->id);
             } elseif (preg_match('/^choose:([a-f0-9]{24}):([a-z_]{1,15})$/', $action, $m)) {
-                if (!$session || !in_array($session->step, ['status_select', 'status_confirm'], true)) {
+                if (! $session || ! in_array($session->step, ['status_select', 'status_confirm'], true)) {
                     $this->reply($key, $chat, $link, '⏳ فرم تغییر وضعیت بسته یا منقضی شده است (S01). تسک را دوباره باز کنید.', [[['text' => 'وظایف من', 'callback_data' => 'tasks']]]);
 
                     return;
                 }
-                if (!hash_equals($session->nonce, $m[1])) {
+                if (! hash_equals($session->nonce, $m[1])) {
                     $this->reply($key, $chat, $link, '🔄 این دکمه مربوط به فرم قبلی است (S02). از جدیدترین پیام تغییر وضعیت استفاده کنید.', [[['text' => 'باز کردن تسک', 'callback_data' => 'task:'.$session->data['task_id']]]]);
 
                     return;
@@ -214,7 +212,7 @@ final class MenuRouter
             } elseif ($action === 'help') {
                 $session?->delete();
                 $this->reply($key, $chat, $link, 'از دکمه‌ها استفاده کنید. متن فقط در فرم فعال (گزارش، ویرایش وظیفه یا ثبت دارایی) و اتصال حساب پذیرفته می‌شود. بازگشت یا لغو، فرم جاری را پاک می‌کند. پیام‌ها با Webhook امن دریافت می‌شوند و تلاش مجدد ارسال توسط scheduler سامانه انجام می‌شود.');
-            } elseif (!$callback && MenuNavigation::drafting($session)) {
+            } elseif (! $callback && MenuNavigation::drafting($session)) {
                 $this->reply($key, $chat, $link, 'فرم جاری باز است؛ از دکمه‌های آخرین پیام استفاده کنید یا لغو را بزنید.');
             } else {
                 $this->home($key, $chat, $link);
@@ -238,7 +236,7 @@ final class MenuRouter
 
                 return;
             }
-            if (!in_array($e->getStatusCode(), [403, 404, 409, 422], true)) {
+            if (! in_array($e->getStatusCode(), [403, 404, 409, 422], true)) {
                 throw $e;
             }
             if (in_array($session?->step, ['edit_value', 'edit_confirm', 'asset_field', 'asset_confirm', 'text_asset_title', 'text_asset_body', 'text_asset_confirm', 'asset_context'], true)) {
@@ -263,7 +261,7 @@ final class MenuRouter
             $comment = $this->tasks->report($user, $task, $session->data['text'], 'bale');
             $result = 'گزارش شماره '.$comment->id.' ثبت شد. زمان: '.$comment->created_at->toIso8601String();
         } else {
-            abort_if($task->content_id || !in_array($task->kind, [null, 'general'], true), 403);
+            abort_if($task->content_id || ! in_array($task->kind, [null, 'general'], true), 403);
             $task = $this->tasks->changeStatus($user, $task, $session->data['status'], $session->data['expected_status'], 'bale');
             $result = 'وضعیت جدید: '.self::LABELS[$task->status];
         }

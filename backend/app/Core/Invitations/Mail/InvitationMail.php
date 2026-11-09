@@ -24,9 +24,7 @@ final class InvitationMail extends Mailable
         public readonly ?string $workspaceName = null,
         public readonly ?string $message = null,
         public readonly ?string $expiresAt = null,
-    )
-    {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {

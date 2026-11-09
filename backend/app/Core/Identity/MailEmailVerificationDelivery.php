@@ -27,9 +27,7 @@ final class MailEmailVerificationDelivery implements EmailVerificationDelivery
 {
     public function __construct(
         private readonly int $lifetimeMinutes = EmailVerificationService::CHALLENGE_LIFETIME_MINUTES,
-    )
-    {
-    }
+    ) {}
 
     public function deliver(User $user, string $normalizedEmail, string $rawToken, CarbonImmutable $expiresAt): void
     {

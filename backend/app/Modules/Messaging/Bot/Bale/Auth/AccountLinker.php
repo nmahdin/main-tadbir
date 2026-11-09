@@ -11,9 +11,7 @@ use Illuminate\Support\Facades\RateLimiter;
 
 final class AccountLinker
 {
-    public function __construct(private Settings $settings)
-    {
-    }
+    public function __construct(private Settings $settings) {}
 
     public function issue(User $user): array
     {
@@ -39,17 +37,17 @@ final class AccountLinker
             return null;
         }
         RateLimiter::hit($key, 600);
-        if (!preg_match('/^[A-F0-9]{10}$/', $code)) {
+        if (! preg_match('/^[A-F0-9]{10}$/', $code)) {
             return null;
         }
 
         return DB::transaction(function () use ($code, $senderId, $chatId, $key): ?BaleUserLink {
             $record = DB::table('bale_link_codes')->where('code_hash', $this->hash($code))->lockForUpdate()->first();
-            if (!$record || now()->gte($record->expires_at)) {
+            if (! $record || now()->gte($record->expires_at)) {
                 return null;
             }
             $user = User::whereKey($record->user_id)->lockForUpdate()->first();
-            if (!$user?->isActive() || BaleUserLink::where('bale_user_id', $senderId)->orWhere('user_id', $record->user_id)->exists()) {
+            if (! $user?->isActive() || BaleUserLink::where('bale_user_id', $senderId)->orWhere('user_id', $record->user_id)->exists()) {
                 return null;
             }
             $link = BaleUserLink::create(['user_id' => $user->id, 'bale_user_id' => $senderId, 'chat_id' => $chatId]);

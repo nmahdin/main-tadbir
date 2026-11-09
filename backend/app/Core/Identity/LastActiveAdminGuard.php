@@ -28,7 +28,7 @@ final class LastActiveAdminGuard
 
     public function protectLastAdmin(User $target, array $attributes = [], bool $deleting = false): void
     {
-        if ($target->role?->key !== 'admin' || !$target->isActive()) {
+        if ($target->role?->key !== 'admin' || ! $target->isActive()) {
             return;
         }
         $losesAdmin = $deleting

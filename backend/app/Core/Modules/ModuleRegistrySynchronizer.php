@@ -105,7 +105,7 @@ final class ModuleRegistrySynchronizer
 
         $created = 0;
         foreach ($expected as $pair => [$moduleId, $requiredId]) {
-            if (!isset($persisted[$pair])) {
+            if (! isset($persisted[$pair])) {
                 DB::table('core_module_dependencies')->insert([
                     'module_id' => $moduleId,
                     'required_module_id' => $requiredId,

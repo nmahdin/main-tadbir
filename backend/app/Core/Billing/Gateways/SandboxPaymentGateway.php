@@ -58,7 +58,7 @@ final class SandboxPaymentGateway implements PaymentGateway
         if ($outcome === 'pending') {
             return VerificationResult::pending('Provider has not finalized.', ['outcome' => 'pending']);
         }
-        if ($outcome === 'fail' || $authority === '' || !str_starts_with($authority, self::TOKEN_PREFIX)) {
+        if ($outcome === 'fail' || $authority === '' || ! str_starts_with($authority, self::TOKEN_PREFIX)) {
             return VerificationResult::failed('payment_failed', 'Payment was not settled at provider.', ['outcome' => $outcome]);
         }
         if ($outcome === 'badamount' || $verifiedAmount !== (int) $payment->requested_amount_toman) {
@@ -81,6 +81,7 @@ final class SandboxPaymentGateway implements PaymentGateway
     {
         $auth = (string) ($query['sandbox_authority'] ?? '');
         $pid = (string) ($query['sandbox_payment'] ?? '');
+
         // A test-only sanity check — real providers sign callbacks.
         return $auth !== '' && $pid !== '' && str_starts_with($auth, self::TOKEN_PREFIX);
     }

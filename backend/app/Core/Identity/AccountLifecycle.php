@@ -59,9 +59,7 @@ final class AccountLifecycle
         private readonly LastActiveAdminGuard $lastAdminGuard,
         private readonly PlatformControlLock $platformLock,
         private readonly PlatformPrimaryGuard $primaryGuard,
-    )
-    {
-    }
+    ) {}
 
     public function suspend(User $actor, User $user, ?string $reason = null): User
     {
@@ -145,7 +143,7 @@ final class AccountLifecycle
             default => false,
         };
 
-        if (!$allowed) {
+        if (! $allowed) {
             throw new AccountLifecycleException(
                 "Account cannot transition from [{$current?->value}] to [{$target->value}].",
             );

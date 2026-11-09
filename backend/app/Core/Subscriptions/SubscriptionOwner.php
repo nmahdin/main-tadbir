@@ -15,9 +15,7 @@ final readonly class SubscriptionOwner
         public string $type, // 'organization' | 'personal'
         public ?Organization $organization,
         public ?Workspace $personalWorkspace,
-    )
-    {
-    }
+    ) {}
 
     public function key(): string
     {

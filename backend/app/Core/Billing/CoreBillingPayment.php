@@ -22,12 +22,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class CoreBillingPayment extends Model
 {
     public const STATUS_INITIATED = 'initiated';
+
     public const STATUS_PENDING = 'pending';     // provider confirms charge; waiting verification
+
     public const STATUS_PAID = 'paid';           // verified paid, pending fulfillment dispatch
+
     public const STATUS_FULFILLED = 'fulfilled'; // subscription activated/extended
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_CANCELLED = 'cancelled'; // order cancelled before settlement
+
     public const STATUS_EXPIRED = 'expired';     // payment attempt abandoned due to order expiry
+
     public const STATUS_ZERO_SETTLED = 'zero_settled'; // zero-amount authorized settlement
 
     protected $table = 'core_billing_payments';
