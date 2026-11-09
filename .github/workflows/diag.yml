@@ -24,7 +24,9 @@ jobs:
         working-directory: backend
         run: |
           set +e
-          php vendor/bin/pint -v --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.txt 2>&1
-          rc=$?
-          cat /tmp/pint.txt
+          php vendor/bin/pint --test --format=github app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tee /tmp/pint.txt
+          rc=${PIPESTATUS[0]}
+          # output the github-annotation lines as they appear to be already in ::error format, but pint writes relative paths
+          cat /tmp/pint.txt | head -100
+          echo "RC=$rc"
           exit $rc
