@@ -529,7 +529,7 @@ final class PaymentService
             $this->orders->expireReviewOrders($at);
             throw new BillingDomainException('order_review_expired', 'Order review period has expired.');
         }
-        if (! in_array($order->status, [CoreBillingOrder::STATUS_IN_REVIEW, CoreBillingOrder::STATUS_PAYABLE_PENDING], true)) {
+        if (!in_array($order->status, [CoreBillingOrder::STATUS_IN_REVIEW, CoreBillingOrder::STATUS_PAYABLE_PENDING], true)) {
             throw new BillingDomainException('order_invalid', 'Order cannot be paid in its current state.');
         }
     }
