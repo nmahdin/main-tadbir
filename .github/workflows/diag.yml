@@ -17,13 +17,12 @@ jobs:
           tools: composer:v2
       - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: pint
+      - name: apply pint
         working-directory: backend
         run: |
-          set -o pipefail
-          php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tee /tmp/pint.txt
-          echo "## Pint results" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/pint.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          exit ${PIPESTATUS[0]}
+          php vendor/bin/pint app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pint-fixed
+          path: backend/app/Core/**/*.php
