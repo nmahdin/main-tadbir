@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
-import {PERIODS,convertible,cancellable,owns} from '../src/features/commercial/commercialApi.ts';
+import {PERIODS,convertible,cancellable,owns} from '../src/features/commercial/commercialRules.ts';
 import {billingAccess} from '../src/features/commercial/billingAccess.ts';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('C5 commercial period and authoritative expiry decision contracts',()=>{

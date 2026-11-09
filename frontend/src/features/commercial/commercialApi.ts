@@ -2,8 +2,7 @@ import {request,type ApiResponse} from '../../shared/api/client';
 
 /** C5-M2-S4 verified contracts. Money is always server authoritative. */
 export type Period='monthly'|'quarterly'|'annual';
-export const PERIODS:Period[]=['monthly','quarterly','annual'];
-export const PERIOD_LABELS:Record<Period,string>={monthly:'ماهانه',quarterly:'سه‌ماهه',annual:'سالانه'};
+export {PERIODS,PERIOD_LABELS,convertible,cancellable,owns} from './commercialRules';
 export type OwnerScope={kind:'personal'}|{kind:'organization';organizationId:number};
 export type Plan={id:number;key:string;name:string;audience:'personal'|'organization';status?:string};
 export type Price={id:number;period:Period;amount_toman:number;is_published?:boolean;is_superseded?:boolean;published_at?:string|null};
@@ -27,9 +26,6 @@ export type PlanPrices={plan:Plan;versions:VersionPrice[]};
 export type TaxRule={id:number;label:string;rate_basis_points:number;is_active:boolean;valid_from:string|null;valid_until:string|null};
 export type Promotion={id:number;code:string;label:string;discount_type:'fixed'|'percent';discount_value_bp:number|null;discount_value_toman:number|null;is_active:boolean};
 export const toman=(n:number|null|undefined)=>n===null||n===undefined?'—':n.toLocaleString('fa-IR')+' تومان';
-export const convertible=(q:Quote)=>q.status==='open'&&q.remaining_seconds>0;
-export const cancellable=(o:Order)=>o.status==='in_review'&&o.review_remaining_seconds>0;
-export const owns=(v:OwnedSnapshot,s:OwnerScope)=>s.kind==='organization'?v.organization_id===s.organizationId:v.organization_id===null&&v.personal_workspace_id!==null;
 const ownerPath=(s:OwnerScope,kind:'quotes'|'orders')=>s.kind==='personal'?'/billing/'+kind:'/billing/'+kind+'/organizations/'+s.organizationId;
 const post=(key:string,body:unknown)=>({method:'POST',headers:{'Idempotency-Key':key},body});
 export const commercialApi={
