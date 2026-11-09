@@ -1,4 +1,4 @@
-<?php
+<? php
 
 namespace App\Core\Billing\Reconciliation;
 
@@ -9,7 +9,6 @@ use App\Core\Billing\CoreBillingOrder;
 use App\Core\Billing\CoreBillingPayment;
 use App\Core\Billing\CorePromoReservation;
 use App\Core\Billing\Documents\BillingDocumentType;
-use App\Core\Subscriptions\CoreSubscription;
 use App\Core\Subscriptions\SubscriptionPeriod;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -36,7 +35,7 @@ final class FinancialReconciliationService
      *
      * @return array{opened:int,resolved:int,total_open:int}
      */
-    public function sweep(?CarbonImmutable $at = null): array
+    public function sweep(? CarbonImmutable $at = null): array
     {
         $at ??= CarbonImmutable::now('UTC');
         $opened = 0;
@@ -348,7 +347,7 @@ final class FinancialReconciliationService
     private function upsertFinding(
         string $type, string $subjectType, int $subjectId,
         string $severity, bool $safeToRetry, string $message, array $evidence,
-        ?string $ownerKey, ?int $paymentId, ?int $orderId, CarbonImmutable $at,
+        ? string $ownerKey, ? int $paymentId, ? int $orderId, CarbonImmutable $at,
     ): bool {
         $existing = DB::table('core_billing_reconciliation_findings')
             ->where('finding_type', $type)

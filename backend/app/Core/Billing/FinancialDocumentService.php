@@ -1,4 +1,4 @@
-<?php
+<? php
 
 namespace App\Core\Billing;
 
@@ -35,9 +35,9 @@ final class FinancialDocumentService
      */
     public function issueInvoiceForOrder(
         CoreBillingOrder $order,
-        ?CoreBillingPayment $payment,
-        ?User $actor,
-        ?CarbonImmutable $at = null,
+        ? CoreBillingPayment $payment,
+        ? User $actor,
+        ? CarbonImmutable $at = null,
     ): array {
         $at ??= CarbonImmutable::now('UTC');
         $ownerKey = $order->owner_key;
@@ -111,8 +111,8 @@ final class FinancialDocumentService
     public function issueReceiptForPayment(
         CoreBillingPayment $payment,
         CoreBillingOrder $order,
-        ?User $actor,
-        ?CarbonImmutable $at = null,
+        ? User $actor,
+        ? CarbonImmutable $at = null,
     ): array {
         $at ??= CarbonImmutable::now('UTC');
         $ownerKey = $order->owner_key;
@@ -187,7 +187,7 @@ final class FinancialDocumentService
         });
     }
 
-    public function documentForOwner(CoreBillingDocument $doc, SubscriptionOwner $owner): ?CoreBillingDocument
+    public function documentForOwner(CoreBillingDocument $doc, SubscriptionOwner $owner): ? CoreBillingDocument
     {
         if ($doc->owner_key !== $owner->key()) {
             return null;
@@ -239,7 +239,7 @@ final class FinancialDocumentService
         }
     }
 
-    private function resolvePlanVersion(CoreBillingOrder $order): ?CorePlanVersion
+    private function resolvePlanVersion(CoreBillingOrder $order): ? CorePlanVersion
     {
         $quote = $order->quote;
         if ($quote === null) {
@@ -261,7 +261,7 @@ final class FinancialDocumentService
         return 'personal:'.($order->personal_workspace_id ?? 'ws');
     }
 
-    private function buildItems(CoreBillingOrder $order, ?CorePlanVersion $version): array
+    private function buildItems(CoreBillingOrder $order, ? CorePlanVersion $version): array
     {
         $items = [];
         $items[] = [
@@ -293,7 +293,7 @@ final class FinancialDocumentService
         return $items;
     }
 
-    private function recordEvent(CoreBillingDocument $doc, string $event, ?string $from, string $to, ?User $actor): void
+    private function recordEvent(CoreBillingDocument $doc, string $event, ? string $from, string $to, ? User $actor): void
     {
         CoreBillingDocumentEvent::create([
             'document_id' => $doc->id,
