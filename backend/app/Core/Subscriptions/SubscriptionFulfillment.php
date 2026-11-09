@@ -338,7 +338,7 @@ final class SubscriptionFulfillment
                 return false;
             }
             $freeVersion = $plan->versions()->where('version', $freeVersionNumber)->first();
-            if ($freeVersion === null || ! $freeVersion->isPublished()) {
+            if ($freeVersion === null || !$freeVersion->isPublished()) {
                 return false;
             }
             if ((int) $locked->plan_version_id === (int) $freeVersion->id) {

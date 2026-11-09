@@ -371,7 +371,9 @@ final class PaymentService
         string $idempotencyKey,
         CarbonImmutable $at,
     ): array {
-        return DB::transaction(function () use ($actor, $owner, $ownerKey = CoreBillingPayment::ownerKeyFor($owner), $order, $idempotencyKey, $at): array {
+        $ownerKey = CoreBillingPayment::ownerKeyFor($owner);
+
+        return DB::transaction(function () use ($actor, $owner, $ownerKey, $order, $idempotencyKey, $at): array {
             $lockedOrder = $this->lockOrderForWrite($order);
             $this->assertOrderConvertible($lockedOrder, $at);
 
