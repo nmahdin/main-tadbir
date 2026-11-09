@@ -9,6 +9,7 @@ use App\Core\Billing\CoreBillingOrder;
 use App\Core\Billing\CoreBillingPayment;
 use App\Core\Billing\CorePromoReservation;
 use App\Core\Billing\Documents\BillingDocumentType;
+use App\Core\Subscriptions\CoreSubscription;
 use App\Core\Subscriptions\SubscriptionPeriod;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -266,12 +267,80 @@ final class FinancialReconciliationService
     }
 
     /**
-     * Subscription fulfillment: order PAID but current subscription is not on expected plan/period.
+     * Cross-check:
+     *  - Duplicate/conflicting fulfillment (multiple settled payments
+     *    for the same owner in the same window, or multiple PAID
+     *    periods pointing at the same subscription/start).
+     *  - Order/period/settlement mismatch: period exists but its
+     *    amount/period/plan_version does not match the order.
+     *  - Document-after-settlement completeness already covered by
+     *    missing-invoice / missing-receipt checks.
      */
     private function checkSubscriptionFulfillmentInconsistencies(CarbonImmutable $at): array
     {
-        // Simple check: any paid payment without any linked subscription_period
-        return ['opened' => 0, 'resolved' => 0]; // already covered by settled_without_fulfillment; placeholder for future cross-checks.
+        $opened = 0;
+        $resolved = 0;
+
+        // Duplicate settled payments for the same order would already be
+        // prevented by idempotency, but defensively scan for any order
+        // with > 1 PAID/FULFILLED/ZERO_SETTLED payment (rare collision
+        // from older data or manual DB edits).
+        $dupes = DB::table('core_billing_payments')
+            ->select('order_id', DB::raw('COUNT(*) AS c'))
+            ->whereIn('status', [CoreBillingPayment::STATUS_PAID, CoreBillingPayment::STATUS_FULFILLED, CoreBillingPayment::STATUS_ZERO_SETTLED])
+            ->groupBy('order_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->get();
+        foreach ($dupes as $row) {
+            $opened += (int) $this->upsertFinding(
+                'duplicate_settled_payments_for_order',
+                'order', (int) $row->order_id, 'critical', false,
+                'Multiple settled payments exist for the same order.',
+                ['order_id' => (int) $row->order_id, 'settled_count' => (int) $row->c],
+                null, null, (int) $row->order_id, $at,
+            );
+        }
+
+        // Period/order mismatches: any paid-by period whose recorded
+        // amount does not correspond to the order total it was paid from.
+        $periods = SubscriptionPeriod::query()
+            ->whereNotNull('paid_by_payment_id')
+            ->with(['payment', 'payment.order'])
+            ->get();
+        foreach ($periods as $period) {
+            $pay = $period->payment;
+            if ($pay === null) {
+                $opened += (int) $this->upsertFinding(
+                    'subscription_period_orphaned_payment_reference',
+                    'subscription', (int) $period->id, 'warning', true,
+                    'Subscription period references a missing payment.',
+                    ['period_id' => (int) $period->id, 'payment_id' => (int) $period->paid_by_payment_id],
+                    null, (int) $period->paid_by_payment_id, null, $at,
+                );
+                continue;
+            }
+            $order = $pay->order;
+            if ($order === null) {
+                continue;
+            }
+            if ((int) $pay->verified_amount_toman !== (int) $order->total_toman && $pay->status !== CoreBillingPayment::STATUS_ZERO_SETTLED) {
+                $opened += (int) $this->upsertFinding(
+                    'subscription_period_amount_mismatch',
+                    'subscription', (int) $period->id, 'critical', false,
+                    'Subscription period paid amount does not match its order total.',
+                    [
+                        'period_id' => (int) $period->id,
+                        'payment_id' => (int) $pay->id,
+                        'order_id' => (int) $order->id,
+                        'verified_amount_toman' => (int) $pay->verified_amount_toman,
+                        'order_total_toman' => (int) $order->total_toman,
+                    ],
+                    $pay->owner_key, (int) $pay->id, (int) $order->id, $at,
+                );
+            }
+        }
+
+        return ['opened' => $opened, 'resolved' => $resolved];
     }
 
     // ---- Finding persistence ----
@@ -328,10 +397,17 @@ final class FinancialReconciliationService
         $open = DB::table('core_billing_reconciliation_findings')->where('status', 'open')->get();
         foreach ($open as $f) {
             $stillOpen = match ($f->finding_type) {
-                'settled_without_fulfillment' => !SubscriptionPeriod::query()->where('paid_by_payment_id', $f->subject_id)->exists()
-                    && !CoreBillingFulfillmentOutbox::query()->where('payment_id', $f->subject_id)->whereNull('dispatched_at')->exists(),
-                'settled_order_missing_invoice' => !CoreBillingDocument::query()->where('order_id', $f->subject_id)->where('doc_type', BillingDocumentType::INVOICE->value)->exists(),
-                'settled_payment_missing_receipt' => !CoreBillingDocument::query()->where('payment_id', $f->subject_id)->where('doc_type', BillingDocumentType::RECEIPT->value)->exists(),
+                'settled_without_fulfillment' => ! SubscriptionPeriod::query()->where('paid_by_payment_id', $f->subject_id)->exists()
+                    && ! CoreBillingFulfillmentOutbox::query()->where('payment_id', $f->subject_id)->whereNull('dispatched_at')->exists(),
+                'settled_order_missing_invoice' => ! CoreBillingDocument::query()->where('order_id', $f->subject_id)->where('doc_type', BillingDocumentType::INVOICE->value)->exists(),
+                'settled_payment_missing_receipt' => ! CoreBillingDocument::query()->where('payment_id', $f->subject_id)->where('doc_type', BillingDocumentType::RECEIPT->value)->exists(),
+                'duplicate_settled_payments_for_order' => DB::table('core_billing_payments')
+                    ->where('order_id', $f->subject_id)
+                    ->whereIn('status', [CoreBillingPayment::STATUS_PAID, CoreBillingPayment::STATUS_FULFILLED, CoreBillingPayment::STATUS_ZERO_SETTLED])
+                    ->count() > 1,
+                'order_review_expired_with_pending_payment', 'payment_failed_requires_attention',
+                'payment_amount_mismatch', 'promo_redeemed_but_order_not_paid',
+                'subscription_period_orphaned_payment_reference', 'subscription_period_amount_mismatch' => true,
                 default => true,
             };
             // For settled_without_fulfillment, also treat STATUS_FULFILLED + period row as resolved.

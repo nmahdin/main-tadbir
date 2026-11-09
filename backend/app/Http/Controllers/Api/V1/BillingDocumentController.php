@@ -10,7 +10,6 @@ use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Core\Workspaces\Workspace;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -30,13 +29,12 @@ final class BillingDocumentController extends Controller
     public function __construct(
         private readonly FinancialDocumentService $documents,
         private readonly MembershipPermissions $permissions,
-    ) {
-    }
+    ) {}
 
     public function indexForPersonal(Request $request): JsonResponse
     {
         $user = $request->user();
-        $ws = app(\App\Core\Workspaces\PersonalWorkspaceProvisioner::class)->ensureDefault($user);
+        $ws = app(PersonalWorkspaceProvisioner::class)->ensureDefault($user);
         $ownerKey = 'ws:'.$ws->id;
 
         return $this->indexByOwnerKey($request, $ownerKey);
@@ -62,7 +60,7 @@ final class BillingDocumentController extends Controller
         $document->loadMissing(['order', 'payment', 'relatedInvoice']);
 
         return response()->json([
-            'data' => ['document' => $this->serializeDocument($document, CarbonImmutable::now())],
+            'data' => ['document' => $this->serializeDocument($document)],
         ]);
     }
 
@@ -96,11 +94,9 @@ final class BillingDocumentController extends Controller
         $query->orderByDesc('issued_at')->orderByDesc('id');
         $paginator = $query->paginate((int) ($data['per_page'] ?? 25));
 
-        $at = CarbonImmutable::now();
-
         return response()->json([
             'data' => [
-                'documents' => collect($paginator->items())->map(fn (CoreBillingDocument $d) => $this->serializeDocument($d, $at))->values()->all(),
+                'documents' => collect($paginator->items())->map(fn (CoreBillingDocument $d) => $this->serializeDocument($d))->values()->all(),
             ],
             'meta' => [
                 'per_page' => $paginator->perPage(),
@@ -140,7 +136,7 @@ final class BillingDocumentController extends Controller
         return false;
     }
 
-    private function serializeDocument(CoreBillingDocument $d, CarbonImmutable $at): array
+    private function serializeDocument(CoreBillingDocument $d): array
     {
         return [
             'id' => (int) $d->id,

@@ -6,7 +6,6 @@ use App\Core\Billing\Reconciliation\CoreBillingReconciliationFinding;
 use App\Core\Billing\Reconciliation\FinancialReconciliationService;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -64,8 +63,8 @@ final class PlatformBillingFinanceController extends Controller
             'resolution_note' => ['required', 'string', 'max:2000'],
         ]);
 
+        /** @var User $user */
         $user = $request->user();
-        assert($user instanceof User);
 
         $resolved = $recon->resolveFinding($finding, $user, $data['resolution_note']);
 

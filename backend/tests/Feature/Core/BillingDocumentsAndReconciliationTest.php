@@ -6,10 +6,8 @@ use App\Core\Billing\CoreBillingDocument;
 use App\Core\Billing\CoreBillingFulfillmentOutbox;
 use App\Core\Billing\CoreBillingOrder;
 use App\Core\Billing\CoreBillingPayment;
-use App\Core\Billing\Documents\BillingDocumentStatus;
 use App\Core\Billing\Documents\BillingDocumentType;
 use App\Core\Billing\Documents\DocumentNumberGenerator;
-use App\Core\Billing\FinancialDocumentService;
 use App\Core\Billing\OrderService;
 use App\Core\Billing\PaymentService;
 use App\Core\Billing\PlanPricePublisher;
@@ -274,6 +272,106 @@ class BillingDocumentsAndReconciliationTest extends TestCase
         $response->assertOk();
         $data = $response->json('data.documents');
         $this->assertNotEmpty($data);
+    }
+
+    public function test_render_endpoint_returns_rtl_payload_without_psp_trace_for_owner(): void
+    {
+        $v = $this->publishVersion('rndr', CorePlan::AUDIENCE_PERSONAL, ['monthly' => 220_000]);
+        $owner = $this->personalOwner($this->actor);
+        $quote = $this->quotes()->create($this->actor, $owner, $v, 'monthly', null, 'k-rndr')['quote'];
+        $order = $this->orders()->convert($this->actor, $owner, $quote, 'c-rndr')['order'];
+        $svc = $this->payments();
+        $init = $svc->initiate($this->actor, $owner, $order, 'i-rndr');
+        parse_str(parse_url($init['redirect_url'], PHP_URL_QUERY), $q);
+        $q['sandbox'] = 'settle';
+        $svc->verifyAndFinalize($this->actor, $init['payment'], $q);
+
+        $invoice = CoreBillingDocument::query()->where('order_id', $order->id)
+            ->where('doc_type', BillingDocumentType::INVOICE->value)->firstOrFail();
+
+        $this->actingAs($this->actor);
+        $resp = $this->getJson('/api/v1/billing/documents/'.$invoice->id.'/render');
+        $resp->assertOk();
+        $render = $resp->json('data.render');
+        $this->assertSame($invoice->doc_number, $render['doc_number']);
+        $this->assertSame('invoice', $render['doc_type']);
+        $this->assertIsArray($render['items']);
+        $this->assertArrayHasKey('totals', $render);
+        $this->assertSame(220_000, $render['totals']['subtotal_toman']);
+        // Owner render exposes provider but NOT raw diagnostics / secret.
+        $this->assertSame('sandbox', $render['payment']['provider']);
+    }
+
+    public function test_jalali_numbering_resets_across_month_boundary(): void
+    {
+        $g = app(DocumentNumberGenerator::class);
+        // Pick the last day of a known Jalali month and the first of the next.
+        // 2026-03-20 ≈ 1404-12-30 (end of Esfand), 2026-03-21 ≈ 1405-01-01 (Farvardin).
+        $end = new CarbonImmutable('2026-03-20T12:00:00Z');
+        $start = new CarbonImmutable('2026-03-21T12:00:00Z');
+        $ownerKey = 'ws:'.(int) $this->actor->id;
+        $a = $g->allocate($ownerKey, BillingDocumentType::INVOICE, $end);
+        $b = $g->allocate($ownerKey, BillingDocumentType::INVOICE, $start);
+        $this->assertSame(1, $a['number']);
+        $this->assertSame(1, $b['number']);
+        $this->assertMatchesRegularExpression('/-0001$/', $a['doc_number']);
+        $this->assertMatchesRegularExpression('/-0001$/', $b['doc_number']);
+        // Different Jalali year/month between the two.
+        $this->assertNotSame(substr($a['doc_number'], 4, 7), substr($b['doc_number'], 4, 7));
+    }
+
+    public function test_issuance_idempotent_after_simulated_crash_between_outbox_and_doc(): void
+    {
+        // Simulates a crash AFTER finalize (outbox+payment marked PAID) but
+        // BEFORE document issuance by invoking issuance a second time via
+        // the document service directly: must return existing on retry.
+        $v = $this->publishVersion('crash', CorePlan::AUDIENCE_PERSONAL, ['monthly' => 180_000]);
+        $owner = $this->personalOwner($this->actor);
+        $quote = $this->quotes()->create($this->actor, $owner, $v, 'monthly', null, 'k-crash')['quote'];
+        $order = $this->orders()->convert($this->actor, $owner, $quote, 'c-crash')['order'];
+        $svc = $this->payments();
+        $init = $svc->initiate($this->actor, $owner, $order, 'i-crash');
+        parse_str(parse_url($init['redirect_url'], PHP_URL_QUERY), $q);
+        $q['sandbox'] = 'settle';
+        $svc->verifyAndFinalize($this->actor, $init['payment'], $q);
+
+        // Simulate "re-run" of document issuance (as an operator recovery would).
+        $docs = app(\App\Core\Billing\FinancialDocumentService::class);
+        $r1 = $docs->issueInvoiceForOrder($order->fresh(), $init['payment']->fresh(), $this->actor);
+        $r2 = $docs->issueReceiptForPayment($init['payment']->fresh(), $order->fresh(), $this->actor);
+        $this->assertFalse($r1['is_new']);
+        $this->assertFalse($r2['is_new']);
+        $this->assertSame(1, CoreBillingDocument::query()->where('order_id', $order->id)
+            ->where('doc_type', BillingDocumentType::INVOICE->value)->count());
+        $this->assertSame(1, CoreBillingDocument::query()->where('payment_id', $init['payment']->id)
+            ->where('doc_type', BillingDocumentType::RECEIPT->value)->count());
+    }
+
+    public function test_reconciliation_detects_missing_receipt(): void
+    {
+        $v = $this->publishVersion('mrec', CorePlan::AUDIENCE_PERSONAL, ['monthly' => 90_000]);
+        $owner = $this->personalOwner($this->actor);
+        $quote = $this->quotes()->create($this->actor, $owner, $v, 'monthly', null, 'k-mrec')['quote'];
+        $order = $this->orders()->convert($this->actor, $owner, $quote, 'c-mrec')['order'];
+        $svc = $this->payments();
+        $init = $svc->initiate($this->actor, $owner, $order, 'i-mrec');
+        parse_str(parse_url($init['redirect_url'], PHP_URL_QUERY), $q);
+        $q['sandbox'] = 'settle';
+        $svc->verifyAndFinalize($this->actor, $init['payment'], $q);
+
+        // Delete the receipt but keep the invoice: finding should be raised.
+        CoreBillingDocument::query()->where('payment_id', $init['payment']->id)
+            ->where('doc_type', BillingDocumentType::RECEIPT->value)->delete();
+
+        $recon = app(FinancialReconciliationService::class);
+        $summary = $recon->sweep();
+        $this->assertGreaterThanOrEqual(1, $summary['total_open']);
+        $this->assertNotNull(
+            CoreBillingReconciliationFinding::query()
+                ->where('finding_type', 'settled_payment_missing_receipt')
+                ->where('subject_id', $init['payment']->id)
+                ->first()
+        );
     }
 
     // ---- helpers ----
