@@ -19,9 +19,11 @@ jobs:
         run: composer install --prefer-dist --no-interaction --no-progress
       - name: pint
         working-directory: backend
-        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.txt 2>&1; head -200 /tmp/pint.txt; tail -50 /tmp/pint.txt; echo DONE
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: pint-out
-          path: /tmp/pint.txt
+        run: |
+          set +e
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tee /tmp/pint.txt
+          echo "## Pint Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/pint.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit ${PIPESTATUS[0]}
