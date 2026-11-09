@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\Bale;
 
+use App\Models\BaleConversation;
+use App\Models\Project;
 use App\Modules\Messaging\Bot\Bale\Auth\AccountLinker;
 use App\Modules\Messaging\Bot\Bale\Client\BaleClient;
 use App\Modules\Messaging\Bot\Bale\Outbox;
 use App\Modules\Messaging\Bot\Bale\Settings;
-use App\Models\BaleConversation;
-use App\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Events\RequestSending;
 use Illuminate\Http\Client\Events\ResponseReceived;

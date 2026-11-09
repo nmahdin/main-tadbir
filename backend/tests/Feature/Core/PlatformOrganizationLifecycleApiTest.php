@@ -11,6 +11,7 @@ use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\ScopedPermission;
+use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\Permission;
 use App\Models\Role;
@@ -250,7 +251,7 @@ class PlatformOrganizationLifecycleApiTest extends TestCase
     }
 
     /**
-     * @return array{0: Organization, 1: \App\Core\Workspaces\Workspace, 2: User}
+     * @return array{0: Organization, 1: Workspace, 2: User}
      */
     private function organization(string $name): array
     {

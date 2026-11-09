@@ -19,7 +19,6 @@ use App\Core\Organizations\OrganizationMembership;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\CorePlanVersion;
 use App\Core\Plans\PlanProvisioner;
-use App\Core\Rbac\MembershipPermissions;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\ScopedPermission;
 use App\Core\Rbac\ScopedRole;

@@ -4,6 +4,8 @@ namespace Tests\Feature\Core;
 
 use App\Core\Audit\AuditLog;
 use App\Core\Authorization\AuthorizationDeniedException;
+use App\Core\Authorization\AuthorizationService;
+use App\Core\Modules\CoreModule;
 use App\Core\Modules\ModuleAccessDeniedException;
 use App\Core\Modules\ModuleAccessGuard;
 use App\Core\Modules\ModuleActivationException;
@@ -11,19 +13,18 @@ use App\Core\Modules\ModuleActivationPlanner;
 use App\Core\Modules\ModuleOperation;
 use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Modules\OrganizationModulePolicy;
-use App\Core\Modules\CoreModule;
 use App\Core\Modules\WorkspaceModule;
 use App\Core\Modules\WorkspaceModuleService;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Plans\Contracts\SubscriptionAccessEvaluator;
+use App\Core\Plans\CorePlanVersion;
 use App\Core\Plans\ModuleAccessLevel;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Subscriptions\CoreSubscription;
-use App\Core\Subscriptions\SubscriptionEntitlementEvaluator;
 use App\Core\Subscriptions\SubscriptionService;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Core\Workspaces\Workspace;
@@ -153,7 +154,7 @@ class SubscriptionEntitlementEvaluatorTest extends TestCase
         $this->assign($workspace, 'eval-personal', '2026-01-01T00:00:00Z', '2026-07-01T00:00:00Z');
         $this->forceEnable($workspace, 'projects', $owner);
         $guard = app(ModuleAccessGuard::class);
-        $context = fn () => app(\App\Core\Authorization\AuthorizationService::class)->resolveContext($owner, $workspace->id);
+        $context = fn () => app(AuthorizationService::class)->resolveContext($owner, $workspace->id);
 
         $this->travelTo(CarbonImmutable::parse('2026-08-01T00:00:00Z')); // expired
         $guard->assertOperational($context(), 'projects', ModuleOperation::Read);
@@ -276,7 +277,7 @@ class SubscriptionEntitlementEvaluatorTest extends TestCase
 
     private function versionId(string $planKey, int $version): int
     {
-        return (int) \App\Core\Plans\CorePlanVersion::query()
+        return (int) CorePlanVersion::query()
             ->whereHas('plan', fn ($query) => $query->where('key', $planKey))
             ->where('version', $version)
             ->value('id');

@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\Schema;
 /**
  * پوشه‌بندی و دسته‌بندی جدول‌های اطلاعات + اتصال ردیف به محتوای خاص.
  */
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::table('dam_data_tables', function (Blueprint $t) {

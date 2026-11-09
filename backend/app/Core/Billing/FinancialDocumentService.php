@@ -6,6 +6,7 @@ use App\Core\Audit\AuditWriter;
 use App\Core\Billing\Documents\BillingDocumentStatus;
 use App\Core\Billing\Documents\BillingDocumentType;
 use App\Core\Billing\Documents\DocumentNumberGenerator;
+use App\Core\Organizations\Organization;
 use App\Core\Plans\CorePlanVersion;
 use App\Core\Subscriptions\SubscriptionOwner;
 use App\Models\User;
@@ -95,8 +96,9 @@ final class FinancialDocumentService
                 'doc_id' => $doc->id, 'doc_number' => $doc->doc_number,
                 'order_id' => $order->id, 'payment_id' => $payment?->id,
             ], $order->organization_id !== null ? 'organization' : 'personal',
-               $order->organization_id ?? $order->personal_workspace_id,
-               'billing_document', (int) $doc->id);
+                $order->organization_id ?? $order->personal_workspace_id,
+                'billing_document', (int) $doc->id);
+
             return ['document' => $doc, 'is_new' => true];
         });
     }
@@ -181,8 +183,9 @@ final class FinancialDocumentService
                 'doc_id' => $doc->id, 'doc_number' => $doc->doc_number,
                 'order_id' => $order->id, 'payment_id' => $payment->id,
             ], $order->organization_id !== null ? 'organization' : 'personal',
-               $order->organization_id ?? $order->personal_workspace_id,
-               'billing_document', (int) $doc->id);
+                $order->organization_id ?? $order->personal_workspace_id,
+                'billing_document', (int) $doc->id);
+
             return ['document' => $doc, 'is_new' => true];
         });
     }
@@ -192,6 +195,7 @@ final class FinancialDocumentService
         if ($doc->owner_key !== $owner->key()) {
             return null;
         }
+
         return $doc;
     }
 
@@ -219,7 +223,7 @@ final class FinancialDocumentService
             ],
             'tax_rate' => $doc->tax_rate_snapshot,
             'promo_code' => $doc->promo_code_snapshot,
-            'payment' => $doc->payment_id === null ?null : [
+            'payment' => $doc->payment_id === null ? null : [
                 'provider' => $doc->provider_name,
                 'transaction_id' => $doc->provider_transaction_id,
             ],
@@ -247,6 +251,7 @@ final class FinancialDocumentService
         }
         /** @var CorePlanVersion $v */
         $v = CorePlanVersion::query()->with('plan')->find($quote->plan_version_id);
+
         return $v;
     }
 
@@ -254,10 +259,12 @@ final class FinancialDocumentService
     {
         if ($order->organization_id !== null) {
             $org = config('database.default') !== 'testing'
-                ?\App\Core\Organizations\Organization::query()->find($order->organization_id)
+                ? Organization::query()->find($order->organization_id)
                 : null;
+
             return $org?->name ?? 'organization:'.$order->organization_id;
         }
+
         return 'personal:'.($order->personal_workspace_id ?? 'ws');
     }
 
@@ -290,6 +297,7 @@ final class FinancialDocumentService
                 'amount_toman' => (int) $order->tax_toman,
             ];
         }
+
         return $items;
     }
 

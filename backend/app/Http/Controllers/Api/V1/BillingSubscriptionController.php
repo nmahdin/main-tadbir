@@ -10,9 +10,7 @@ use App\Core\Subscriptions\CoreSubscription;
 use App\Core\Subscriptions\SubscriptionLifecycle;
 use App\Core\Subscriptions\SubscriptionOwnerResolver;
 use App\Core\Subscriptions\SubscriptionPeriod;
-use App\Core\Subscriptions\SubscriptionService;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
-use App\Core\Workspaces\Workspace;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -126,6 +124,7 @@ final class BillingSubscriptionController extends Controller
             return null;
         }
         $days = (int) round($sub->starts_at->diffInDays($sub->expires_at));
+
         return match (true) {
             $days >= 350 && $days <= 380 => 'annual',
             $days >= 80 && $days <= 100 => 'quarterly',

@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\Schema;
  * Explicit, auditable links between canonical DAM records and Google Workspace.
  * Google files never replace the native asset/table; they are optional editors.
  */
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::create('google_workspace_links', function (Blueprint $table): void {

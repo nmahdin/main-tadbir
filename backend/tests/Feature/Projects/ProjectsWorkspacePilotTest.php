@@ -2,17 +2,32 @@
 
 namespace Tests\Feature\Projects;
 
+use App\Core\Authorization\AuthorizationDeniedException;
+use App\Core\Authorization\AuthorizationService;
 use App\Core\Memberships\MembershipStatus;
+use App\Core\Modules\CoreModule;
+use App\Core\Modules\ModuleRegistrySynchronizer;
+use App\Core\Modules\WorkspaceModule;
+use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Organizations\OrganizationProvisioner;
+use App\Core\Plans\PlanProvisioner;
+use App\Core\Platform\PlatformRoleAssignment;
+use App\Core\Platform\PlatformRoleProvisioner;
+use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\RoleProvisioner;
 use App\Core\Rbac\WorkspaceRoleService;
+use App\Core\Subscriptions\SubscriptionService;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
+use App\Models\Permission;
 use App\Models\Project;
+use App\Models\ProjectTemplate;
+use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -33,7 +48,7 @@ class ProjectsWorkspacePilotTest extends TestCase
 {
     use RefreshDatabase;
 
-    private \App\Models\User $platformAdmin;
+    private User $platformAdmin;
 
     protected function setUp(): void
     {
@@ -43,10 +58,10 @@ class ProjectsWorkspacePilotTest extends TestCase
         // access runs on real C5 fixtures: published plans (personal
         // + organization) entitling `projects`, activated per
         // workspace by an authorized platform administrator.
-        \App\Core\Rbac\PermissionCatalog::sync();
-        app(\App\Core\Modules\ModuleRegistrySynchronizer::class)->sync();
+        PermissionCatalog::sync();
+        app(ModuleRegistrySynchronizer::class)->sync();
 
-        $plans = app(\App\Core\Plans\PlanProvisioner::class);
+        $plans = app(PlanProvisioner::class);
         foreach (['pilot-personal' => 'personal', 'pilot-org' => 'organization'] as $key => $audience) {
             $plans->createPlan($key, ucfirst($key), $audience);
             $plans->createDraftVersion($key, 1, 0);
@@ -55,21 +70,21 @@ class ProjectsWorkspacePilotTest extends TestCase
         }
 
         $this->platformAdmin = User::factory()->create(['status' => 'active']);
-        \App\Core\Platform\PlatformRoleAssignment::create([
+        PlatformRoleAssignment::create([
             'user_id' => $this->platformAdmin->id,
-            'platform_role_id' => app(\App\Core\Platform\PlatformRoleProvisioner::class)->ensurePrimaryAdministrator()->id,
+            'platform_role_id' => app(PlatformRoleProvisioner::class)->ensurePrimaryAdministrator()->id,
         ]);
     }
 
-    private function assignSubscription(\App\Core\Organizations\Organization|\App\Core\Workspaces\Workspace $owner, string $planKey): void
+    private function assignSubscription(Organization|Workspace $owner, string $planKey): void
     {
-        app(\App\Core\Subscriptions\SubscriptionService::class)->assignInitial(
+        app(SubscriptionService::class)->assignInitial(
             $this->platformAdmin,
             $owner,
             $planKey,
             1,
-            \Carbon\CarbonImmutable::parse('2026-01-01T00:00:00Z'),
-            \Carbon\CarbonImmutable::parse('2027-01-01T00:00:00Z'),
+            CarbonImmutable::parse('2026-01-01T00:00:00Z'),
+            CarbonImmutable::parse('2027-01-01T00:00:00Z'),
             'Scoped Projects fixture',
             'corr-'.uniqid(),
         );
@@ -126,12 +141,12 @@ class ProjectsWorkspacePilotTest extends TestCase
         // Stage C4-2: scoped Projects operations require the module
         // to be enabled in the workspace (the creator may create;
         // the organization-only member below still gets nothing).
-        app(\App\Core\Modules\ModuleRegistrySynchronizer::class)->sync();
-        $module = \App\Core\Modules\CoreModule::query()->where('key', 'projects')->firstOrFail();
-        \App\Core\Modules\WorkspaceModule::create([
+        app(ModuleRegistrySynchronizer::class)->sync();
+        $module = CoreModule::query()->where('key', 'projects')->firstOrFail();
+        WorkspaceModule::create([
             'workspace_id' => $workspace->id,
             'module_id' => $module->id,
-            'status' => \App\Core\Modules\WorkspaceModule::STATUS_ENABLED,
+            'status' => WorkspaceModule::STATUS_ENABLED,
             'enabled_at' => now(),
             'enabled_by_user_id' => $creator->id,
         ]);
@@ -312,10 +327,10 @@ class ProjectsWorkspacePilotTest extends TestCase
     {
         [$owner, $workspace] = $this->workspaceOwner();
 
-        $service = app(\App\Core\Authorization\AuthorizationService::class);
+        $service = app(AuthorizationService::class);
         // No real module id is registered for gates; an unresolvable
         // gate identifier must fail closed, never silently pass.
-        $this->expectException(\App\Core\Authorization\AuthorizationDeniedException::class);
+        $this->expectException(AuthorizationDeniedException::class);
         $service->authorize($owner, $workspace->id, 'projects.view', 'unimplemented-module');
     }
 
@@ -326,11 +341,11 @@ class ProjectsWorkspacePilotTest extends TestCase
         // evaluator denies every scoped operation.
         $owner = User::factory()->create(['status' => 'active']);
         $workspace = app(PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
-        $module = \App\Core\Modules\CoreModule::query()->where('key', 'projects')->firstOrFail();
-        \App\Core\Modules\WorkspaceModule::create([
+        $module = CoreModule::query()->where('key', 'projects')->firstOrFail();
+        WorkspaceModule::create([
             'workspace_id' => $workspace->id,
             'module_id' => $module->id,
-            'status' => \App\Core\Modules\WorkspaceModule::STATUS_ENABLED,
+            'status' => WorkspaceModule::STATUS_ENABLED,
             'enabled_at' => now(),
             'enabled_by_user_id' => $owner->id,
         ]);
@@ -348,7 +363,7 @@ class ProjectsWorkspacePilotTest extends TestCase
     {
         [$owner, $workspace] = $this->workspaceOwner();
 
-        $template = \App\Models\ProjectTemplate::create([
+        $template = ProjectTemplate::create([
             'name' => 'Pilot Template',
             'is_active' => true,
             'tasks' => [['title' => 'Template task']],
@@ -395,12 +410,12 @@ class ProjectsWorkspacePilotTest extends TestCase
 
         // Stage C4-2: workspace-scoped Projects operations require
         // the `projects` module to be enabled in the workspace.
-        app(\App\Core\Modules\ModuleRegistrySynchronizer::class)->sync();
-        $module = \App\Core\Modules\CoreModule::query()->where('key', 'projects')->firstOrFail();
-        \App\Core\Modules\WorkspaceModule::create([
+        app(ModuleRegistrySynchronizer::class)->sync();
+        $module = CoreModule::query()->where('key', 'projects')->firstOrFail();
+        WorkspaceModule::create([
             'workspace_id' => $workspace->id,
             'module_id' => $module->id,
-            'status' => \App\Core\Modules\WorkspaceModule::STATUS_ENABLED,
+            'status' => WorkspaceModule::STATUS_ENABLED,
             'enabled_at' => now(),
             'enabled_by_user_id' => $owner->id,
         ]);
@@ -429,13 +444,13 @@ class ProjectsWorkspacePilotTest extends TestCase
 
     private function legacyUserWithProjectsAccess(array $extraPermissions = []): User
     {
-        $role = \App\Models\Role::create([
+        $role = Role::create([
             'key' => 'pilot-legacy-'.uniqid(),
             'name' => 'Pilot Legacy',
             'is_active' => true,
         ]);
         foreach (['projects.view', 'projects.create', 'projects.edit', 'projects.delete', ...$extraPermissions] as $key) {
-            $role->permissions()->attach(\App\Models\Permission::firstOrCreate(
+            $role->permissions()->attach(Permission::firstOrCreate(
                 ['key' => $key],
                 ['label' => $key, 'category' => 'tests'],
             ));

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\DamAsset;
+use App\Models\DamRelation;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
@@ -161,7 +163,7 @@ class WorkspaceRecordsTest extends TestCase
             'owner_id' => $user->id,
             'payload' => [],
         ]);
-        $asset = \App\Models\DamAsset::create([
+        $asset = DamAsset::create([
             'type' => 'content',
             'title' => 'دارایی مشترک',
             'status' => 'draft',
@@ -171,7 +173,7 @@ class WorkspaceRecordsTest extends TestCase
             'updated_by' => $user->id,
         ]);
         foreach ([['idea', $idea->id], ['meeting', $meeting->id]] as [$type, $id]) {
-            \App\Models\DamRelation::create([
+            DamRelation::create([
                 'asset_id' => $asset->id,
                 'related_type' => $type,
                 'related_id' => $id,

@@ -6,6 +6,7 @@ use App\Core\Modules\ModuleActivationException;
 use App\Core\Modules\ModuleActivationPlanner;
 use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Modules\WorkspaceModuleService;
+use App\Core\Plans\CorePlan;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
@@ -50,7 +51,7 @@ class EntitlementConcurrencyMysqlTest extends TestCase
         app(ModuleRegistrySynchronizer::class)->sync();
 
         $plans = app(PlanProvisioner::class);
-        if (\App\Core\Plans\CorePlan::query()->where('key', 'race-personal')->doesntExist()) {
+        if (CorePlan::query()->where('key', 'race-personal')->doesntExist()) {
             $plans->createPlan('race-personal', 'Race Personal', 'personal');
             $plans->createDraftVersion('race-personal', 1, 0);
             $plans->setModuleEntitlement('race-personal', 1, 'projects', true);

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Core;
 
+use App\Core\Audit\AuditLog;
 use App\Core\Authorization\AuthorizationDeniedException;
 use App\Core\Authorization\AuthorizationService;
 use App\Core\Platform\Operations\OperationTokenSigner;
@@ -14,7 +15,6 @@ use App\Core\Platform\PlatformRole;
 use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\PermissionCatalog;
-use App\Core\Rbac\ScopedPermission;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Models\Permission;
 use App\Models\Role;
@@ -174,7 +174,7 @@ class PlatformOperationsTest extends TestCase
         $assignment = $this->execute($this->recoveryToken('new.primary'));
 
         $this->assertSame(PlatformRoleProvisioner::PRIMARY_ROLE_KEY, $assignment->role->key);
-        $audit = \App\Core\Audit\AuditLog::where('action', 'platform.emergency_recovery')->sole();
+        $audit = AuditLog::where('action', 'platform.emergency_recovery')->sole();
         $this->assertNull($audit->actor_user_id);
         $this->assertSame('INC-42', $audit->summary['incident_id']);
         $this->assertSame('infra:ops-lead', $audit->summary['operator_id']);

@@ -2,18 +2,20 @@
 
 namespace Tests\Feature\Core;
 
-use App\Core\Billing\BillingArithmeticException;
 use App\Core\Billing\BillingDomainException;
 use App\Core\Billing\CorePlanPrice;
 use App\Core\Billing\MoneyToman;
 use App\Core\Billing\PlanPricePublisher;
 use App\Core\Modules\ModuleRegistrySynchronizer;
-use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\CorePlanVersion;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Plans\PlanProvisioningException;
+use App\Core\Platform\PlatformRole;
+use App\Core\Platform\PlatformRoleAssignment;
+use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\PermissionCatalog;
+use App\Core\Rbac\ScopedPermission;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -49,17 +51,17 @@ class PlanPricePublisherTest extends TestCase
         // negative-authorization tests (e.g. "subscriptions.manage
         // does NOT satisfy billing.manage") trivially pass when
         // the primary role already contains billing.manage.
-        app(\App\Core\Platform\PlatformRoleProvisioner::class)->ensurePrimaryAdministrator();
-        $role = \App\Core\Platform\PlatformRole::query()->create([
+        app(PlatformRoleProvisioner::class)->ensurePrimaryAdministrator();
+        $role = PlatformRole::query()->create([
             'key' => 'test_role_'.str_replace('.', '_', $permission).'_'.bin2hex(random_bytes(3)),
             'name' => 'Test Admin ('.$permission.')',
             'is_protected' => false,
         ]);
-        $perm = \App\Core\Rbac\ScopedPermission::where('key', $permission)->firstOrFail();
+        $perm = ScopedPermission::where('key', $permission)->firstOrFail();
         $role->permissions()->attach($perm->id);
 
         $user = User::factory()->create(['status' => 'active']);
-        \App\Core\Platform\PlatformRoleAssignment::query()->create([
+        PlatformRoleAssignment::query()->create([
             'user_id' => $user->id,
             'platform_role_id' => $role->id,
             'granted_by_user_id' => $user->id,

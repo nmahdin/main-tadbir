@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Core\Identity\AccountStatus;
+use App\Core\Identity\UsernamePolicy;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -52,7 +54,7 @@ class User extends Authenticatable
         // normalization-equivalent uniqueness lookups.
         static::saving(function (self $user): void {
             if ($user->username !== null) {
-                $user->username_normalized = \App\Core\Identity\UsernamePolicy::normalize($user->username);
+                $user->username_normalized = UsernamePolicy::normalize($user->username);
             }
         });
     }
@@ -143,6 +145,6 @@ class User extends Authenticatable
 
     public function isActive(): bool
     {
-        return \App\Core\Identity\AccountStatus::of($this->status)?->allowsOperationalAccess() ?? false;
+        return AccountStatus::of($this->status)?->allowsOperationalAccess() ?? false;
     }
 }

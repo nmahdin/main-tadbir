@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\Schema;
  * دسترسی سطح جدول، ثبت‌کننده/ویرایش‌کننده ردیف، اتصال ردیف به تسک
  * و تاریخچه فعالیت ردیف‌ها در جدول‌های اطلاعات DAM.
  */
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::table('dam_data_tables', function (Blueprint $t) {

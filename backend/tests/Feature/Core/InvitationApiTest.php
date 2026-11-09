@@ -3,7 +3,10 @@
 namespace Tests\Feature\Core;
 
 use App\Core\Identity\EmailVerificationDelivery;
+use App\Core\Identity\EmailVerificationService;
 use App\Core\Invitations\CoreInvitation;
+use App\Core\Invitations\InvitationService;
+use App\Core\Invitations\Mail\InvitationMail;
 use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
@@ -14,7 +17,6 @@ use App\Core\Rbac\ScopedPermission;
 use App\Core\Rbac\ScopedRole;
 use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
-use App\Core\Invitations\Mail\InvitationMail;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -178,7 +180,7 @@ class InvitationApiTest extends TestCase
         $this->assertSame(CoreInvitation::STATUS_PENDING, CoreInvitation::query()->sole()->status, 'preview never consumes');
 
         // Revoked: minimal safe status only.
-        app(\App\Core\Invitations\InvitationService::class)->revoke($this->manager, CoreInvitation::query()->sole());
+        app(InvitationService::class)->revoke($this->manager, CoreInvitation::query()->sole());
         $revoked = $this->postJson('/api/v1/invitations/preview', ['token' => $token])->assertOk();
         $revoked->assertJsonPath('data.invitation.status', 'revoked');
         $this->assertArrayNotHasKey('organization', $revoked->json('data'));
@@ -307,8 +309,8 @@ class InvitationApiTest extends TestCase
     private function verifiedUser(string $email, string $username): User
     {
         $user = User::factory()->create(['username' => $username, 'status' => 'active']);
-        app(\App\Core\Identity\EmailVerificationService::class)->requestChallenge($user, $email);
-        app(\App\Core\Identity\EmailVerificationService::class)->confirmEmail($user, $this->delivery->lastToken());
+        app(EmailVerificationService::class)->requestChallenge($user, $email);
+        app(EmailVerificationService::class)->confirmEmail($user, $this->delivery->lastToken());
 
         return $user->fresh();
     }

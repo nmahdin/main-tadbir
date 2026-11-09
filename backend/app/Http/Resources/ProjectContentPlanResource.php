@@ -11,6 +11,7 @@ class ProjectContentPlanResource extends JsonResource
     public function toArray(Request $request): array
     {
         $base = Content::where('project_id', $this->project_id)->where('type', $this->content_type)->where('status', '!=', 'archived');
+
         return [
             'id' => (string) $this->id,
             'projectId' => (string) $this->project_id,

@@ -1,11 +1,24 @@
 <?php
 
+use App\Core\Identity\UsernamePolicy;
+use App\Core\Modules\ModuleCatalog;
+use App\Core\Modules\ModuleRegistrySynchronizer;
+use App\Core\Organizations\Organization;
+use App\Core\Plans\CorePlan;
+use App\Core\Plans\PlanProvisioner;
+use App\Core\Subscriptions\FreeActivationPending;
+use App\Core\Subscriptions\FreePlanActivator;
+use App\Core\Workspaces\Workspace;
+use App\Models\DomainRecord;
+use App\Models\User;
+use App\Modules\Contents\Support\ContentCodeAllocator;
 use App\Modules\Messaging\Bot\Bale\Client\BaleApiException;
 use App\Modules\Messaging\Bot\Bale\PollingRunner;
 use App\Modules\Messaging\Bot\Bale\Settings;
 use App\Modules\Messaging\Bot\Bale\Support\RuntimeLock;
+use App\Modules\Notifications\Services\NotificationInbox;
+use App\Modules\Notifications\Services\NotificationRetention;
 use App\Modules\Notifications\Services\OverdueNotifications;
-use App\Modules\Contents\Support\ContentCodeAllocator;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
@@ -25,7 +38,7 @@ Artisan::command('bale:tick', function (Settings $settings, RuntimeLock $lock, P
         $this->error('Bale tick failed with safe code: '.$exception->reason);
 
         return 1;
-    } catch (\Throwable) {
+    } catch (Throwable) {
         // Console output must not contain a URL capability, token, payload or linking code.
         $this->error('Bale tick failed before completion.');
 
@@ -71,7 +84,7 @@ Schedule::command('billing:sweep-subscriptions')
 // call from the Bale tick above, from an external scheduler, or by hand.
 // UX-02-4: 90-day notification retention (archives unread ordinary rows,
 // deletes read ones, exempts mandatory/security). Chunked + idempotent.
-Artisan::command('notifications:prune-retention {--dry-run}', function (\App\Modules\Notifications\Services\NotificationRetention $retention): int {
+Artisan::command('notifications:prune-retention {--dry-run}', function (NotificationRetention $retention): int {
     $result = $retention->run((bool) $this->option('dry-run'));
     $this->line(sprintf('Notification retention: deleted=%d archived=%d exempt=%d%s.', $result['deleted'], $result['archived'], $result['exempt'], $result['dry_run'] ? ' (dry-run)' : ''));
 
@@ -82,17 +95,17 @@ Artisan::command('notifications:prune-retention {--dry-run}', function (\App\Mod
 // written before the columns existed. Idempotent, chunked, any-time.
 Artisan::command('notifications:backfill-columns', function (): int {
     $filled = 0;
-    \App\Models\DomainRecord::query()
-        ->where('domain', \App\Models\DomainRecord::DOMAIN_NOTIFICATION)
+    DomainRecord::query()
+        ->where('domain', DomainRecord::DOMAIN_NOTIFICATION)
         ->whereNull('group_key')
         ->orderBy('id')
         ->chunkById(1000, function ($rows) use (&$filled) {
             foreach ($rows as $row) {
                 $payload = is_array($row->payload) ? $row->payload : [];
-                $category = \App\Modules\Notifications\Services\NotificationInbox::categoryOfPayload($payload);
+                $category = NotificationInbox::categoryOfPayload($payload);
                 $row->forceFill([
                     'category_key' => $category,
-                    'group_key' => \App\Modules\Notifications\Services\NotificationInbox::groupKeyOf($payload, $category),
+                    'group_key' => NotificationInbox::groupKeyOf($payload, $category),
                     'read_at' => ! empty($payload['read']) ? ($row->created_at ?? now()) : null,
                 ])->saveQuietly();
                 $filled++;
@@ -138,7 +151,7 @@ Artisan::command('auth:phone-preflight', function (): int {
 
 // AUTH-EXT-01 (AMB-01): read-only username normalization audit.
 Artisan::command('auth:username-preflight', function (): int {
-    $conflicts = \App\Core\Identity\UsernamePolicy::normalizationConflicts();
+    $conflicts = UsernamePolicy::normalizationConflicts();
     $this->line('normalization_conflict_groups='.count($conflicts));
     foreach ($conflicts as $conflict) {
         $this->line("conflict normalized={$conflict['normalized']} usernames=".implode('|', $conflict['usernames']));
@@ -176,7 +189,7 @@ Artisan::command('accounts:process-deletions', function (): int {
                     DB::table('user_external_identities')->where('user_id', $row->id)->delete();
                     DB::table('user_devices')->where('user_id', $row->id)->delete();
                     DB::table('sessions')->where('user_id', $row->id)->delete();
-                    DB::table('personal_access_tokens')->where('tokenable_id', $row->id)->where('tokenable_type', \App\Models\User::class)->delete();
+                    DB::table('personal_access_tokens')->where('tokenable_id', $row->id)->where('tokenable_type', User::class)->delete();
                     $processed++;
                 });
             }
@@ -197,10 +210,10 @@ Artisan::command('auth:prune-otp-challenges', function (): int {
 // C5-EXT-01 M1: publish the canonical Free plans (idempotent).
 // Run explicitly by platform operations; --dry-run only reports.
 Artisan::command('plans:provision-free {--dry-run}', function (): int {
-    $plans = app(\App\Core\Plans\PlanProvisioner::class);
+    $plans = app(PlanProvisioner::class);
     $dry = (bool) $this->option('dry-run');
     $grace = (int) config('billing.free.grace_days', 7);
-    $entitle = collect(\App\Core\Modules\ModuleCatalog::definitions())
+    $entitle = collect(ModuleCatalog::definitions())
         ->filter(fn ($definition) => $definition->availability->isAvailable())
         ->map(fn ($definition) => $definition->key)
         ->all();
@@ -213,7 +226,7 @@ Artisan::command('plans:provision-free {--dry-run}', function (): int {
             'limits' => ['workspaces' => 1, 'organization_members' => 3, 'workspace_members' => 3, 'projects' => 5, 'storage_bytes' => 104857600]],
     ];
     foreach ($specs as $spec) {
-        $existing = \App\Core\Plans\CorePlan::query()->where('key', $spec['key'])->first();
+        $existing = CorePlan::query()->where('key', $spec['key'])->first();
         $versionModel = $existing?->versions()->where('version', $spec['version'])->first();
         if ($versionModel !== null && $versionModel->isPublished()) {
             $snapshot = $plans->snapshot($spec['key'], $spec['version']);
@@ -230,13 +243,15 @@ Artisan::command('plans:provision-free {--dry-run}', function (): int {
                 return 1;
             }
             $this->line("{$spec['key']} v{$spec['version']}: already published (idempotent no-op).");
+
             continue;
         }
         if ($dry) {
             $this->line("{$spec['key']} v{$spec['version']}: would publish (grace {$grace}d, limits ".json_encode($spec['limits']).', modules '.implode(',', $entitle).').');
+
             continue;
         }
-        app(\App\Core\Modules\ModuleRegistrySynchronizer::class)->sync();
+        app(ModuleRegistrySynchronizer::class)->sync();
         $plans->createPlan($spec['key'], $spec['name'], $spec['audience']);
         $plans->createDraftVersion($spec['key'], $spec['version'], $grace);
         foreach ($spec['limits'] as $resource => $value) {
@@ -246,9 +261,9 @@ Artisan::command('plans:provision-free {--dry-run}', function (): int {
             $plans->setModuleEntitlement($spec['key'], $spec['version'], $moduleKey, true);
         }
         $plans->publish($spec['key'], $spec['version']);
-        $plan = \App\Core\Plans\CorePlan::query()->where('key', $spec['key'])->first();
-        if ($plan !== null && $plan->status === \App\Core\Plans\CorePlan::STATUS_DRAFT) {
-            $plans->setPlanStatus($spec['key'], \App\Core\Plans\CorePlan::STATUS_ACTIVE);
+        $plan = CorePlan::query()->where('key', $spec['key'])->first();
+        if ($plan !== null && $plan->status === CorePlan::STATUS_DRAFT) {
+            $plans->setPlanStatus($spec['key'], CorePlan::STATUS_ACTIVE);
         }
         $this->line("{$spec['key']} v{$spec['version']}: published.");
     }
@@ -261,16 +276,16 @@ Artisan::command('plans:provision-free {--dry-run}', function (): int {
 // Never overwrites an existing legitimate subscription; legacy
 // organizations without a pending record are NOT mass-assigned.
 Artisan::command('subscriptions:resume-pending-free {--dry-run}', function (): int {
-    $activator = app(\App\Core\Subscriptions\FreePlanActivator::class);
+    $activator = app(FreePlanActivator::class);
     $dry = (bool) $this->option('dry-run');
     $counts = ['activated' => 0, 'existing' => 0, 'pending' => 0, 'conflict' => 0, 'invalid' => 0];
 
     // (a) Personal scan: active users with a personal workspace but
     // no subscription (covers pre-M1 `pending_plan` accounts; the
     // activation gate no longer depends on the provisioned stamp).
-    \App\Models\User::query()->where('status', 'active')->orderBy('id')->chunkById(200, function ($users) use ($activator, $dry, &$counts): void {
+    User::query()->where('status', 'active')->orderBy('id')->chunkById(200, function ($users) use ($activator, $dry, &$counts): void {
         foreach ($users as $user) {
-            $workspace = \App\Core\Workspaces\Workspace::personal()->where('owner_user_id', $user->id)->where('is_default', true)->first();
+            $workspace = Workspace::personal()->where('owner_user_id', $user->id)->where('is_default', true)->first();
             if ($workspace === null || $activator->subscriptionForPersonalWorkspace($workspace) !== null) {
                 continue;
             }
@@ -280,22 +295,23 @@ Artisan::command('subscriptions:resume-pending-free {--dry-run}', function (): i
 
     // (b) Recorded pending rows (incl. organizations created while
     // the plan was unpublished).
-    \App\Core\Subscriptions\FreeActivationPending::query()->whereNull('resolved_at')->orderBy('id')->chunkById(200, function ($rows) use ($activator, $dry, &$counts): void {
+    FreeActivationPending::query()->whereNull('resolved_at')->orderBy('id')->chunkById(200, function ($rows) use ($activator, $dry, &$counts): void {
         foreach ($rows as $row) {
             if ($dry) {
                 $counts['pending']++;
+
                 continue;
             }
-            $result = \App\Core\Subscriptions\FreePlanActivator::INVALID;
+            $result = FreePlanActivator::INVALID;
             if ($row->organization_id !== null) {
-                $organization = \App\Core\Organizations\Organization::find($row->organization_id);
-                $creator = $row->user_id !== null ? \App\Models\User::find($row->user_id) : null;
+                $organization = Organization::find($row->organization_id);
+                $creator = $row->user_id !== null ? User::find($row->user_id) : null;
                 if ($organization !== null && $creator !== null) {
                     $result = $activator->activateForOrganization($creator, $organization, 'org-creation-'.$organization->id);
                 }
             } elseif ($row->personal_workspace_id !== null) {
-                $workspace = \App\Core\Workspaces\Workspace::find($row->personal_workspace_id);
-                $user = $row->user_id !== null ? \App\Models\User::find($row->user_id) : null;
+                $workspace = Workspace::find($row->personal_workspace_id);
+                $user = $row->user_id !== null ? User::find($row->user_id) : null;
                 if ($workspace !== null && $user !== null) {
                     $result = $activator->activateForPersonalWorkspace($user, $workspace, 'auth-activation-'.$user->id);
                 }

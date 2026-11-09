@@ -135,7 +135,7 @@ return new class extends Migration
         }
         $this->dropCheckIfExists('core_billing_orders', 'billing_orders_status_valid');
         DB::statement(
-            "ALTER TABLE core_billing_orders ADD CONSTRAINT billing_orders_status_valid CHECK ".
+            'ALTER TABLE core_billing_orders ADD CONSTRAINT billing_orders_status_valid CHECK '.
             "(status IN ('in_review','cancelled','review_expired','payable_pending','paid'))"
         );
     }
@@ -148,7 +148,7 @@ return new class extends Migration
         }
         $this->dropCheckIfExists('core_billing_orders', 'billing_orders_status_valid');
         DB::statement(
-            "ALTER TABLE core_billing_orders ADD CONSTRAINT billing_orders_status_valid CHECK ".
+            'ALTER TABLE core_billing_orders ADD CONSTRAINT billing_orders_status_valid CHECK '.
             "(status IN ('in_review','cancelled','review_expired'))"
         );
     }

@@ -16,7 +16,18 @@ class ProjectContentPlan extends Model
 
     protected $casts = ['planned_count' => 'integer', 'deadline' => 'date'];
 
-    public function project(): BelongsTo { return $this->belongsTo(Project::class); }
-    public function defaultSeries(): BelongsTo { return $this->belongsTo(ContentSeries::class, 'default_series_id'); }
-    public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    public function defaultSeries(): BelongsTo
+    {
+        return $this->belongsTo(ContentSeries::class, 'default_series_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

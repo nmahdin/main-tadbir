@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Core\Identity\AccountActivationService;
 use App\Core\Identity\Otp\FakeSmsOtpDelivery;
+use App\Core\Identity\Otp\SmsOtpDelivery;
 use App\Core\Workspaces\Workspace;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
@@ -30,14 +31,13 @@ class AuthExtTest extends TestCase
     /** Generated per-test fixture credential (never a committed literal pair). */
     private string $testPassword;
 
-
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed([PermissionSeeder::class, RoleSeeder::class]);
         $this->testPassword = Str::password(16, symbols: false);
         config(['auth.otp.driver' => 'fake']);
-        $this->app->bind(\App\Core\Identity\Otp\SmsOtpDelivery::class, fn () => new FakeSmsOtpDelivery);
+        $this->app->bind(SmsOtpDelivery::class, fn () => new FakeSmsOtpDelivery);
     }
 
     private function registration(array $overrides = []): array

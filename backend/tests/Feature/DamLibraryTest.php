@@ -1,10 +1,18 @@
 <?php
+
 namespace Tests\Feature;
 
 use App\Models\Content;
+use App\Models\ContentSeries;
+use App\Models\DamAsset;
+use App\Models\DamFolder;
 use App\Models\Permission;
+use App\Models\Project;
 use App\Models\Role;
+use App\Models\Task;
 use App\Models\User;
+use App\Models\WorkspaceRecord;
+use App\Modules\Dam\Services\DamService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -19,31 +27,32 @@ class DamLibraryTest extends TestCase
 
     private function actor(array $keys, string $roleKey = 'member'): User
     {
-        $role = Role::create(['key'=>$roleKey,'name'=>$roleKey,'color'=>'#000000','is_system'=>false,'is_active'=>true]);
+        $role = Role::create(['key' => $roleKey, 'name' => $roleKey, 'color' => '#000000', 'is_system' => false, 'is_active' => true]);
         foreach ($keys as $key) {
-            $permission = Permission::firstOrCreate(['key'=>$key], ['label'=>$key,'category'=>'dam']);
+            $permission = Permission::firstOrCreate(['key' => $key], ['label' => $key, 'category' => 'dam']);
             $role->permissions()->attach($permission);
         }
-        $user = User::factory()->create(['role_id'=>$role->id,'role_key'=>$roleKey]);
+        $user = User::factory()->create(['role_id' => $role->id, 'role_key' => $roleKey]);
         Sanctum::actingAs($user);
+
         return $user;
     }
 
     public function test_private_file_upload_download_and_confidential_scope(): void
     {
         Storage::fake('local');
-        $owner = $this->actor(['assets.view','assets.upload','assets.download']);
+        $owner = $this->actor(['assets.view', 'assets.upload', 'assets.download']);
         $response = $this->post('/api/v1/dam/library', [
-            'title'=>'Private document', 'confidentiality'=>'confidential',
-            'file'=>UploadedFile::fake()->create('report.pdf', 5, 'application/pdf'),
-        ])->assertCreated()->assertJsonPath('data.type','file');
+            'title' => 'Private document', 'confidentiality' => 'confidential',
+            'file' => UploadedFile::fake()->create('report.pdf', 5, 'application/pdf'),
+        ])->assertCreated()->assertJsonPath('data.type', 'file');
         $id = $response->json('data.id');
-        $path = \App\Models\DamAsset::findOrFail($id)->latestFile->storage_path;
+        $path = DamAsset::findOrFail($id)->latestFile->storage_path;
         Storage::disk('local')->assertExists($path);
         $this->get('/api/v1/dam/library/'.$id.'/download')->assertOk();
         $this->getJson('/api/v1/dam/library')->assertJsonCount(1, 'data');
 
-        $other = $this->actor(['assets.view','assets.download'], 'other');
+        $other = $this->actor(['assets.view', 'assets.download'], 'other');
         $this->getJson('/api/v1/dam/library')->assertJsonCount(0, 'data');
         $this->getJson('/api/v1/dam/library/'.$id)->assertForbidden();
         $this->get('/api/v1/dam/library/'.$id.'/download')->assertForbidden();
@@ -66,10 +75,10 @@ class DamLibraryTest extends TestCase
 
     public function test_text_is_persisted_and_searchable_without_file(): void
     {
-        $this->actor(['assets.view','assets.upload']);
+        $this->actor(['assets.view', 'assets.upload']);
         $id = $this->postJson('/api/v1/dam/library', [
-            'title'=>'History', 'body'=>'روایت تاریخی امروز',
-        ])->assertCreated()->assertJsonPath('data.type','content')->json('data.id');
+            'title' => 'History', 'body' => 'روایت تاریخی امروز',
+        ])->assertCreated()->assertJsonPath('data.type', 'content')->json('data.id');
         $this->getJson('/api/v1/dam/library?search='.urlencode('تاریخی'))
             ->assertOk()->assertJsonPath('data.0.id', $id);
         $this->getJson('/api/v1/dam/library/'.$id)->assertJsonPath('data.content_item.content_body', 'روایت تاریخی امروز');
@@ -102,9 +111,9 @@ class DamLibraryTest extends TestCase
             'file' => UploadedFile::fake()->create('idea.pdf', 5, 'application/pdf'),
         ])->assertCreated()->json('data.id');
 
-        $root = \App\Models\DamFolder::query()->where('system_key', 'ideas-root')->firstOrFail();
-        $idea = \App\Models\DamFolder::query()->where('system_key', 'idea:'.$ideaKey)->firstOrFail();
-        $files = \App\Models\DamFolder::query()->where('system_key', 'idea:'.$ideaKey.':files')->firstOrFail();
+        $root = DamFolder::query()->where('system_key', 'ideas-root')->firstOrFail();
+        $idea = DamFolder::query()->where('system_key', 'idea:'.$ideaKey)->firstOrFail();
+        $files = DamFolder::query()->where('system_key', 'idea:'.$ideaKey.':files')->firstOrFail();
         $this->assertSame('ایده‌ها', $root->name);
         $this->assertSame('ایده آزمایشی', $idea->name);
         $this->assertSame($root->id, $idea->parent_id);
@@ -113,8 +122,8 @@ class DamLibraryTest extends TestCase
         $this->assertDatabaseHas('dam_assets', ['folder_id' => $files->id]);
         $this->assertDatabaseCount('dam_relations', 0);
 
-        $ideaRecord = \App\Models\WorkspaceRecord::create([
-            'kind' => \App\Models\WorkspaceRecord::KIND_IDEA,
+        $ideaRecord = WorkspaceRecord::create([
+            'kind' => WorkspaceRecord::KIND_IDEA,
             'client_request_id' => $ideaKey,
             'title' => 'ایده آزمایشی',
             'status' => 'submitted',
@@ -126,11 +135,11 @@ class DamLibraryTest extends TestCase
             'related_id' => $ideaRecord->id,
         ])->assertOk();
 
-        $idFolder = \App\Models\DamFolder::query()->where('system_key', 'idea:'.$ideaRecord->id)->firstOrFail();
-        $idFiles = \App\Models\DamFolder::query()->where('system_key', 'idea:'.$ideaRecord->id.':files')->firstOrFail();
+        $idFolder = DamFolder::query()->where('system_key', 'idea:'.$ideaRecord->id)->firstOrFail();
+        $idFiles = DamFolder::query()->where('system_key', 'idea:'.$ideaRecord->id.':files')->firstOrFail();
         $this->assertSame((string) $ideaRecord->id, $idFolder->name);
         $this->assertDatabaseHas('dam_assets', ['id' => $assetId, 'folder_id' => $idFiles->id]);
-        $this->assertStringContainsString('dam/ایدهها/'.$ideaRecord->id.'/فایل/', \App\Models\DamAsset::findOrFail($assetId)->latestFile->storage_path);
+        $this->assertStringContainsString('dam/ایدهها/'.$ideaRecord->id.'/فایل/', DamAsset::findOrFail($assetId)->latestFile->storage_path);
     }
 
     public function test_project_meeting_and_idea_assets_use_context_relations_and_managed_file_folders(): void
@@ -140,16 +149,16 @@ class DamLibraryTest extends TestCase
             'assets.view', 'assets.upload', 'assets.edit_info',
             'projects.view', 'thinktank.view', 'meetings.view',
         ]);
-        $project = \App\Models\Project::create(['name' => 'پروژه راهبردی', 'project_manager_id' => $actor->id]);
-        $idea = \App\Models\WorkspaceRecord::create([
-            'kind' => \App\Models\WorkspaceRecord::KIND_IDEA,
+        $project = Project::create(['name' => 'پروژه راهبردی', 'project_manager_id' => $actor->id]);
+        $idea = WorkspaceRecord::create([
+            'kind' => WorkspaceRecord::KIND_IDEA,
             'title' => 'ایده متصل',
             'status' => 'draft',
             'owner_id' => $actor->id,
             'payload' => [],
         ]);
-        $meeting = \App\Models\WorkspaceRecord::create([
-            'kind' => \App\Models\WorkspaceRecord::KIND_MEETING,
+        $meeting = WorkspaceRecord::create([
+            'kind' => WorkspaceRecord::KIND_MEETING,
             'title' => 'جلسه راهبردی',
             'status' => 'scheduled',
             'owner_id' => $actor->id,
@@ -180,22 +189,22 @@ class DamLibraryTest extends TestCase
         $this->getJson('/api/v1/dam/library?meeting_id='.$meeting->id)->assertOk()->assertJsonPath('data.0.id', $meetingAsset);
         $this->getJson('/api/v1/dam/library?idea_id='.$idea->id)->assertOk()->assertJsonPath('data.0.id', $ideaAsset);
 
-        $projectFiles = \App\Models\DamFolder::where('system_key', 'project:'.$project->id.':files')->firstOrFail();
-        $meetingFiles = \App\Models\DamFolder::where('system_key', 'meeting:'.$meeting->id.':files')->firstOrFail();
-        $ideaFolder = \App\Models\DamFolder::where('system_key', 'idea:'.$idea->id)->firstOrFail();
-        $ideaFiles = \App\Models\DamFolder::where('system_key', 'idea:'.$idea->id.':files')->firstOrFail();
+        $projectFiles = DamFolder::where('system_key', 'project:'.$project->id.':files')->firstOrFail();
+        $meetingFiles = DamFolder::where('system_key', 'meeting:'.$meeting->id.':files')->firstOrFail();
+        $ideaFolder = DamFolder::where('system_key', 'idea:'.$idea->id)->firstOrFail();
+        $ideaFiles = DamFolder::where('system_key', 'idea:'.$idea->id.':files')->firstOrFail();
         $this->assertSame('فایل', $projectFiles->name);
         $this->assertSame('فایل', $meetingFiles->name);
         $this->assertSame((string) $idea->id, $ideaFolder->name);
         $this->assertSame($ideaFolder->id, $ideaFiles->parent_id);
-        $this->assertStringContainsString('dam/پروژهها/پروژه راهبردی/فایل/', \App\Models\DamAsset::findOrFail($projectAsset)->latestFile->storage_path);
-        $this->assertStringContainsString('dam/جلسات/جلسه راهبردی/فایل/', \App\Models\DamAsset::findOrFail($meetingAsset)->latestFile->storage_path);
-        $this->assertStringContainsString('dam/ایدهها/'.$idea->id.'/فایل/', \App\Models\DamAsset::findOrFail($ideaAsset)->latestFile->storage_path);
+        $this->assertStringContainsString('dam/پروژهها/پروژه راهبردی/فایل/', DamAsset::findOrFail($projectAsset)->latestFile->storage_path);
+        $this->assertStringContainsString('dam/جلسات/جلسه راهبردی/فایل/', DamAsset::findOrFail($meetingAsset)->latestFile->storage_path);
+        $this->assertStringContainsString('dam/ایدهها/'.$idea->id.'/فایل/', DamAsset::findOrFail($ideaAsset)->latestFile->storage_path);
 
         $project->update(['name' => 'پروژه تغییرنام‌یافته']);
-        app(\App\Modules\Dam\Services\DamService::class)->syncProjectFolderName($project->fresh());
+        app(DamService::class)->syncProjectFolderName($project->fresh());
         $meeting->update(['title' => 'جلسه تغییرنام‌یافته']);
-        app(\App\Modules\Dam\Services\DamService::class)->syncWorkspaceFolderName($meeting->fresh());
+        app(DamService::class)->syncWorkspaceFolderName($meeting->fresh());
         $this->assertDatabaseHas('dam_folders', ['system_key' => 'project:'.$project->id, 'name' => 'پروژه تغییرنام‌یافته']);
         $this->assertDatabaseHas('dam_folders', ['system_key' => 'meeting:'.$meeting->id, 'name' => 'جلسه تغییرنام‌یافته']);
     }
@@ -208,7 +217,7 @@ class DamLibraryTest extends TestCase
             'title' => 'حذف نهایی',
             'file' => UploadedFile::fake()->create('delete-me.pdf', 2, 'application/pdf'),
         ])->assertCreated()->json('data.id');
-        $path = \App\Models\DamAsset::findOrFail($assetId)->latestFile->storage_path;
+        $path = DamAsset::findOrFail($assetId)->latestFile->storage_path;
 
         $this->deleteJson('/api/v1/dam/library/'.$assetId.'/force')->assertNotFound();
         $this->deleteJson('/api/v1/dam/library/'.$assetId)->assertNoContent();
@@ -222,49 +231,51 @@ class DamLibraryTest extends TestCase
     public function test_version_restore_keeps_previous_file_and_records_activity(): void
     {
         Storage::fake('local');
-        $this->actor(['assets.view','assets.upload','assets.download','assets.create_version','assets.restore']);
+        $this->actor(['assets.view', 'assets.upload', 'assets.download', 'assets.create_version', 'assets.restore']);
         $id = $this->post('/api/v1/dam/library', [
-            'title'=>'Versioned','file'=>UploadedFile::fake()->createWithContent('first.txt', 'first'),
+            'title' => 'Versioned', 'file' => UploadedFile::fake()->createWithContent('first.txt', 'first'),
         ])->assertCreated()->json('data.id');
         $this->post('/api/v1/dam/library/'.$id.'/versions', [
-            'file'=>UploadedFile::fake()->createWithContent('second.txt', 'second'),
-            'change_description'=>'New draft',
+            'file' => UploadedFile::fake()->createWithContent('second.txt', 'second'),
+            'change_description' => 'New draft',
         ])->assertOk()->assertJsonCount(2, 'data.versions');
         $this->postJson('/api/v1/dam/library/'.$id.'/versions/1/restore')->assertOk()
-            ->assertJsonPath('data.latest_file.original_filename','first.txt')
+            ->assertJsonPath('data.latest_file.original_filename', 'first.txt')
             ->assertJsonCount(3, 'data.versions');
-        $asset = \App\Models\DamAsset::findOrFail($id);
+        $asset = DamAsset::findOrFail($id);
         $this->assertCount(2, $asset->files);
-        foreach ($asset->files as $file) Storage::disk('local')->assertExists($file->storage_path);
-        $this->assertDatabaseHas('dam_activities', ['asset_id'=>$id,'action'=>'version_restored']);
+        foreach ($asset->files as $file) {
+            Storage::disk('local')->assertExists($file->storage_path);
+        }
+        $this->assertDatabaseHas('dam_activities', ['asset_id' => $id, 'action' => 'version_restored']);
     }
 
     public function test_content_revision_preserves_prior_snapshot(): void
     {
-        $this->actor(['assets.view','assets.upload','assets.edit_info','assets.restore']);
-        $id = $this->postJson('/api/v1/dam/library', ['title'=>'Note','body'=>'First text'])
+        $this->actor(['assets.view', 'assets.upload', 'assets.edit_info', 'assets.restore']);
+        $id = $this->postJson('/api/v1/dam/library', ['title' => 'Note', 'body' => 'First text'])
             ->assertCreated()->json('data.id');
-        $this->postJson('/api/v1/dam/library/'.$id.'/versions', ['body'=>'Second text'])
-            ->assertOk()->assertJsonPath('data.content_item.content_body','Second text');
+        $this->postJson('/api/v1/dam/library/'.$id.'/versions', ['body' => 'Second text'])
+            ->assertOk()->assertJsonPath('data.content_item.content_body', 'Second text');
         $this->postJson('/api/v1/dam/library/'.$id.'/versions/1/restore')
-            ->assertOk()->assertJsonPath('data.content_item.content_body','First text');
+            ->assertOk()->assertJsonPath('data.content_item.content_body', 'First text');
     }
 
     public function test_asset_can_link_to_multiple_projects_without_duplicate_file(): void
     {
         Storage::fake('local');
-        $actor = $this->actor(['assets.view','assets.upload','assets.edit_info','projects.view']);
-        $one = \App\Models\Project::create(['name' => 'One', 'project_manager_id' => $actor->id]);
-        $two = \App\Models\Project::create(['name' => 'Two', 'project_manager_id' => $actor->id]);
+        $actor = $this->actor(['assets.view', 'assets.upload', 'assets.edit_info', 'projects.view']);
+        $one = Project::create(['name' => 'One', 'project_manager_id' => $actor->id]);
+        $two = Project::create(['name' => 'Two', 'project_manager_id' => $actor->id]);
         $id = $this->post('/api/v1/dam/library', [
-            'title'=>'Shared file', 'project_id'=>$one->id,
-            'file'=>UploadedFile::fake()->create('shared.pdf', 5, 'application/pdf'),
+            'title' => 'Shared file', 'project_id' => $one->id,
+            'file' => UploadedFile::fake()->create('shared.pdf', 5, 'application/pdf'),
         ])->assertCreated()->json('data.id');
         $this->postJson("/api/v1/dam/library/{$id}/relations", [
-            'related_type'=>'project', 'related_id'=>$two->id,
+            'related_type' => 'project', 'related_id' => $two->id,
         ])->assertOk();
-        $this->getJson('/api/v1/dam/library?project_id='.$one->id)->assertJsonPath('data.0.id',$id);
-        $this->getJson('/api/v1/dam/library?project_id='.$two->id)->assertJsonPath('data.0.id',$id);
+        $this->getJson('/api/v1/dam/library?project_id='.$one->id)->assertJsonPath('data.0.id', $id);
+        $this->getJson('/api/v1/dam/library?project_id='.$two->id)->assertJsonPath('data.0.id', $id);
         $this->assertDatabaseCount('dam_files', 1);
         $this->assertDatabaseCount('dam_relations', 2);
     }
@@ -274,11 +285,11 @@ class DamLibraryTest extends TestCase
         Storage::fake('local');
         $this->actor(['assets.upload']);
         $this->post('/api/v1/dam/library', [
-            'title'=>'Too large', 'file'=>UploadedFile::fake()->create('huge.pdf', 20481),
-        ], ['Accept'=>'application/json'])->assertUnprocessable();
+            'title' => 'Too large', 'file' => UploadedFile::fake()->create('huge.pdf', 20481),
+        ], ['Accept' => 'application/json'])->assertUnprocessable();
         $this->post('/api/v1/dam/library', [
-            'title'=>'Script', 'file'=>UploadedFile::fake()->create('bad.php', 1),
-        ], ['Accept'=>'application/json'])->assertUnprocessable();
+            'title' => 'Script', 'file' => UploadedFile::fake()->create('bad.php', 1),
+        ], ['Accept' => 'application/json'])->assertUnprocessable();
         $this->assertDatabaseCount('dam_assets', 0);
     }
 
@@ -307,7 +318,7 @@ class DamLibraryTest extends TestCase
     {
         Storage::fake('local');
         $actor = $this->actor(['assets.view', 'assets.upload', 'assets.move', 'projects.view']);
-        $project = \App\Models\Project::create(['name' => 'Central', 'project_manager_id' => $actor->id]);
+        $project = Project::create(['name' => 'Central', 'project_manager_id' => $actor->id]);
         $assetId = $this->post('/api/v1/dam/library', [
             'title' => 'Move me', 'project_id' => $project->id,
             'file' => UploadedFile::fake()->create('move.txt', 1, 'text/plain'),
@@ -382,7 +393,7 @@ class DamLibraryTest extends TestCase
             'duplicate_action' => 'create',
             'file' => UploadedFile::fake()->create('output.txt', 1, 'text/plain'),
         ])->assertCreated()->json('data.id');
-        $selectedFolder = \App\Models\DamFolder::create(['name' => 'مقصد انتخابی', 'created_by' => $owner->id]);
+        $selectedFolder = DamFolder::create(['name' => 'مقصد انتخابی', 'created_by' => $owner->id]);
         $customOutput = $this->post('/api/v1/dam/library', [
             'title' => 'خروجی با مقصد دستی',
             'content_id' => $content->id,
@@ -395,9 +406,9 @@ class DamLibraryTest extends TestCase
         $this->assertDatabaseHas('dam_folders', ['name' => 'محتواها', 'parent_id' => null]);
         $this->assertDatabaseHas('dam_folders', ['name' => 'پیوست‌های دیگر']);
         $this->assertDatabaseHas('dam_folders', ['name' => 'خروجی‌ها']);
-        $attachmentPath = \App\Models\DamAsset::findOrFail($attachment)->latestFile->storage_path;
-        $outputPath = \App\Models\DamAsset::findOrFail($output)->latestFile->storage_path;
-        $customOutputPath = \App\Models\DamAsset::findOrFail($customOutput)->latestFile->storage_path;
+        $attachmentPath = DamAsset::findOrFail($attachment)->latestFile->storage_path;
+        $outputPath = DamAsset::findOrFail($output)->latestFile->storage_path;
+        $customOutputPath = DamAsset::findOrFail($customOutput)->latestFile->storage_path;
         // Visible labels keep their ZWNJ; private physical paths remove Unicode
         // format characters that Flysystem rejects.
         $this->assertStringContainsString('dam/محتواها/عمومی - کد عمومی/پیوستهای دیگر/', $attachmentPath);
@@ -405,7 +416,7 @@ class DamLibraryTest extends TestCase
         $this->assertStringContainsString('dam/مقصد انتخابی/', $customOutputPath);
         $this->assertStringNotContainsString('/خروجی‌ها/', $customOutputPath);
 
-        $series = \App\Models\ContentSeries::create([
+        $series = ContentSeries::create([
             'name' => 'گزارش‌های دوره‌ای', 'code_prefix' => 'MONTHLY', 'content_type' => 'article',
             'owner_id' => $owner->id, 'created_by' => $owner->id, 'status' => 'active',
             'recurrence_type' => 'manual', 'recurrence_config' => [], 'default_content_payload' => [],
@@ -419,9 +430,9 @@ class DamLibraryTest extends TestCase
             'title' => 'ورودی مجموعه', 'content_id' => $seriesContent->id, 'content_bucket' => 'inputs',
             'duplicate_action' => 'create', 'file' => UploadedFile::fake()->create('series-input.txt', 1, 'text/plain'),
         ])->assertCreated()->json('data.id');
-        $seriesAsset = \App\Models\DamAsset::findOrFail($seriesInput);
+        $seriesAsset = DamAsset::findOrFail($seriesInput);
         $seriesInputPath = $seriesAsset->latestFile->storage_path;
-        $seriesFolder = \App\Models\DamFolder::findOrFail($seriesAsset->folder_id);
+        $seriesFolder = DamFolder::findOrFail($seriesAsset->folder_id);
         $this->assertSame('content-series:'.$series->id, $seriesFolder->system_key);
         $this->assertSame('گزارش‌های دوره‌ای - MONTHLY', $seriesFolder->name);
         $secondSeriesContent = Content::create([
@@ -432,7 +443,7 @@ class DamLibraryTest extends TestCase
             'title' => 'خروجی مجموعه', 'content_id' => $secondSeriesContent->id, 'content_bucket' => 'outputs',
             'duplicate_action' => 'create', 'file' => UploadedFile::fake()->create('series-output.txt', 1, 'text/plain'),
         ])->assertCreated()->json('data.id');
-        $seriesOutputAsset = \App\Models\DamAsset::findOrFail($seriesOutput);
+        $seriesOutputAsset = DamAsset::findOrFail($seriesOutput);
         $this->assertSame($seriesFolder->id, $seriesOutputAsset->folder_id);
         $this->assertDatabaseMissing('dam_folders', ['system_key' => 'content-series:'.$series->id.':inputs']);
         $this->assertDatabaseMissing('dam_folders', ['system_key' => 'content-series:'.$series->id.':outputs']);
@@ -470,13 +481,13 @@ class DamLibraryTest extends TestCase
     public function test_new_assets_default_to_approved_and_receive_context_category(): void
     {
         $this->actor(['assets.view', 'assets.upload', 'tasks.view']);
-        $task = \App\Models\Task::create(['title' => 'Categorized task', 'status' => 'backlog']);
+        $task = Task::create(['title' => 'Categorized task', 'status' => 'backlog']);
 
         $assetId = $this->postJson('/api/v1/dam/library', [
             'title' => 'Task note', 'body' => 'text', 'task_id' => $task->id,
         ])->assertCreated()->assertJsonPath('data.status', 'approved')->json('data.id');
 
-        $asset = \App\Models\DamAsset::with('category')->findOrFail($assetId);
+        $asset = DamAsset::with('category')->findOrFail($assetId);
         $this->assertSame('approved', $asset->status);
         $this->assertSame('وظایف', $asset->category?->name);
     }
@@ -529,7 +540,7 @@ class DamLibraryTest extends TestCase
     public function test_legacy_metadata_only_asset_creation_is_blocked(): void
     {
         $this->actor(['assets.upload']);
-        $this->postJson('/api/v1/dam/assets', ['title'=>'Metadata only', 'fileName'=>'not-real.pdf'])
+        $this->postJson('/api/v1/dam/assets', ['title' => 'Metadata only', 'fileName' => 'not-real.pdf'])
             ->assertStatus(410);
         $this->assertDatabaseCount('domain_records', 0);
     }
@@ -537,6 +548,6 @@ class DamLibraryTest extends TestCase
     public function test_write_is_denied_without_upload_permission(): void
     {
         $this->actor(['assets.view']);
-        $this->postJson('/api/v1/dam/library', ['title'=>'Denied','body'=>'Some text'])->assertForbidden();
+        $this->postJson('/api/v1/dam/library', ['title' => 'Denied', 'body' => 'Some text'])->assertForbidden();
     }
 }

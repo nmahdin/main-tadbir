@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Bale;
 
-use App\Models\ActivityLog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;

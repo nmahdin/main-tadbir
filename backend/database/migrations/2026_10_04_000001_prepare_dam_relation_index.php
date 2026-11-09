@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     private const TARGET_MIGRATION = '2026_10_04_000002_harden_dam_contexts_and_indexes';
+
     private const SUPPORT_INDEX = 'dam_relations_asset_id_repair_index';
 
     public function up(): void

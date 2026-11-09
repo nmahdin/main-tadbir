@@ -2,6 +2,9 @@
 
 namespace Tests\Feature\Core;
 
+use App\Core\Organizations\OrganizationProvisioner;
+use App\Core\Rbac\RoleProvisioner;
+use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -55,12 +58,12 @@ class InvitationSchemaMysqlTest extends TestCase
 
     public function test_scope_status_uniqueness_and_restrictive_foreign_keys(): void
     {
-        $creator = \App\Models\User::factory()->create(['status' => 'active']);
+        $creator = User::factory()->create(['status' => 'active']);
         $this->userIds[] = (int) $creator->id;
-        $organization = app(\App\Core\Organizations\OrganizationProvisioner::class)->create($creator, 'Schema Inv Org '.uniqid());
+        $organization = app(OrganizationProvisioner::class)->create($creator, 'Schema Inv Org '.uniqid());
         $this->organizationIds[] = (int) $organization->id;
         $workspace = $organization->workspaces()->where('is_default', true)->firstOrFail();
-        $role = app(\App\Core\Rbac\RoleProvisioner::class)->organizationMember($organization);
+        $role = app(RoleProvisioner::class)->organizationMember($organization);
 
         $valid = [
             'email_normalized' => 'schema@example.com',

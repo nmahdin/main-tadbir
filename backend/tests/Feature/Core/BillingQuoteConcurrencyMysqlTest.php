@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Core;
 
+use App\Core\Billing\BillingDomainException;
 use App\Core\Billing\CoreBillingQuote;
 use App\Core\Billing\CorePlanPrice;
-use App\Core\Billing\CorePromotion;
 use App\Core\Billing\CorePromoReservation;
 use App\Core\Billing\PlanPricePublisher;
 use App\Core\Billing\PromotionService;
@@ -132,7 +132,7 @@ class BillingQuoteConcurrencyMysqlTest extends TestCase
         $threw = false;
         try {
             $svc->create($actor, $owner, $version->fresh(), CorePlanPrice::PERIOD_MONTHLY, 'CQ1', 'k-cq-2');
-        } catch (\App\Core\Billing\BillingDomainException $e) {
+        } catch (BillingDomainException $e) {
             $threw = $e->errorCode === 'promo_capacity_exceeded';
         }
         $this->assertTrue($threw, 'Second concurrent quote must fail with promo_capacity_exceeded.');

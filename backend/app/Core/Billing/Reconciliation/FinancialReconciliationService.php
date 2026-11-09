@@ -63,6 +63,7 @@ final class FinancialReconciliationService
         });
 
         $totalOpen = DB::table('core_billing_reconciliation_findings')->where('status', 'open')->count();
+
         return ['opened' => $opened, 'resolved' => $resolved, 'total_open' => (int) $totalOpen];
     }
 
@@ -134,6 +135,7 @@ final class FinancialReconciliationService
                 $p->owner_key, $p->id, $p->order_id, $at,
             );
         }
+
         return ['opened' => $opened, 'resolved' => $resolved];
     }
 
@@ -157,6 +159,7 @@ final class FinancialReconciliationService
                 $o->owner_key, null, $o->id, $at,
             );
         }
+
         return ['opened' => $opened, 'resolved' => $resolved];
     }
 
@@ -180,6 +183,7 @@ final class FinancialReconciliationService
                 $p->owner_key, $p->id, $p->order_id, $at,
             );
         }
+
         return ['opened' => $opened, 'resolved' => $resolved];
     }
 
@@ -207,6 +211,7 @@ final class FinancialReconciliationService
                     ['payment_id' => $p->id, 'failure_code' => $p->failure_code],
                     $p->owner_key, $p->id, $order->id, $at,
                 );
+
                 continue;
             }
             if ((int) $p->verified_amount_toman !== (int) $order->total_toman) {
@@ -219,6 +224,7 @@ final class FinancialReconciliationService
                 );
             }
         }
+
         return ['opened' => $opened, 'resolved' => $resolved];
     }
 
@@ -243,6 +249,7 @@ final class FinancialReconciliationService
                 $o->owner_key, null, $o->id, $at,
             );
         }
+
         return ['opened' => $opened, 'resolved' => $resolved];
     }
 
@@ -268,6 +275,7 @@ final class FinancialReconciliationService
                 $pr->owner_key, null, $pr->order_id, $at,
             );
         }
+
         return ['opened' => $opened, 'resolved' => $resolved];
     }
 
@@ -322,6 +330,7 @@ final class FinancialReconciliationService
                     ['period_id' => (int) $period->id, 'payment_id' => (int) $period->paid_by_payment_id],
                     null, (int) $period->paid_by_payment_id, null, $at,
                 );
+
                 continue;
             }
             $order = $pay->order;
@@ -372,6 +381,7 @@ final class FinancialReconciliationService
                 'detected_at' => $at, 'resolved_at' => null, 'resolution_note' => null, 'resolved_by_user_id' => null,
                 'updated_at' => now(),
             ]);
+
             return true;
         }
 
@@ -391,6 +401,7 @@ final class FinancialReconciliationService
             'detected_run_id' => null,
             'created_at' => now(), 'updated_at' => now(),
         ]);
+
         return true;
     }
 
@@ -431,6 +442,7 @@ final class FinancialReconciliationService
                 $resolved++;
             }
         }
+
         return $resolved;
     }
 }

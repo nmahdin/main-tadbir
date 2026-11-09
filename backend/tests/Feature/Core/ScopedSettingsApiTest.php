@@ -202,7 +202,7 @@ class ScopedSettingsApiTest extends TestCase
         $this->getJson('/api/v1/core/organizations/999999/settings')->assertNotFound();
         $this->putJson("/api/v1/core/organizations/{$this->org->id}/settings/unknown.key", ['value' => 'x'])
             ->assertNotFound()->assertJsonPath('code', 'setting_not_found');
-        $this->getJson('/api/v1/core/organizations/' . $this->org->id . '/settings')->assertOk()
+        $this->getJson('/api/v1/core/organizations/'.$this->org->id.'/settings')->assertOk()
             ->assertJsonMissingPath('data.0.explicit.ciphertext');
     }
 

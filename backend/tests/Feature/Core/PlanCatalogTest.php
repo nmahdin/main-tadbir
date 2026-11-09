@@ -4,10 +4,8 @@ namespace Tests\Feature\Core;
 
 use App\Core\Modules\Contracts\ModuleEntitlementGate;
 use App\Core\Modules\ModuleRegistrySynchronizer;
-use App\Core\Modules\UnavailableModuleEntitlementGate;
 use App\Core\Modules\WorkspaceModule;
 use App\Core\Plans\CorePlan;
-use App\Core\Plans\CorePlanVersion;
 use App\Core\Plans\PlanModuleEntitlement;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Plans\PlanProvisioningException;

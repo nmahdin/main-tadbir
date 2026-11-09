@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
+use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\OrganizationRoleService;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\RoleProvisioner;
@@ -40,7 +41,7 @@ class CoreRbacSeeder extends Seeder
 
             // Stage C2-1: provision the protected primary platform
             // role definition (never assigned to any user here).
-            app(\App\Core\Platform\PlatformRoleProvisioner::class)->ensurePrimaryAdministrator();
+            app(PlatformRoleProvisioner::class)->ensurePrimaryAdministrator();
 
             $provisioner = app(RoleProvisioner::class);
             $workspaceRoles = app(WorkspaceRoleService::class);

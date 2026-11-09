@@ -4,10 +4,11 @@ namespace Tests\Feature\Core;
 
 use App\Core\Billing\CoreBillingDocument;
 use App\Core\Billing\CoreBillingFulfillmentOutbox;
-use App\Core\Billing\CoreBillingOrder;
 use App\Core\Billing\CoreBillingPayment;
+use App\Core\Billing\CorePlanPrice;
 use App\Core\Billing\Documents\BillingDocumentType;
 use App\Core\Billing\Documents\DocumentNumberGenerator;
+use App\Core\Billing\FinancialDocumentService;
 use App\Core\Billing\OrderService;
 use App\Core\Billing\PaymentService;
 use App\Core\Billing\PlanPricePublisher;
@@ -16,6 +17,7 @@ use App\Core\Billing\Reconciliation\CoreBillingReconciliationFinding;
 use App\Core\Billing\Reconciliation\FinancialReconciliationService;
 use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Plans\CorePlan;
+use App\Core\Plans\CorePlanVersion;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Subscriptions\SubscriptionFulfillment;
@@ -336,7 +338,7 @@ class BillingDocumentsAndReconciliationTest extends TestCase
         $svc->verifyAndFinalize($this->actor, $init['payment'], $q);
 
         // Simulate "re-run" of document issuance (as an operator recovery would).
-        $docs = app(\App\Core\Billing\FinancialDocumentService::class);
+        $docs = app(FinancialDocumentService::class);
         $r1 = $docs->issueInvoiceForOrder($order->fresh(), $init['payment']->fresh(), $this->actor);
         $r2 = $docs->issueReceiptForPayment($init['payment']->fresh(), $order->fresh(), $this->actor);
         $this->assertFalse($r1['is_new']);
@@ -376,9 +378,20 @@ class BillingDocumentsAndReconciliationTest extends TestCase
 
     // ---- helpers ----
 
-    private function quotes(): QuoteService { return app(QuoteService::class); }
-    private function orders(): OrderService { return app(OrderService::class); }
-    private function payments(): PaymentService { return app(PaymentService::class); }
+    private function quotes(): QuoteService
+    {
+        return app(QuoteService::class);
+    }
+
+    private function orders(): OrderService
+    {
+        return app(OrderService::class);
+    }
+
+    private function payments(): PaymentService
+    {
+        return app(PaymentService::class);
+    }
 
     private function personalOwner(User $u): SubscriptionOwner
     {
@@ -387,13 +400,13 @@ class BillingDocumentsAndReconciliationTest extends TestCase
         return new SubscriptionOwner('personal', null, $ws);
     }
 
-    private function publishVersion(string $key, string $audience, array $prices): \App\Core\Plans\CorePlanVersion
+    private function publishVersion(string $key, string $audience, array $prices): CorePlanVersion
     {
         $p = app(PlanProvisioner::class);
         $p->createPlan($key, ucfirst($key), $audience);
         $p->createDraftVersion($key, 1);
         $p->setPlanStatus($key, CorePlan::STATUS_ACTIVE);
-        $v = \App\Core\Plans\CorePlanVersion::whereHas('plan', fn ($q) => $q->where('key', $key))->firstOrFail();
+        $v = CorePlanVersion::whereHas('plan', fn ($q) => $q->where('key', $key))->firstOrFail();
         app(PlanPricePublisher::class)->publishPrices($v, $prices, $this->actor);
 
         return $v->fresh();
@@ -401,16 +414,16 @@ class BillingDocumentsAndReconciliationTest extends TestCase
 
     private function createPlanIfMissing(string $key, string $audience, int $versionNumber): void
     {
-        $plan = \App\Core\Plans\CorePlan::query()->firstOrCreate(['key' => $key, 'audience' => $audience], ['name' => 'Plan '.$key]);
-        if (\App\Core\Plans\CorePlanVersion::query()->where('plan_id', $plan->id)->where('version', $versionNumber)->exists()) {
+        $plan = CorePlan::query()->firstOrCreate(['key' => $key, 'audience' => $audience], ['name' => 'Plan '.$key]);
+        if (CorePlanVersion::query()->where('plan_id', $plan->id)->where('version', $versionNumber)->exists()) {
             return;
         }
-        $v = \App\Core\Plans\CorePlanVersion::query()->create([
+        $v = CorePlanVersion::query()->create([
             'plan_id' => $plan->id, 'version' => $versionNumber, 'periods_supported' => ['monthly'],
             'billing_period_unit' => 'month', 'billing_period_count' => 1,
             'status' => 'published', 'published_at' => now(),
         ]);
-        \App\Core\Billing\CorePlanPrice::query()->create([
+        CorePlanPrice::query()->create([
             'plan_version_id' => $v->id, 'billing_period' => 'monthly',
             'price_toman' => 0, 'currency' => 'TOMAN', 'is_active' => true,
         ]);

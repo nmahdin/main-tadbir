@@ -17,16 +17,19 @@ use App\Core\Modules\WorkspaceModule;
 use App\Core\Modules\WorkspaceModuleService;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationProvisioner;
+use App\Core\Plans\PlanProvisioner;
 use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\RoleProvisioner;
 use App\Core\Rbac\ScopedRole;
+use App\Core\Subscriptions\SubscriptionService;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
 use App\Models\Project;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -380,25 +383,25 @@ class ModuleActivationTest extends TestCase
      */
     private function subscribePersonal(Workspace $workspace): void
     {
-        $plans = app(\App\Core\Plans\PlanProvisioner::class);
+        $plans = app(PlanProvisioner::class);
         $plans->createPlan('activation-personal', 'Activation Personal', 'personal');
         $plans->createDraftVersion('activation-personal', 1, 0);
         $plans->setModuleEntitlement('activation-personal', 1, 'projects', true);
         $plans->publish('activation-personal', 1);
 
         $admin = User::factory()->create(['status' => 'active']);
-        \App\Core\Platform\PlatformRoleAssignment::create([
+        PlatformRoleAssignment::create([
             'user_id' => $admin->id,
-            'platform_role_id' => app(\App\Core\Platform\PlatformRoleProvisioner::class)->ensurePrimaryAdministrator()->id,
+            'platform_role_id' => app(PlatformRoleProvisioner::class)->ensurePrimaryAdministrator()->id,
         ]);
 
-        app(\App\Core\Subscriptions\SubscriptionService::class)->assignInitial(
+        app(SubscriptionService::class)->assignInitial(
             $admin,
             $workspace,
             'activation-personal',
             1,
-            \Carbon\CarbonImmutable::parse('2026-01-01T00:00:00Z'),
-            \Carbon\CarbonImmutable::parse('2027-01-01T00:00:00Z'),
+            CarbonImmutable::parse('2026-01-01T00:00:00Z'),
+            CarbonImmutable::parse('2027-01-01T00:00:00Z'),
             'C5-3 integration fixture',
             'corr-'.uniqid(),
         );

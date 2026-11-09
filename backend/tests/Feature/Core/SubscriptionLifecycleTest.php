@@ -7,6 +7,7 @@ use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Modules\WorkspaceModule;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationProvisioner;
+use App\Core\Plans\CorePlanVersion;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
@@ -318,7 +319,7 @@ class SubscriptionLifecycleTest extends TestCase
 
     private function publishedVersionId(string $planKey, int $version): int
     {
-        return (int) \App\Core\Plans\CorePlanVersion::query()
+        return (int) CorePlanVersion::query()
             ->whereHas('plan', fn ($query) => $query->where('key', $planKey))
             ->where('version', $version)
             ->value('id');

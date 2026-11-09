@@ -2,15 +2,15 @@
 
 namespace Tests\Feature\Bale;
 
-use App\Modules\Messaging\Bot\Bale\Client\BaleHttp;
-use App\Modules\Messaging\Bot\Bale\PollingRunner;
-use App\Modules\Messaging\Bot\Bale\Settings;
-use App\Modules\Messaging\Bot\Bale\Support\RuntimeLock;
 use App\Models\BaleUserLink;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
+use App\Modules\Messaging\Bot\Bale\Client\BaleHttp;
+use App\Modules\Messaging\Bot\Bale\PollingRunner;
+use App\Modules\Messaging\Bot\Bale\Settings;
+use App\Modules\Messaging\Bot\Bale\Support\RuntimeLock;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Crypt;
 

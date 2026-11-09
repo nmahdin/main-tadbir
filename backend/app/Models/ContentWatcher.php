@@ -12,7 +12,18 @@ class ContentWatcher extends Model
 
     protected $fillable = ['content_id', 'user_id', 'created_by'];
 
-    public function content(): BelongsTo { return $this->belongsTo(Content::class); }
-    public function user(): BelongsTo { return $this->belongsTo(User::class); }
-    public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function content(): BelongsTo
+    {
+        return $this->belongsTo(Content::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

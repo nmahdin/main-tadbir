@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use App\Core\Identity\UsernamePolicy;
+use App\Models\User;
 use App\Modules\Identity\Rules\PasswordByteLimit;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
@@ -46,7 +47,7 @@ class RegisterRequest extends FormRequest
                 $validator->errors()->add('username', 'این نام کاربری قبلاً انتخاب شده است.');
             }
             $email = $this->input('email');
-            if (is_string($email) && $email !== '' && \App\Models\User::where('email', strtolower(trim($email)))->exists()) {
+            if (is_string($email) && $email !== '' && User::where('email', strtolower(trim($email)))->exists()) {
                 $validator->errors()->add('email', 'این ایمیل قبلاً استفاده شده است.');
             }
             if ((string) $this->input('terms_version') !== (string) config('auth.terms.current_version')) {

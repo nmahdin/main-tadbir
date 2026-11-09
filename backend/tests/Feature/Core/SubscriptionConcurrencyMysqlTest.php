@@ -3,7 +3,9 @@
 namespace Tests\Feature\Core;
 
 use App\Core\Modules\ModuleRegistrySynchronizer;
+use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationProvisioner;
+use App\Core\Plans\CorePlan;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
@@ -56,7 +58,7 @@ class SubscriptionConcurrencyMysqlTest extends TestCase
         app(ModuleRegistrySynchronizer::class)->sync();
 
         $plans = app(PlanProvisioner::class);
-        if (\App\Core\Plans\CorePlan::query()->where('key', 'team')->doesntExist()) {
+        if (CorePlan::query()->where('key', 'team')->doesntExist()) {
             $plans->createPlan('team', 'Team', 'organization');
             $plans->createDraftVersion('team', 1, 7);
             $plans->publish('team', 1);
@@ -196,7 +198,7 @@ class SubscriptionConcurrencyMysqlTest extends TestCase
         $this->assertSame(1, DB::table('core_subscriptions')->where('organization_id', $orgB->id)->count());
     }
 
-    /** @return array{0: \App\Core\Organizations\Organization} */
+    /** @return array{0: Organization} */
     private function organization(): array
     {
         $creator = User::factory()->create(['status' => 'active']);

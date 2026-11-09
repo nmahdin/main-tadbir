@@ -13,6 +13,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -74,12 +75,12 @@ class CoreLegacyDeleteDisabledTest extends TestCase
             app(RoleProvisioner::class)->workspaceMember($workspace),
         );
         // Legacy project relationship via the project_user pivot.
-        $projectId = \Illuminate\Support\Facades\DB::table('projects')->insertGetId([
+        $projectId = DB::table('projects')->insertGetId([
             'name' => 'Target Project',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        \Illuminate\Support\Facades\DB::table('project_user')->insert([
+        DB::table('project_user')->insert([
             'project_id' => $projectId,
             'user_id' => $target->id,
         ]);

@@ -69,11 +69,11 @@ return new class extends Migration
         });
 
         if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
-            DB::statement("ALTER TABLE core_tax_rules ADD CONSTRAINT core_tax_rules_rate_check CHECK (rate_basis_points BETWEEN 0 AND 10000)");
-            DB::statement("ALTER TABLE core_tax_rules ADD CONSTRAINT core_tax_rules_window_check CHECK (valid_until IS NULL OR valid_from IS NULL OR valid_until >= valid_from)");
+            DB::statement('ALTER TABLE core_tax_rules ADD CONSTRAINT core_tax_rules_rate_check CHECK (rate_basis_points BETWEEN 0 AND 10000)');
+            DB::statement('ALTER TABLE core_tax_rules ADD CONSTRAINT core_tax_rules_window_check CHECK (valid_until IS NULL OR valid_from IS NULL OR valid_until >= valid_from)');
             DB::statement("ALTER TABLE core_promotions ADD CONSTRAINT core_promotions_discount_type_check CHECK (discount_type IN ('percent','fixed'))");
             DB::statement("ALTER TABLE core_promotions ADD CONSTRAINT core_promotions_discount_value_check CHECK ((discount_type='percent' AND discount_value_bp IS NOT NULL AND discount_value_bp BETWEEN 0 AND 10000 AND discount_value_toman IS NULL) OR (discount_type='fixed' AND discount_value_toman IS NOT NULL AND discount_value_toman >= 0 AND discount_value_bp IS NULL))");
-            DB::statement("ALTER TABLE core_promotions ADD CONSTRAINT core_promotions_window_check CHECK (ends_at IS NULL OR starts_at IS NULL OR ends_at >= starts_at)");
+            DB::statement('ALTER TABLE core_promotions ADD CONSTRAINT core_promotions_window_check CHECK (ends_at IS NULL OR starts_at IS NULL OR ends_at >= starts_at)');
         }
     }
 

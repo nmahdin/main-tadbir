@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Bale;
 
-use App\Modules\Messaging\Bot\Bale\Auth\AccountLinker;
-use App\Modules\Messaging\Bot\Bale\Settings;
 use App\Models\BaleConversation;
 use App\Models\BaleOutbox;
+use App\Modules\Messaging\Bot\Bale\Auth\AccountLinker;
+use App\Modules\Messaging\Bot\Bale\Settings;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Cache;

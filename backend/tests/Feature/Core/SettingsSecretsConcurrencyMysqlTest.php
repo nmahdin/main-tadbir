@@ -3,6 +3,7 @@
 namespace Tests\Feature\Core;
 
 use App\Core\Organizations\Organization;
+use App\Core\Organizations\OrganizationMembership;
 use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\ScopedPermission;
@@ -10,6 +11,7 @@ use App\Core\Rbac\ScopedRole;
 use App\Core\Settings\ScopedSettingService;
 use App\Core\Settings\Services\ScopedSecretService;
 use App\Core\Settings\SettingDefinition;
+use App\Core\Settings\SettingServiceException;
 use App\Core\Settings\SettingsRegistry;
 use App\Core\Settings\SettingsRegistrySynchronizer;
 use App\Models\User;
@@ -112,7 +114,7 @@ class SettingsSecretsConcurrencyMysqlTest extends TestCase
         try {
             $secrets->putOrganizationSecret($admin, $this->org, 'integrations.demo.api_key', 'race-two', expectedVersion: 1);
             $this->fail('stale secret version must be rejected');
-        } catch (\App\Core\Settings\SettingServiceException $exception) {
+        } catch (SettingServiceException $exception) {
             $this->assertSame('setting_version_conflict', $exception->errorCode);
         }
         $metadata = $secrets->putOrganizationSecret($admin, $this->org, 'integrations.demo.api_key', 'race-two', expectedVersion: 2);
@@ -152,7 +154,7 @@ class SettingsSecretsConcurrencyMysqlTest extends TestCase
         try {
             $service->restoreOrganizationValue($this->manager, $this->org, 'workspace.display.density', $createRevision['id'], expectedVersion: 2);
             $this->fail('stale restore must be rejected');
-        } catch (\App\Core\Settings\SettingServiceException $exception) {
+        } catch (SettingServiceException $exception) {
             $this->assertSame('setting_version_conflict', $exception->errorCode);
         }
         $restored = $service->restoreOrganizationValue($this->manager, $this->org, 'workspace.display.density', $createRevision['id'], expectedVersion: 3);
@@ -168,7 +170,7 @@ class SettingsSecretsConcurrencyMysqlTest extends TestCase
             ['name' => 'Secret Administrators'],
         );
         $role->permissions()->sync([$permission->id]);
-        $membership = \App\Core\Organizations\OrganizationMembership::query()
+        $membership = OrganizationMembership::query()
             ->where('organization_id', $this->org->id)->where('user_id', $user->id)->firstOrFail();
         $membership->forceFill(['role_id' => $role->id])->save();
 

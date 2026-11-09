@@ -31,6 +31,7 @@ return new class extends Migration
 
         if ($target) {
             $this->merge($source, $target, $storage);
+
             return;
         }
 
@@ -51,6 +52,7 @@ return new class extends Migration
             $matching = DamFolder::query()->where('parent_id', $target->id)->where('name', $child->name)->first();
             if ($matching) {
                 $this->merge($child, $matching, $storage);
+
                 return;
             }
 

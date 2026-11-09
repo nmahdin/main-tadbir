@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Core;
 
+use App\Core\Audit\AuditWriter;
 use App\Core\Platform\Operations\OperationTokenSigner;
 use App\Core\Platform\Operations\OperationTokenVerifier;
 use App\Core\Platform\Operations\PlatformOperationException;
@@ -9,12 +10,14 @@ use App\Core\Platform\PlatformRole;
 use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\PermissionCatalog;
+use App\Core\Rbac\ScopedPermission;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -79,7 +82,7 @@ class PlatformSecurityIntegrationTest extends TestCase
     {
         $manager = $this->platformUser('sec.manager', null, ['platform.admins.view', 'platform.admins.manage']);
         $rich = PlatformRole::create(['key' => 'sec_rich', 'name' => 'Rich']);
-        $rich->permissions()->attach(\App\Core\Rbac\ScopedPermission::where('key', 'platform.users.view')->value('id'));
+        $rich->permissions()->attach(ScopedPermission::where('key', 'platform.users.view')->value('id'));
         $plain = PlatformRole::create(['key' => 'sec_plain', 'name' => 'Plain']);
         $target = User::factory()->create(['status' => 'active']);
         PlatformRoleAssignment::create(['user_id' => $target->id, 'platform_role_id' => $plain->id]);
@@ -124,7 +127,7 @@ class PlatformSecurityIntegrationTest extends TestCase
     {
         $primary = $this->platformUser('sec.audit', [PlatformRoleProvisioner::PRIMARY_ROLE_KEY]);
 
-        app(\App\Core\Audit\AuditWriter::class)->record($primary, 'test.sensitive', [
+        app(AuditWriter::class)->record($primary, 'test.sensitive', [
             'password' => 'hunter2-super-secret',
             'note' => 'visible',
             'nested' => ['api_token' => 'tok-should-hide'],
@@ -212,7 +215,7 @@ class PlatformSecurityIntegrationTest extends TestCase
             $this->assertStringNotContainsString($token, $output);
         } finally {
             Auth::forgetGuards();
-            \Illuminate\Support\Facades\File::deleteDirectory($base);
+            File::deleteDirectory($base);
         }
     }
 
@@ -246,7 +249,7 @@ class PlatformSecurityIntegrationTest extends TestCase
         } else {
             $role = PlatformRole::create(['key' => 'sec_'.uniqid(), 'name' => 'Sec']);
             $role->permissions()->attach(
-                \App\Core\Rbac\ScopedPermission::whereIn('key', $permissionKeys)->pluck('id'),
+                ScopedPermission::whereIn('key', $permissionKeys)->pluck('id'),
             );
         }
         PlatformRoleAssignment::create(['user_id' => $user->id, 'platform_role_id' => $role->id]);

@@ -11,10 +11,10 @@ use App\Core\Modules\ModuleDependencyException;
 use App\Core\Modules\ModuleDependencyResolver;
 use App\Core\Modules\ModuleRegistryConflictException;
 use App\Core\Modules\ModuleRegistrySynchronizer;
-use App\Core\Modules\UnavailableModuleEntitlementGate;
 use App\Core\Modules\WorkspaceModule;
 use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Rbac\PermissionCatalog;
+use App\Core\Subscriptions\SubscriptionEntitlementEvaluator;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Core\Workspaces\Workspace;
 use App\Models\User;
@@ -223,7 +223,7 @@ class ModuleRegistrySyncTest extends TestCase
         // closed for every module, exactly as the unavailable gate
         // did before it.
         $gate = app(ModuleEntitlementGate::class);
-        $this->assertInstanceOf(\App\Core\Subscriptions\SubscriptionEntitlementEvaluator::class, $gate);
+        $this->assertInstanceOf(SubscriptionEntitlementEvaluator::class, $gate);
         $this->assertFalse($gate->isEntitled($workspace, 'projects'));
         $this->assertFalse($gate->isEntitled($workspace, 'tasks'));
         $this->assertFalse($gate->isEntitled($workspace, 'anything'));

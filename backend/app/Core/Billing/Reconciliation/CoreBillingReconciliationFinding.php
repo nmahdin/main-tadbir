@@ -12,10 +12,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $id
  * @property string $finding_type
- * @property string $subject_type   payment|order|document|promotion|subscription
+ * @property string $subject_type payment|order|document|promotion|subscription
  * @property int $subject_id
- * @property string $severity       info|warning|critical
- * @property string $status         open|resolved
+ * @property string $severity info|warning|critical
+ * @property string $status open|resolved
  * @property bool $safe_to_retry
  * @property array|null $evidence
  * @property CarbonImmutable|null $detected_at

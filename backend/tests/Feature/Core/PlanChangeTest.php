@@ -7,11 +7,12 @@ use App\Core\Modules\CoreModule;
 use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Modules\WorkspaceModule;
 use App\Core\Organizations\Organization;
-use App\Core\Rbac\PermissionCatalog;
+use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Plans\ModuleAccessLevel;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
+use App\Core\Rbac\PermissionCatalog;
 use App\Core\Subscriptions\CoreSubscription;
 use App\Core\Subscriptions\PlanChangePlanner;
 use App\Core\Subscriptions\PlanChangePreview;
@@ -61,7 +62,7 @@ class PlanChangeTest extends TestCase
 
         $this->admin = $this->platformAdmin();
         $this->creator = User::factory()->create(['username' => 'pc_owner']);
-        $this->org = app(\App\Core\Organizations\OrganizationProvisioner::class)->create($this->creator, 'Plan Change Org');
+        $this->org = app(OrganizationProvisioner::class)->create($this->creator, 'Plan Change Org');
         $this->ws1 = $this->org->workspaces()->where('is_default', true)->firstOrFail();
         $this->ws2 = Workspace::factory()->for($this->org, 'organization')->create(['owner_user_id' => null]);
 

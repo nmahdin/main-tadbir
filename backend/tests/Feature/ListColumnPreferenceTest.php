@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Core\Settings\SettingsRegistry;
+use App\Core\Settings\SettingsRegistrySynchronizer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -20,8 +22,8 @@ class ListColumnPreferenceTest extends TestCase
     {
         parent::setUp();
         // Definitions persist to the registry tables (C7-1 contract).
-        app(\App\Core\Settings\SettingsRegistrySynchronizer::class)
-            ->sync(app(\App\Core\Settings\SettingsRegistry::class));
+        app(SettingsRegistrySynchronizer::class)
+            ->sync(app(SettingsRegistry::class));
     }
 
     public function test_column_preferences_round_trip_per_user(): void

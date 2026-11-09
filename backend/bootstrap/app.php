@@ -1,9 +1,9 @@
 <?php
 
-use App\Modules\Messaging\Bot\Bale\Support\OperationsSchema;
 use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\RequestCorrelationId;
+use App\Modules\Messaging\Bot\Bale\Support\OperationsSchema;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;

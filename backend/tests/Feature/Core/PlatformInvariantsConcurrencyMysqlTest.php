@@ -17,10 +17,11 @@ use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Platform\PlatformRoleService;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\RbacValidationException;
+use App\Core\Rbac\ScopedPermission;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
-use Illuminate\Contracts\Database\Eloquent\Builder;
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -179,7 +180,7 @@ class PlatformInvariantsConcurrencyMysqlTest extends TestCase
     {
         $admin = $this->primaryUser('inv.edit.admin');
         $role = $this->role('inv_edit_role');
-        $usersViewId = (int) \App\Core\Rbac\ScopedPermission::where('key', 'platform.users.view')->value('id');
+        $usersViewId = (int) ScopedPermission::where('key', 'platform.users.view')->value('id');
 
         $winner = DB::connection('mysql_concurrent');
         $winner->beginTransaction();
@@ -248,7 +249,7 @@ class PlatformInvariantsConcurrencyMysqlTest extends TestCase
         }
     }
 
-    private function lockControl(\Illuminate\Database\ConnectionInterface $connection): void
+    private function lockControl(ConnectionInterface $connection): void
     {
         $connection->table('platform_administration_control')->where('id', 1)->lockForUpdate()->first();
     }

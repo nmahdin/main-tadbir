@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Modules\Projects\Services\ProjectProgress;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -22,7 +23,7 @@ class ProjectResource extends JsonResource
             'deadline' => $this->deadline?->toDateString() ?? '',
             'status' => $this->status,
             'previousStatus' => $this->previous_status,
-            'progress' => app(\App\Modules\Projects\Services\ProjectProgress::class)->calculate($this->resource),
+            'progress' => app(ProjectProgress::class)->calculate($this->resource),
             'priority' => $this->priority,
             'tags' => $this->tags ?? [],
             'color' => $this->color,

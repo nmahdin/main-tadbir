@@ -132,7 +132,7 @@ return new class extends Migration
         }
         $this->dropCheckIfExists('core_subscription_periods', 'core_subscription_periods_operation_check');
         DB::statement(
-            "ALTER TABLE core_subscription_periods ADD CONSTRAINT core_subscription_periods_operation_check CHECK ".
+            'ALTER TABLE core_subscription_periods ADD CONSTRAINT core_subscription_periods_operation_check CHECK '.
             "(operation IN ('initial','renewal','plan_change','paid_activation','paid_renewal','upgrade','downgrade','grace_expiry_free'))"
         );
     }
@@ -145,7 +145,7 @@ return new class extends Migration
         }
         $this->dropCheckIfExists('core_subscription_periods', 'core_subscription_periods_operation_check');
         DB::statement(
-            "ALTER TABLE core_subscription_periods ADD CONSTRAINT core_subscription_periods_operation_check CHECK ".
+            'ALTER TABLE core_subscription_periods ADD CONSTRAINT core_subscription_periods_operation_check CHECK '.
             "(operation IN ('initial', 'renewal', 'plan_change'))"
         );
     }

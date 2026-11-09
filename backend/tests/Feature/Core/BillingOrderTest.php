@@ -6,7 +6,6 @@ use App\Core\Billing\BillingDomainException;
 use App\Core\Billing\CoreBillingOrder;
 use App\Core\Billing\CoreBillingOrderLine;
 use App\Core\Billing\CoreBillingQuote;
-use App\Core\Billing\CorePlanPrice;
 use App\Core\Billing\CorePromoReservation;
 use App\Core\Billing\CorePromotion;
 use App\Core\Billing\CoreTaxRule;
@@ -30,6 +29,7 @@ use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -158,7 +158,7 @@ class BillingOrderTest extends TestCase
         $q = $this->quotes()->create($this->actor, $this->personalOwner($this->actor), $v, 'monthly', null, 'k-uniq')['quote'];
         $this->orders()->convert($this->actor, $this->personalOwner($this->actor), $q, 'c-uniq');
         $owner = $this->personalOwner($this->actor);
-        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+        $this->expectException(UniqueConstraintViolationException::class);
         DB::table('core_billing_orders')->insert([
             'quote_id' => $q->id,
             'owner_key' => $owner->key(),
@@ -181,7 +181,7 @@ class BillingOrderTest extends TestCase
     public function test_promo_reservation_transfers_to_order_on_conversion_without_redeeming(): void
     {
         $v = $this->publishedVersion('otr', CorePlan::AUDIENCE_PERSONAL, ['monthly' => 200_000]);
-        $promo = $this->createPromo('TR', 'percent', 5000 /*50%*/, null, maxRedemptions: 1);
+        $promo = $this->createPromo('TR', 'percent', 5000 /* 50% */, null, maxRedemptions: 1);
         $q = $this->quotes()->create($this->actor, $this->personalOwner($this->actor), $v, 'monthly', 'TR', 'k-tr')['quote'];
         $this->assertSame(1, CorePromoReservation::query()->where('promo_id', $promo->id)->where('state', CorePromoReservation::STATE_RESERVED)->count());
         $order = $this->orders()->convert($this->actor, $this->personalOwner($this->actor), $q, 'c-tr')['order'];
@@ -237,7 +237,7 @@ class BillingOrderTest extends TestCase
     {
         $v = $this->publishedVersion('oimm', CorePlan::AUDIENCE_PERSONAL, ['monthly' => 500_000]);
         $this->activateTax(900); // 9%
-        $this->createPromo('IM', 'percent', 1000 /*10%*/, null);
+        $this->createPromo('IM', 'percent', 1000 /* 10% */, null);
         $q = $this->quotes()->create($this->actor, $this->personalOwner($this->actor), $v, 'monthly', 'IM', 'k-oimm')['quote'];
         $order = $this->orders()->convert($this->actor, $this->personalOwner($this->actor), $q, 'c-oimm')['order'];
         $subtotalAtCreation = (int) $order->subtotal_toman;
@@ -364,7 +364,7 @@ class BillingOrderTest extends TestCase
             $threw = false;
             try {
                 $org->delete();
-            } catch (\Illuminate\Database\QueryException $e) {
+            } catch (QueryException $e) {
                 $threw = str_contains($e->getMessage(), 'CONSTRAINT') || str_contains($e->getMessage(), 'foreign key') || str_contains($e->getCode(), '23000') || str_contains($e->getCode(), 'HY000');
             }
             $this->assertTrue($threw, 'Organization delete must be RESTRICT while it owns an order.');

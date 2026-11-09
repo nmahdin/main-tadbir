@@ -100,7 +100,7 @@ return new class extends Migration
         if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
             DB::statement("ALTER TABLE core_billing_quotes ADD CONSTRAINT billing_quotes_period_valid CHECK (period IN ('monthly','quarterly','annual'))");
             DB::statement("ALTER TABLE core_billing_quotes ADD CONSTRAINT billing_quotes_status_valid CHECK (status IN ('open','expired','superseded','converted'))");
-            DB::statement("ALTER TABLE core_billing_quotes ADD CONSTRAINT billing_quotes_amounts_nonneg CHECK (subtotal_toman >= 0 AND discount_toman >= 0 AND tax_toman >= 0 AND total_toman >= 0 AND discount_toman <= subtotal_toman AND total_toman >= (subtotal_toman - discount_toman))");
+            DB::statement('ALTER TABLE core_billing_quotes ADD CONSTRAINT billing_quotes_amounts_nonneg CHECK (subtotal_toman >= 0 AND discount_toman >= 0 AND tax_toman >= 0 AND total_toman >= 0 AND discount_toman <= subtotal_toman AND total_toman >= (subtotal_toman - discount_toman))');
             DB::statement("ALTER TABLE core_billing_promo_reservations ADD CONSTRAINT billing_reservations_state_valid CHECK (state IN ('reserved','released','expired','redeemed'))");
         }
     }

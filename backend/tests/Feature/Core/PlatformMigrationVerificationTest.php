@@ -3,9 +3,11 @@
 namespace Tests\Feature\Core;
 
 use App\Core\Platform\PlatformAdministrationControl;
+use App\Core\Platform\PlatformRole;
 use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Models\User;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -37,9 +39,9 @@ class PlatformMigrationVerificationTest extends TestCase
 
     public function test_one_active_platform_assignment_per_user_across_different_roles(): void
     {
-        \App\Core\Platform\PlatformRole::create(['key' => 'mig_a', 'name' => 'A']);
-        \App\Core\Platform\PlatformRole::create(['key' => 'mig_b', 'name' => 'B']);
-        $roles = \App\Core\Platform\PlatformRole::whereIn('key', ['mig_a', 'mig_b'])->pluck('id', 'key');
+        PlatformRole::create(['key' => 'mig_a', 'name' => 'A']);
+        PlatformRole::create(['key' => 'mig_b', 'name' => 'B']);
+        $roles = PlatformRole::whereIn('key', ['mig_a', 'mig_b'])->pluck('id', 'key');
         $user = User::factory()->create(['status' => 'active']);
 
         DB::table('platform_role_assignments')->insert([
@@ -82,7 +84,7 @@ class PlatformMigrationVerificationTest extends TestCase
         // "bootstrap not completed".
         DB::table('platform_administration_control')->delete();
 
-        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        $this->expectException(ModelNotFoundException::class);
         PlatformAdministrationControl::singleton();
     }
 

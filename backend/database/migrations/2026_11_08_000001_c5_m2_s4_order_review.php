@@ -119,7 +119,7 @@ return new class extends Migration
 
         if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
             DB::statement("ALTER TABLE core_billing_orders ADD CONSTRAINT billing_orders_status_valid CHECK (status IN ('in_review','cancelled','review_expired'))");
-            DB::statement("ALTER TABLE core_billing_orders ADD CONSTRAINT billing_orders_amounts_nonneg CHECK (subtotal_toman >= 0 AND discount_toman >= 0 AND tax_toman >= 0 AND total_toman >= 0 AND discount_toman <= subtotal_toman AND total_toman >= (subtotal_toman - discount_toman))");
+            DB::statement('ALTER TABLE core_billing_orders ADD CONSTRAINT billing_orders_amounts_nonneg CHECK (subtotal_toman >= 0 AND discount_toman >= 0 AND tax_toman >= 0 AND total_toman >= 0 AND discount_toman <= subtotal_toman AND total_toman >= (subtotal_toman - discount_toman))');
             DB::statement("ALTER TABLE core_billing_orders ADD CONSTRAINT billing_orders_period_valid CHECK (period IN ('monthly','quarterly','annual'))");
             DB::statement("ALTER TABLE core_billing_order_lines ADD CONSTRAINT billing_order_lines_kind_valid CHECK (kind IN ('plan','discount','tax'))");
         }

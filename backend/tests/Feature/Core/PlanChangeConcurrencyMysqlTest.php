@@ -3,11 +3,14 @@
 namespace Tests\Feature\Core;
 
 use App\Core\Modules\ModuleRegistrySynchronizer;
+use App\Core\Organizations\Organization;
+use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\PermissionCatalog;
+use App\Core\Subscriptions\CoreSubscription;
 use App\Core\Subscriptions\PlanChangePlanner;
 use App\Core\Subscriptions\SubscriptionException;
 use App\Core\Subscriptions\SubscriptionService;
@@ -185,7 +188,7 @@ class PlanChangeConcurrencyMysqlTest extends TestCase
     }
 
     /**
-     * @return array{0: User, 1: \App\Core\Organizations\Organization, 2: \App\Core\Subscriptions\CoreSubscription}
+     * @return array{0: User, 1: Organization, 2: CoreSubscription}
      */
     private function fixture(string $correlation): array
     {
@@ -198,7 +201,7 @@ class PlanChangeConcurrencyMysqlTest extends TestCase
 
         $creator = User::factory()->create(['status' => 'active']);
         $this->userIds[] = (int) $creator->id;
-        $organization = app(\App\Core\Organizations\OrganizationProvisioner::class)->create($creator, 'Race Org '.uniqid());
+        $organization = app(OrganizationProvisioner::class)->create($creator, 'Race Org '.uniqid());
         $this->organizationIds[] = (int) $organization->id;
         $workspace = $organization->workspaces()->where('is_default', true)->firstOrFail();
         $this->workspaceIds[] = (int) $workspace->id;

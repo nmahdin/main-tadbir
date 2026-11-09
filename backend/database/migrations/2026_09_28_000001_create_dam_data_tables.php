@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Schema;
  * هر «جدول» یک شیت مجزاست با ستون‌های قابل تنظیم؛ هر «ردیف» یک رکورد
  * دیتابیسی است که سلول‌هایش به‌صورت JSON ذخیره می‌شوند.
  */
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::create('dam_data_tables', function (Blueprint $t) {

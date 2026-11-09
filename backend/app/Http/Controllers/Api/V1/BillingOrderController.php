@@ -55,7 +55,7 @@ final class BillingOrderController extends Controller
             // Prefer header; body field is irrelevant in that branch.
         } elseif ($request->hasHeader('idempotency-key')) {
             // All lowercase variant from some clients.
-        } elseif (!array_key_exists('idempotency_key', $data) || $data['idempotency_key'] === null || $data['idempotency_key'] === '') {
+        } elseif (! array_key_exists('idempotency_key', $data) || $data['idempotency_key'] === null || $data['idempotency_key'] === '') {
             return response()->json([
                 'message' => 'Idempotency-Key header or idempotency_key body is required.',
                 'code' => 'order_idempotency_key_required',

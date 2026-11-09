@@ -6,6 +6,7 @@ use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Rbac\PermissionCatalog;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -113,7 +114,7 @@ class PlanPriceSchemaMysqlTest extends TestCase
         $thrown = false;
         try {
             $fn();
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             $thrown = true;
         }
         $this->assertTrue($thrown, 'Expected a database constraint violation.');

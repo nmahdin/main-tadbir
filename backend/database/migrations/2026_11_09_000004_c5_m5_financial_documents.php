@@ -113,23 +113,23 @@ return new class extends Migration
         $driver = DB::connection()->getDriverName();
         if (in_array($driver, ['mysql', 'mariadb'], true)) {
             DB::statement(
-                "ALTER TABLE core_billing_documents ADD CONSTRAINT billing_doc_type_valid CHECK ".
+                'ALTER TABLE core_billing_documents ADD CONSTRAINT billing_doc_type_valid CHECK '.
                 "(doc_type IN ('invoice','receipt'))"
             );
             DB::statement(
-                "ALTER TABLE core_billing_documents ADD CONSTRAINT billing_doc_status_valid CHECK ".
+                'ALTER TABLE core_billing_documents ADD CONSTRAINT billing_doc_status_valid CHECK '.
                 "(status IN ('draft','issued','void'))"
             );
             DB::statement(
-                "ALTER TABLE core_billing_documents ADD CONSTRAINT billing_doc_amounts_nonnegative CHECK ".
-                "(subtotal_toman >= 0 AND discount_toman >= 0 AND tax_toman >= 0 AND total_toman >= 0)"
+                'ALTER TABLE core_billing_documents ADD CONSTRAINT billing_doc_amounts_nonnegative CHECK '.
+                '(subtotal_toman >= 0 AND discount_toman >= 0 AND tax_toman >= 0 AND total_toman >= 0)'
             );
             DB::statement(
-                "ALTER TABLE core_billing_documents ADD CONSTRAINT billing_doc_total_consistent CHECK ".
-                "(total_toman = subtotal_toman - discount_toman + tax_toman)"
+                'ALTER TABLE core_billing_documents ADD CONSTRAINT billing_doc_total_consistent CHECK '.
+                '(total_toman = subtotal_toman - discount_toman + tax_toman)'
             );
             DB::statement(
-                "ALTER TABLE core_billing_document_events ADD CONSTRAINT billing_doc_event_valid CHECK ".
+                'ALTER TABLE core_billing_document_events ADD CONSTRAINT billing_doc_event_valid CHECK '.
                 "(event IN ('created','issued','voided','viewed'))"
             );
         }

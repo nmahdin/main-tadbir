@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Bale;
 
-use App\Modules\Messaging\Bot\Bale\Support\PanelLinks;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Modules\Messaging\Bot\Bale\Support\PanelLinks;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;

@@ -20,7 +20,7 @@ class TrackedEnvironmentFilesTest extends TestCase
      * binary and no process spawning (shared hosts and CI sandboxes differ).
      *
      * @return list<string>|null null when the index is absent or uses an
-     *                            unsupported layout (version 4 path compression).
+     *                           unsupported layout (version 4 path compression).
      */
     private function trackedFiles(): ?array
     {

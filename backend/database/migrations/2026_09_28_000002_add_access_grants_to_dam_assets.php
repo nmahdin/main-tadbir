@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\Schema;
  * دسترسی دانه‌بندی‌شده دارایی‌ها: به‌جای سطح محرمانگی صرف،
  * پروژه‌ها، اشخاص و نقش‌های مجاز هر دارایی ذخیره می‌شود.
  */
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::table('dam_assets', function (Blueprint $t) {

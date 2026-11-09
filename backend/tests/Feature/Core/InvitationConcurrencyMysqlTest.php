@@ -8,6 +8,7 @@ use App\Core\Invitations\InvitationService;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Rbac\RoleProvisioner;
+use App\Core\Rbac\ScopedRole;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
@@ -159,7 +160,7 @@ class InvitationConcurrencyMysqlTest extends TestCase
     }
 
     /**
-     * @return array{0: User, 1: Organization, 2: InvitationService, 3: \App\Core\Rbac\ScopedRole}
+     * @return array{0: User, 1: Organization, 2: InvitationService, 3: ScopedRole}
      */
     private function fixture(string $label): array
     {

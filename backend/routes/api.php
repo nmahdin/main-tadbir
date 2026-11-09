@@ -1,17 +1,24 @@
 <?php
 
+use App\Core\Architecture\DomainPaths;
+use App\Http\Controllers\Api\V1\BillingCatalogController;
+use App\Http\Controllers\Api\V1\BillingDocumentController;
+use App\Http\Controllers\Api\V1\BillingOrderController;
+use App\Http\Controllers\Api\V1\BillingPaymentController;
+use App\Http\Controllers\Api\V1\BillingQuoteController;
+use App\Http\Controllers\Api\V1\BillingSubscriptionController;
+use App\Http\Controllers\Api\V1\Core\AccountLifecycleController;
+use App\Http\Middleware\EnsureDepartmentStructure;
+use App\Models\DomainRecord;
+use App\Models\WorkspaceRecord;
 use App\Modules\Administration\Http\Controllers\ActivityLogController;
 use App\Modules\Administration\Http\Controllers\AnalyticsController;
 use App\Modules\Administration\Http\Controllers\ApprovalController;
-use App\Modules\Identity\Http\Controllers\AuthController;
-use App\Modules\Messaging\Http\Controllers\Bale\BaleAccountController;
-use App\Modules\Messaging\Http\Controllers\Bale\BaleAssetAccessController;
-use App\Modules\Messaging\Http\Controllers\Bale\BaleOperationsController;
-use App\Modules\Messaging\Http\Controllers\Bale\BaleSettingsController;
-use App\Modules\Messaging\Http\Controllers\Bale\BaleTransportController;
-use App\Http\Controllers\Api\V1\Core\AccountLifecycleController;
-use App\Modules\Messaging\Http\Controllers\ChatAttachmentController;
-use App\Modules\Messaging\Http\Controllers\ChatRealtimeController;
+use App\Modules\Administration\Http\Controllers\GlobalSearchController;
+use App\Modules\Administration\Http\Controllers\HealthController;
+use App\Modules\Administration\Http\Controllers\IntegrityController;
+use App\Modules\Administration\Http\Controllers\RestoreController;
+use App\Modules\Administration\Http\Controllers\SystemSettingController;
 use App\Modules\Collaboration\Http\Controllers\CommentController;
 use App\Modules\Contents\Http\Controllers\ContentController;
 use App\Modules\Contents\Http\Controllers\ContentSeriesController;
@@ -21,25 +28,28 @@ use App\Modules\Dam\Http\Controllers\DamDataTableController;
 use App\Modules\Dam\Http\Controllers\DamTaxonomyController;
 use App\Modules\Departments\Http\Controllers\DepartmentController;
 use App\Modules\Departments\Http\Controllers\DepartmentDashboardController;
-use App\Modules\Secretariat\Http\Controllers\DomainRecordController;
-use App\Modules\Administration\Http\Controllers\GlobalSearchController;
+use App\Modules\Identity\Http\Controllers\AccountSecurityController;
+use App\Modules\Identity\Http\Controllers\AuthController;
+use App\Modules\Identity\Http\Controllers\AuthExtController;
+use App\Modules\Identity\Http\Controllers\GoogleAuthController;
+use App\Modules\Identity\Http\Controllers\RoleController;
+use App\Modules\Identity\Http\Controllers\UserController;
 use App\Modules\Integrations\Http\Controllers\GoogleWorkspaceController;
-use App\Modules\Administration\Http\Controllers\HealthController;
-use App\Modules\Administration\Http\Controllers\IntegrityController;
+use App\Modules\Messaging\Http\Controllers\Bale\BaleAccountController;
+use App\Modules\Messaging\Http\Controllers\Bale\BaleAssetAccessController;
+use App\Modules\Messaging\Http\Controllers\Bale\BaleOperationsController;
+use App\Modules\Messaging\Http\Controllers\Bale\BaleSettingsController;
+use App\Modules\Messaging\Http\Controllers\Bale\BaleTransportController;
+use App\Modules\Messaging\Http\Controllers\ChatAttachmentController;
+use App\Modules\Messaging\Http\Controllers\ChatRealtimeController;
 use App\Modules\Notifications\Http\Controllers\NotificationInboxController;
 use App\Modules\Projects\Http\Controllers\ProjectContentPlanController;
 use App\Modules\Projects\Http\Controllers\ProjectController;
 use App\Modules\Projects\Http\Controllers\ProjectOperationsController;
 use App\Modules\Projects\Http\Controllers\ProjectTemplateController;
-use App\Modules\Administration\Http\Controllers\RestoreController;
-use App\Modules\Identity\Http\Controllers\RoleController;
-use App\Modules\Administration\Http\Controllers\SystemSettingController;
-use App\Modules\Tasks\Http\Controllers\TaskController;
-use App\Modules\Identity\Http\Controllers\UserController;
+use App\Modules\Secretariat\Http\Controllers\DomainRecordController;
 use App\Modules\Secretariat\Http\Controllers\WorkspaceRecordController;
-use App\Http\Middleware\EnsureDepartmentStructure;
-use App\Models\DomainRecord;
-use App\Models\WorkspaceRecord;
+use App\Modules\Tasks\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
@@ -100,28 +110,28 @@ Route::prefix('v1')->group(function (): void {
         ->middleware(['web', 'throttle:8,1,auth-bale-reset']);
 
     // AUTH-EXT-01 public flows (spec + ADR-0021).
-    Route::post('auth/email/confirm', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'confirmEmail'])
+    Route::post('auth/email/confirm', [AuthExtController::class, 'confirmEmail'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:10,1,auth-email-confirm']);
-    Route::post('auth/step-up', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'stepUp'])
+    Route::post('auth/step-up', [AuthExtController::class, 'stepUp'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:10,1,auth-step-up']);
-    Route::post('auth/otp/challenge', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'otpChallenge'])
+    Route::post('auth/otp/challenge', [AuthExtController::class, 'otpChallenge'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:10,1,auth-otp-challenge']);
-    Route::post('auth/otp/login', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'otpLogin'])
+    Route::post('auth/otp/login', [AuthExtController::class, 'otpLogin'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:10,1,auth-otp-login']);
-    Route::post('auth/password/forgot', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'forgotPassword'])
+    Route::post('auth/password/forgot', [AuthExtController::class, 'forgotPassword'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:5,1,auth-forgot']);
-    Route::post('auth/password/reset', [\App\Modules\Identity\Http\Controllers\AuthExtController::class, 'resetPassword'])
+    Route::post('auth/password/reset', [AuthExtController::class, 'resetPassword'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:10,1,auth-reset']);
-    Route::get('auth/google/redirect', [\App\Modules\Identity\Http\Controllers\GoogleAuthController::class, 'redirect'])
+    Route::get('auth/google/redirect', [GoogleAuthController::class, 'redirect'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:20,1,auth-google']);
-    Route::get('auth/google/callback', [\App\Modules\Identity\Http\Controllers\GoogleAuthController::class, 'callback'])
+    Route::get('auth/google/callback', [GoogleAuthController::class, 'callback'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->middleware(['web', 'throttle:20,1,auth-google-callback']);
 
@@ -169,25 +179,25 @@ Route::prefix('v1')->group(function (): void {
         Route::post('auth/logout', [AuthController::class, 'logout'])->name('api.v1.auth.logout');
 
         // AUTH-EXT-01 authenticated account security (self-scoped).
-        Route::post('auth/google/link', [\App\Modules\Identity\Http\Controllers\GoogleAuthController::class, 'link']);
-        Route::post('account/reauthenticate', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'reauthenticate']);
-        Route::post('account/security/password', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'changePassword']);
-        Route::post('account/security/email', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'requestEmailChange']);
-        Route::post('account/security/email/confirm', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'confirmEmailChange']);
-        Route::post('account/security/mobile', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'requestMobileChange']);
-        Route::post('account/security/mobile/confirm', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'confirmMobileChange']);
-        Route::get('account/sessions', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'sessions']);
-        Route::delete('account/sessions/{id}', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'revokeSession']);
-        Route::post('account/sessions/revoke-others', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'revokeOtherSessions']);
-        Route::post('account/deletion-request', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'requestDeletion']);
-        Route::post('account/deletion-request/cancel', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'cancelDeletion']);
-        Route::get('account/deletion-status', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'deletionStatus']);
-        Route::get('account/welcome', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'welcome']);
-        Route::post('account/welcome/complete', [\App\Modules\Identity\Http\Controllers\AccountSecurityController::class, 'completeWelcome']);
+        Route::post('auth/google/link', [GoogleAuthController::class, 'link']);
+        Route::post('account/reauthenticate', [AccountSecurityController::class, 'reauthenticate']);
+        Route::post('account/security/password', [AccountSecurityController::class, 'changePassword']);
+        Route::post('account/security/email', [AccountSecurityController::class, 'requestEmailChange']);
+        Route::post('account/security/email/confirm', [AccountSecurityController::class, 'confirmEmailChange']);
+        Route::post('account/security/mobile', [AccountSecurityController::class, 'requestMobileChange']);
+        Route::post('account/security/mobile/confirm', [AccountSecurityController::class, 'confirmMobileChange']);
+        Route::get('account/sessions', [AccountSecurityController::class, 'sessions']);
+        Route::delete('account/sessions/{id}', [AccountSecurityController::class, 'revokeSession']);
+        Route::post('account/sessions/revoke-others', [AccountSecurityController::class, 'revokeOtherSessions']);
+        Route::post('account/deletion-request', [AccountSecurityController::class, 'requestDeletion']);
+        Route::post('account/deletion-request/cancel', [AccountSecurityController::class, 'cancelDeletion']);
+        Route::get('account/deletion-status', [AccountSecurityController::class, 'deletionStatus']);
+        Route::get('account/welcome', [AccountSecurityController::class, 'welcome']);
+        Route::post('account/welcome/complete', [AccountSecurityController::class, 'completeWelcome']);
 
         // Core domain routes (ARCH-01 registrar): loaded in the
         // original registration order from domain-owned files.
-        foreach (\App\Core\Architecture\DomainPaths::routeFiles()['authenticated'] as $coreRouteFile) {
+        foreach (DomainPaths::routeFiles()['authenticated'] as $coreRouteFile) {
             require $coreRouteFile;
         }
 
@@ -378,39 +388,39 @@ Route::prefix('v1')->group(function (): void {
         // C5-M2-S2 read-only commercial catalog (any authenticated active
         // account; specific billing permissions are NOT required to read
         // catalog). Administration lives under /platform/billing above.
-        Route::get('billing/catalog', [\App\Http\Controllers\Api\V1\BillingCatalogController::class, 'index'])->name('api.v1.billing.catalog');
+        Route::get('billing/catalog', [BillingCatalogController::class, 'index'])->name('api.v1.billing.catalog');
 
         // C5-M2-S3 owner-scoped quotes (personal quotes require an active
         // personal workspace; organization quotes require organization.billing.manage).
         // Idempotent creation via Idempotency-Key header.
-        Route::get('billing/quotes', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'indexForPersonal'])->name('api.v1.billing.quotes.personal.index');
-        Route::post('billing/quotes/personal', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'createForPersonal'])->name('api.v1.billing.quotes.personal.create');
-        Route::get('billing/quotes/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'indexForOrganization'])->name('api.v1.billing.quotes.org.index');
-        Route::post('billing/quotes/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'createForOrganization'])->name('api.v1.billing.quotes.org.create');
-        Route::get('billing/quotes/{quote}', [\App\Http\Controllers\Api\V1\BillingQuoteController::class, 'show'])->name('api.v1.billing.quotes.show')->whereNumber('quote');
-        Route::post('billing/quotes/{quote}/convert', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'convert'])->name('api.v1.billing.quotes.convert')->whereNumber('quote');
-        Route::get('billing/orders', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'indexForPersonal'])->name('api.v1.billing.orders.personal.index');
-        Route::get('billing/orders/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'indexForOrganization'])->name('api.v1.billing.orders.org.index');
-        Route::get('billing/orders/{order}', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'show'])->name('api.v1.billing.orders.show')->whereNumber('order');
-        Route::post('billing/orders/{order}/cancel', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'cancel'])->name('api.v1.billing.orders.cancel')->whereNumber('order');
+        Route::get('billing/quotes', [BillingQuoteController::class, 'indexForPersonal'])->name('api.v1.billing.quotes.personal.index');
+        Route::post('billing/quotes/personal', [BillingQuoteController::class, 'createForPersonal'])->name('api.v1.billing.quotes.personal.create');
+        Route::get('billing/quotes/organizations/{organization}', [BillingQuoteController::class, 'indexForOrganization'])->name('api.v1.billing.quotes.org.index');
+        Route::post('billing/quotes/organizations/{organization}', [BillingQuoteController::class, 'createForOrganization'])->name('api.v1.billing.quotes.org.create');
+        Route::get('billing/quotes/{quote}', [BillingQuoteController::class, 'show'])->name('api.v1.billing.quotes.show')->whereNumber('quote');
+        Route::post('billing/quotes/{quote}/convert', [BillingOrderController::class, 'convert'])->name('api.v1.billing.quotes.convert')->whereNumber('quote');
+        Route::get('billing/orders', [BillingOrderController::class, 'indexForPersonal'])->name('api.v1.billing.orders.personal.index');
+        Route::get('billing/orders/organizations/{organization}', [BillingOrderController::class, 'indexForOrganization'])->name('api.v1.billing.orders.org.index');
+        Route::get('billing/orders/{order}', [BillingOrderController::class, 'show'])->name('api.v1.billing.orders.show')->whereNumber('order');
+        Route::post('billing/orders/{order}/cancel', [BillingOrderController::class, 'cancel'])->name('api.v1.billing.orders.cancel')->whereNumber('order');
         // C5-M3 payment endpoints. Cached CSRF/session state is NOT
         // consulted; the `callback` endpoints accept signed provider
         // returns and perform authoritative server-side verification
         // before marking payment paid.
-        Route::post('billing/orders/{order}/pay', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'initiate'])->name('api.v1.billing.orders.pay')->whereNumber('order')->middleware('throttle:10,1');
-        Route::get('billing/payments/{payment}', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'show'])->name('api.v1.billing.payments.show')->whereNumber('payment');
-        Route::get('billing/payments/{payment}/callback', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'callbackReturn'])->name('api.v1.billing.payments.callback.return')->whereNumber('payment');
-        Route::post('billing/payments/{payment}/callback', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'callbackWebhook'])->name('api.v1.billing.payments.callback.webhook')->whereNumber('payment')->middleware('throttle:60,1');
-        Route::post('billing/payments/{payment}/reconcile', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'reconcile'])->name('api.v1.billing.payments.reconcile')->whereNumber('payment')->middleware('throttle:10,1');
+        Route::post('billing/orders/{order}/pay', [BillingPaymentController::class, 'initiate'])->name('api.v1.billing.orders.pay')->whereNumber('order')->middleware('throttle:10,1');
+        Route::get('billing/payments/{payment}', [BillingPaymentController::class, 'show'])->name('api.v1.billing.payments.show')->whereNumber('payment');
+        Route::get('billing/payments/{payment}/callback', [BillingPaymentController::class, 'callbackReturn'])->name('api.v1.billing.payments.callback.return')->whereNumber('payment');
+        Route::post('billing/payments/{payment}/callback', [BillingPaymentController::class, 'callbackWebhook'])->name('api.v1.billing.payments.callback.webhook')->whereNumber('payment')->middleware('throttle:60,1');
+        Route::post('billing/payments/{payment}/reconcile', [BillingPaymentController::class, 'reconcile'])->name('api.v1.billing.payments.reconcile')->whereNumber('payment')->middleware('throttle:10,1');
         // C5-M5 financial document history (owner-scoped).
-        Route::get('billing/documents', [\App\Http\Controllers\Api\V1\BillingDocumentController::class, 'indexForPersonal'])->name('api.v1.billing.documents.personal.index');
-        Route::get('billing/documents/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingDocumentController::class, 'indexForOrganization'])->name('api.v1.billing.documents.org.index');
-        Route::get('billing/documents/{document}', [\App\Http\Controllers\Api\V1\BillingDocumentController::class, 'show'])->name('api.v1.billing.documents.show')->whereNumber('document');
-        Route::get('billing/documents/{document}/render', [\App\Http\Controllers\Api\V1\BillingDocumentController::class, 'render'])->name('api.v1.billing.documents.render')->whereNumber('document');
+        Route::get('billing/documents', [BillingDocumentController::class, 'indexForPersonal'])->name('api.v1.billing.documents.personal.index');
+        Route::get('billing/documents/organizations/{organization}', [BillingDocumentController::class, 'indexForOrganization'])->name('api.v1.billing.documents.org.index');
+        Route::get('billing/documents/{document}', [BillingDocumentController::class, 'show'])->name('api.v1.billing.documents.show')->whereNumber('document');
+        Route::get('billing/documents/{document}/render', [BillingDocumentController::class, 'render'])->name('api.v1.billing.documents.render')->whereNumber('document');
 
         // C5-M4 read-only current subscription endpoint.
-        Route::get('billing/subscription', [\App\Http\Controllers\Api\V1\BillingSubscriptionController::class, 'showForPersonal'])->name('api.v1.billing.subscription.personal');
-        Route::get('billing/subscription/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingSubscriptionController::class, 'showForOrganization'])->name('api.v1.billing.subscription.org');
+        Route::get('billing/subscription', [BillingSubscriptionController::class, 'showForPersonal'])->name('api.v1.billing.subscription.personal');
+        Route::get('billing/subscription/organizations/{organization}', [BillingSubscriptionController::class, 'showForOrganization'])->name('api.v1.billing.subscription.org');
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
         // UX-02-3-FINAL: bulk status reuses the single-record service per task.
         Route::post('tasks/bulk-status', [TaskController::class, 'bulkStatus'])->middleware('permission:tasks.view')->name('api.v1.tasks.bulk-status');

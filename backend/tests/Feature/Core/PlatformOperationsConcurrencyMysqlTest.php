@@ -7,6 +7,7 @@ use App\Core\Platform\Operations\OperationTokenVerifier;
 use App\Core\Platform\Operations\PlatformOperationException;
 use App\Core\Platform\Operations\PlatformOperationService;
 use App\Core\Platform\PlatformAdministrationControl;
+use App\Core\Platform\PlatformRole;
 use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\PermissionCatalog;
@@ -76,7 +77,7 @@ class PlatformOperationsConcurrencyMysqlTest extends TestCase
         $targetA = $this->user('conc.boot.a');
         $targetB = $this->user('conc.boot.b');
         app(PlatformRoleProvisioner::class)->ensurePrimaryAdministrator();
-        $primaryRoleId = (int) \App\Core\Platform\PlatformRole::where('key', 'primary_administrator')->value('id');
+        $primaryRoleId = (int) PlatformRole::where('key', 'primary_administrator')->value('id');
 
         $winner = DB::connection('mysql_concurrent');
         $winner->beginTransaction();
@@ -119,7 +120,7 @@ class PlatformOperationsConcurrencyMysqlTest extends TestCase
 
         $successor = $this->user('conc.rec.new');
         $other = $this->user('conc.rec.other');
-        $primaryRoleId = (int) \App\Core\Platform\PlatformRole::where('key', 'primary_administrator')->value('id');
+        $primaryRoleId = (int) PlatformRole::where('key', 'primary_administrator')->value('id');
 
         $winner = DB::connection('mysql_concurrent');
         $winner->beginTransaction();

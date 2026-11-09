@@ -5,6 +5,7 @@ namespace Tests\Feature\Core;
 use App\Core\Invitations\CoreInvitation;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
+use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Plans\CorePlan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -49,7 +50,7 @@ class DemoSeedingTest extends TestCase
         // A different organization (provisioned for someone else)
         // remains forbidden: demo access never leaks across scopes.
         $other = User::factory()->create(['username' => 'uxfix_other_owner', 'status' => 'active']);
-        $foreign = app(\App\Core\Organizations\OrganizationProvisioner::class)->create($other, 'Foreign Org');
+        $foreign = app(OrganizationProvisioner::class)->create($other, 'Foreign Org');
         $this->getJson("/api/v1/core/organizations/{$foreign->id}/settings")->assertForbidden();
         $this->putJson("/api/v1/core/organizations/{$foreign->id}/settings/display.locale", ['value' => 'en'])
             ->assertForbidden();

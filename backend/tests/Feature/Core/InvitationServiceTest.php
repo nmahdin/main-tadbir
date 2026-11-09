@@ -4,18 +4,24 @@ namespace Tests\Feature\Core;
 
 use App\Core\Audit\AuditLog;
 use App\Core\Invitations\CoreInvitation;
+use App\Core\Invitations\InvitationException;
+use App\Core\Invitations\InvitationPresenter;
 use App\Core\Invitations\InvitationService;
 use App\Core\Invitations\InvitationState;
 use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
 use App\Core\Organizations\OrganizationProvisioner;
+use App\Core\Platform\PlatformRoleAssignment;
+use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\RoleProvisioner;
 use App\Core\Rbac\ScopedPermission;
 use App\Core\Rbac\ScopedRole;
+use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
+use App\Models\Role;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -109,7 +115,7 @@ class InvitationServiceTest extends TestCase
 
         // Personal workspace: no organization membership invented.
         $owner = User::factory()->create(['username' => 'inv_personal', 'status' => 'active']);
-        $personal = app(\App\Core\Workspaces\PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
+        $personal = app(PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
         $personalRole = app(RoleProvisioner::class)->workspaceMember($personal);
         $orgMembershipsBefore = OrganizationMembership::count();
 
@@ -152,12 +158,12 @@ class InvitationServiceTest extends TestCase
 
         // Platform primary administrator: platform status grants no scope authority.
         $platformAdmin = User::factory()->create(['username' => 'inv_platform', 'status' => 'active']);
-        \App\Core\Platform\PlatformRoleAssignment::create(['user_id' => $platformAdmin->id, 'platform_role_id' => app(\App\Core\Platform\PlatformRoleProvisioner::class)->ensurePrimaryAdministrator()->id]);
+        PlatformRoleAssignment::create(['user_id' => $platformAdmin->id, 'platform_role_id' => app(PlatformRoleProvisioner::class)->ensurePrimaryAdministrator()->id]);
         $this->assertInvitationFails('invitation_forbidden', fn () => $service->issueOrganizationInvitation($platformAdmin, $this->org, 'x@example.com', $this->orgMemberRole->id));
         $this->assertInvitationFails('invitation_forbidden', fn () => $service->issueWorkspaceInvitation($platformAdmin, $this->ws1, 'x@example.com', $this->wsMemberRole->id));
 
         // Legacy admin: legacy role confers nothing.
-        $legacyRole = \App\Models\Role::firstOrCreate(['key' => 'admin'], ['name' => 'Admin', 'is_active' => true]);
+        $legacyRole = Role::firstOrCreate(['key' => 'admin'], ['name' => 'Admin', 'is_active' => true]);
         $legacy = User::factory()->create(['username' => 'inv_legacy', 'role_id' => $legacyRole->id, 'role_key' => 'admin', 'status' => 'active']);
         $this->assertInvitationFails('invitation_forbidden', fn () => $service->issueOrganizationInvitation($legacy, $this->org, 'x@example.com', $this->orgMemberRole->id));
 
@@ -357,7 +363,7 @@ class InvitationServiceTest extends TestCase
 
         // Combined on a personal workspace is not a valid intent.
         $owner = User::factory()->create(['username' => 'inv_combo_personal', 'status' => 'active']);
-        $personal = app(\App\Core\Workspaces\PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
+        $personal = app(PersonalWorkspaceProvisioner::class)->ensureDefault($owner);
         $personalWsRole = app(RoleProvisioner::class)->workspaceMember($personal);
         $this->assertInvitationFails('invitation_scope_invalid', fn () => $service->issueCombinedInvitation($owner, $personal, 'd@example.com', $this->orgMemberRole->id, $personalWsRole->id));
     }
@@ -372,7 +378,7 @@ class InvitationServiceTest extends TestCase
         $this->org->forceFill(['settings' => ['public' => ['description' => 'We build things.', 'logo_url' => 'https://example.com/logo.png'], 'secret_note' => 'internal-only']])->save();
         $issued = $service->issueCombinedInvitation($this->manager, $this->ws1, 'present@example.com', $this->orgMemberRole->id, $this->wsMemberRole->id, 'See you soon');
 
-        $dto = app(\App\Core\Invitations\InvitationPresenter::class)->present($issued->invitation->fresh())->toArray();
+        $dto = app(InvitationPresenter::class)->present($issued->invitation->fresh())->toArray();
         $json = (string) json_encode($dto);
 
         $this->assertSame('combined', $dto['invitation']['type']);
@@ -400,7 +406,7 @@ class InvitationServiceTest extends TestCase
         try {
             $operation();
             $this->fail("Expected invitation failure [{$code}].");
-        } catch (\App\Core\Invitations\InvitationException $exception) {
+        } catch (InvitationException $exception) {
             $this->assertSame($code, $exception->errorCode);
         }
     }

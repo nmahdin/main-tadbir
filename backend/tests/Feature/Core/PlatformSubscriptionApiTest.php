@@ -4,6 +4,7 @@ namespace Tests\Feature\Core;
 
 use App\Core\Modules\ModuleRegistrySynchronizer;
 use App\Core\Organizations\Organization;
+use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Platform\PlatformRole;
 use App\Core\Platform\PlatformRoleAssignment;
@@ -12,6 +13,8 @@ use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\ScopedPermission;
 use App\Core\Subscriptions\CoreSubscription;
 use App\Core\Workspaces\Workspace;
+use App\Models\Permission;
+use App\Models\Role;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -59,7 +62,7 @@ class PlatformSubscriptionApiTest extends TestCase
 
         $this->admin = $this->actorWith(null, 'psa_admin');
         $creator = User::factory()->create(['username' => 'psa_owner']);
-        $this->org = app(\App\Core\Organizations\OrganizationProvisioner::class)->create($creator, 'PSA Org');
+        $this->org = app(OrganizationProvisioner::class)->create($creator, 'PSA Org');
         $this->workspace = $this->org->workspaces()->where('is_default', true)->firstOrFail();
     }
 
@@ -77,8 +80,8 @@ class PlatformSubscriptionApiTest extends TestCase
         $this->getJson($url)->assertForbidden()->assertJsonPath('code', 'platform_forbidden');
 
         // Legacy Admin obtains nothing from the legacy role system.
-        $legacyRole = \App\Models\Role::firstOrCreate(['key' => 'admin'], ['name' => 'Admin', 'is_active' => true]);
-        $legacyRole->permissions()->syncWithoutDetaching(\App\Models\Permission::query()->pluck('id'));
+        $legacyRole = Role::firstOrCreate(['key' => 'admin'], ['name' => 'Admin', 'is_active' => true]);
+        $legacyRole->permissions()->syncWithoutDetaching(Permission::query()->pluck('id'));
         $legacy = User::factory()->create(['username' => 'psa_legacy', 'role_id' => $legacyRole->id, 'role_key' => 'admin', 'status' => 'active']);
         Sanctum::actingAs($legacy);
         $this->getJson($url)->assertForbidden()->assertJsonPath('code', 'platform_forbidden');

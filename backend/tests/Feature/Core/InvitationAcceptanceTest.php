@@ -8,6 +8,7 @@ use App\Core\Identity\EmailVerificationService;
 use App\Core\Invitations\CoreInvitation;
 use App\Core\Invitations\InvitationAcceptanceService;
 use App\Core\Invitations\InvitationException;
+use App\Core\Invitations\InvitationPresenter;
 use App\Core\Invitations\InvitationService;
 use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\Organization;
@@ -75,7 +76,7 @@ class InvitationAcceptanceTest extends TestCase
 
         // Viewing / looking up the invitation consumes nothing.
         app(InvitationService::class)->resolveByRawToken($issued->rawToken);
-        app(\App\Core\Invitations\InvitationPresenter::class)->present($issued->invitation);
+        app(InvitationPresenter::class)->present($issued->invitation);
         $this->assertSame(CoreInvitation::STATUS_PENDING, $issued->invitation->fresh()->status);
 
         $result = app(InvitationAcceptanceService::class)->accept($invitee, $issued->rawToken);

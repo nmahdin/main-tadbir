@@ -8,11 +8,13 @@ use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Plans\CorePlan;
 use App\Core\Plans\PlanProvisioner;
+use App\Core\Plans\PlanProvisioningException;
 use App\Core\Subscriptions\CoreResourceUsageReader;
 use App\Core\Subscriptions\CoreSubscription;
 use App\Core\Subscriptions\FreeActivationPending;
 use App\Core\Subscriptions\FreePlanActivator;
 use App\Core\Subscriptions\ResourceLimitGuard;
+use App\Core\Subscriptions\ResourceUsageReader;
 use App\Core\Subscriptions\SubscriptionException;
 use App\Core\Subscriptions\SubscriptionOwner;
 use App\Core\Subscriptions\SubscriptionService;
@@ -77,7 +79,7 @@ class C5Ext01M1FreeFoundationTest extends TestCase
         try {
             $plans->setLimit('personal-free', 1, 'projects', 99);
             $this->fail('published version must reject limit writes');
-        } catch (\App\Core\Plans\PlanProvisioningException $exception) {
+        } catch (PlanProvisioningException $exception) {
             $this->assertSame('plan_version_immutable', $exception->errorCode);
         }
     }
@@ -308,9 +310,9 @@ class C5Ext01M1FreeFoundationTest extends TestCase
         // G-4: an enforceable limit with unmeasurable usage denies
         // the write (never reinterpreted as zero), with the shared
         // Persian usage_unknown response.
-        $unknownReader = new class implements \App\Core\Subscriptions\ResourceUsageReader
+        $unknownReader = new class implements ResourceUsageReader
         {
-            public function measure(\App\Core\Subscriptions\SubscriptionOwner $owner): array
+            public function measure(SubscriptionOwner $owner): array
             {
                 return ['workspaces' => 1, 'organization_members' => null, 'workspace_members' => 1, 'projects' => 0, 'storage_bytes' => null];
             }

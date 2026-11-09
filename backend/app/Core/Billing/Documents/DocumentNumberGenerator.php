@@ -47,6 +47,7 @@ final class DocumentNumberGenerator
         } else {
             $jm = 7 + (int) (($days - 186) / 30);
         }
+
         return [$jy, $jm];
     }
 

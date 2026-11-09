@@ -57,11 +57,11 @@ return new class extends Migration
         $driver = DB::connection()->getDriverName();
         if (in_array($driver, ['mysql', 'mariadb'], true)) {
             DB::statement(
-                "ALTER TABLE core_billing_reconciliation_findings ADD CONSTRAINT billing_recon_severity_valid CHECK ".
+                'ALTER TABLE core_billing_reconciliation_findings ADD CONSTRAINT billing_recon_severity_valid CHECK '.
                 "(severity IN ('info','warning','error','critical'))"
             );
             DB::statement(
-                "ALTER TABLE core_billing_reconciliation_findings ADD CONSTRAINT billing_recon_status_valid CHECK ".
+                'ALTER TABLE core_billing_reconciliation_findings ADD CONSTRAINT billing_recon_status_valid CHECK '.
                 "(status IN ('open','resolved','ignored'))"
             );
         }

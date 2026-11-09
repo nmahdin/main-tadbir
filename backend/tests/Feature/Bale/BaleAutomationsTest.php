@@ -2,10 +2,6 @@
 
 namespace Tests\Feature\Bale;
 
-use App\Modules\Messaging\Bot\Bale\Automations;
-use App\Modules\Messaging\Bot\Bale\Outbox;
-use App\Modules\Messaging\Bot\Bale\Settings;
-use App\Modules\Messaging\Bot\Bale\UpdateProcessor;
 use App\Models\BaleConversation;
 use App\Models\BaleOutbox;
 use App\Models\DamAsset;
@@ -13,6 +9,10 @@ use App\Models\DamDataTable;
 use App\Models\Department;
 use App\Models\Permission;
 use App\Models\User;
+use App\Modules\Messaging\Bot\Bale\Automations;
+use App\Modules\Messaging\Bot\Bale\Outbox;
+use App\Modules\Messaging\Bot\Bale\Settings;
+use App\Modules\Messaging\Bot\Bale\UpdateProcessor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;

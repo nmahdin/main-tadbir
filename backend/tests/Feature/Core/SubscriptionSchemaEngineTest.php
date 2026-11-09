@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Core;
 
+use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -62,7 +63,7 @@ class SubscriptionSchemaEngineTest extends TestCase
 
     public function test_insert_without_explicit_business_date_fails_closed(): void
     {
-        $user = \App\Models\User::factory()->create();
+        $user = User::factory()->create();
 
         try {
             DB::table('core_email_verification_challenges')->insert([

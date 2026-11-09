@@ -3,20 +3,19 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Core\Billing\BillingDomainException;
+use App\Core\Billing\CoreBillingFulfillmentOutbox;
 use App\Core\Billing\CoreBillingOrder;
 use App\Core\Billing\CoreBillingPayment;
-use App\Core\Billing\CoreBillingFulfillmentOutbox;
 use App\Core\Billing\PaymentGateway;
 use App\Core\Billing\PaymentService;
-use App\Core\Billing\SubscriptionFulfillmentConnector;
 use App\Core\Organizations\Organization;
 use App\Core\Rbac\MembershipPermissions;
+use App\Core\Subscriptions\SubscriptionFulfillment;
 use App\Core\Subscriptions\SubscriptionOwner;
 use App\Core\Subscriptions\SubscriptionOwnerResolver;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Core\Workspaces\Workspace;
 use App\Http\Controllers\Controller;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -216,7 +215,7 @@ final class BillingPaymentController extends Controller
     private function dispatchOutbox(): void
     {
         try {
-            $fulfillment = app(\App\Core\Subscriptions\SubscriptionFulfillment::class);
+            $fulfillment = app(SubscriptionFulfillment::class);
             $this->payments->dispatchOutbox(function (CoreBillingFulfillmentOutbox $evt) use ($fulfillment): void {
                 $fulfillment->fulfillPaid($evt);
             });

@@ -8,10 +8,12 @@ use App\Core\Invitations\CoreInvitation;
 use App\Core\Invitations\InvitationAcceptanceService;
 use App\Core\Invitations\InvitationException;
 use App\Core\Invitations\InvitationService;
+use App\Core\Invitations\IssuedInvitation;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Rbac\RoleProvisioner;
 use App\Core\Rbac\ScopedRole;
+use App\Core\Workspaces\Workspace;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
@@ -184,7 +186,7 @@ class InvitationAcceptanceConcurrencyMysqlTest extends TestCase
     }
 
     /**
-     * @return array{0: User, 1: Organization, 2: \App\Core\Workspaces\Workspace, 3: ScopedRole, 4: User, 5: \App\Core\Invitations\IssuedInvitation}
+     * @return array{0: User, 1: Organization, 2: Workspace, 3: ScopedRole, 4: User, 5: IssuedInvitation}
      */
     private function fixture(string $email): array
     {

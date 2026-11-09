@@ -8,9 +8,10 @@ use App\Core\Rbac\PermissionCatalog;
 use App\Core\Settings\CoreSettingRevision;
 use App\Core\Settings\ScopedSettingService;
 use App\Core\Settings\SettingDefinition;
+use App\Core\Settings\SettingServiceException;
 use App\Core\Settings\SettingsRegistry;
 use App\Core\Settings\SettingsRegistrySynchronizer;
-use App\Core\Settings\SettingServiceException;
+use App\Core\Settings\SettingValidationException;
 use App\Core\Settings\SettingValueStore;
 use App\Core\Workspaces\Workspace;
 use App\Models\User;
@@ -178,7 +179,7 @@ class SettingHistoryRestoreTest extends TestCase
         try {
             $this->service->writeOrganizationValue($this->manager, $this->org, 'integrations.demo.api_key', 'plaintext');
             $this->fail('secret write must be rejected');
-        } catch (\App\Core\Settings\SettingValidationException $exception) {
+        } catch (SettingValidationException $exception) {
             $this->assertSame('setting_secret_not_storable', $exception->errorCode);
         }
     }

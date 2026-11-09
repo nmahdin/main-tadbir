@@ -13,6 +13,7 @@ use App\Core\Platform\PlatformRole;
 use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\PermissionCatalog;
+use App\Core\Rbac\RoleProvisioner;
 use App\Core\Rbac\ScopedPermission;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -172,7 +173,7 @@ class DashboardSummaryTest extends TestCase
             'email_normalized' => 'pending@example.com',
             'token_hash' => hash('sha256', 'dashboard-token'),
             'status' => CoreInvitation::STATUS_PENDING,
-            'intended_organization_role_id' => app(\App\Core\Rbac\RoleProvisioner::class)->organizationMember($organization)->id,
+            'intended_organization_role_id' => app(RoleProvisioner::class)->organizationMember($organization)->id,
             'invited_by_user_id' => $manager->id,
             'expires_at' => now()->addDays(3),
         ]);

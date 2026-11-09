@@ -5,7 +5,6 @@ namespace Tests\Feature\Core;
 use App\Core\Invitations\InvitationPresenter;
 use App\Core\Invitations\InvitationService;
 use App\Core\Modules\WorkspaceModule;
-use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Rbac\RoleProvisioner;

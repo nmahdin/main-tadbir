@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class DamFolder extends Model
 {
     public const SYSTEM = 'system';
+
     public const USER = 'user';
 
     protected $fillable = [

@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Core\Billing\PaymentService;
 use App\Core\Billing\CoreBillingFulfillmentOutbox;
+use App\Core\Billing\PaymentService;
 use App\Core\Subscriptions\SubscriptionFulfillment;
 use Illuminate\Console\Command;
 

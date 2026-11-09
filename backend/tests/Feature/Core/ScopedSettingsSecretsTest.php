@@ -17,9 +17,10 @@ use App\Core\Rbac\ScopedRole;
 use App\Core\Settings\CoreSettingSecret;
 use App\Core\Settings\Services\ScopedSecretService;
 use App\Core\Settings\SettingDefinition;
+use App\Core\Settings\SettingServiceException;
 use App\Core\Settings\SettingsRegistry;
 use App\Core\Settings\SettingsRegistrySynchronizer;
-use App\Core\Settings\SettingServiceException;
+use App\Core\Settings\SettingValidationException;
 use App\Core\Settings\SettingValueStore;
 use App\Core\Workspaces\Workspace;
 use App\Core\Workspaces\WorkspaceMembership;
@@ -118,7 +119,7 @@ class ScopedSettingsSecretsTest extends TestCase
         try {
             app(SettingValueStore::class)->put('organization', $this->org->id, 'integrations.demo.api_key', 'leak');
             $this->fail('generic store must refuse secrets');
-        } catch (\App\Core\Settings\SettingValidationException $exception) {
+        } catch (SettingValidationException $exception) {
             $this->assertSame('setting_secret_not_storable', $exception->errorCode);
         }
     }

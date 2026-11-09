@@ -2,15 +2,13 @@
 
 namespace Tests\Feature\Core;
 
+use App\Core\Billing\BillingDomainException;
 use App\Core\Billing\CoreBillingFulfillmentOutbox;
 use App\Core\Billing\CoreBillingOrder;
 use App\Core\Billing\CoreBillingPayment;
-use App\Core\Billing\CoreBillingPaymentEvent;
-use App\Core\Billing\CoreBillingQuote;
 use App\Core\Billing\CorePromoReservation;
 use App\Core\Billing\CorePromotion;
 use App\Core\Billing\CoreTaxRule;
-use App\Core\Billing\Gateways\SandboxPaymentGateway;
 use App\Core\Billing\OrderService;
 use App\Core\Billing\PaymentService;
 use App\Core\Billing\PlanPricePublisher;
@@ -25,15 +23,14 @@ use App\Core\Plans\PlanProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Subscriptions\CoreSubscription;
 use App\Core\Subscriptions\SubscriptionFulfillment;
-use App\Core\Subscriptions\SubscriptionPeriod;
 use App\Core\Subscriptions\SubscriptionLifecycle;
 use App\Core\Subscriptions\SubscriptionOwner;
+use App\Core\Subscriptions\SubscriptionPeriod;
 use App\Core\Subscriptions\SubscriptionState;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -44,7 +41,9 @@ class BillingPaymentTest extends TestCase
     use RefreshDatabase;
 
     private User $actor;
+
     private ?User $orgAdmin = null;
+
     private ?Organization $org = null;
 
     protected function setUp(): void
@@ -232,7 +231,7 @@ class BillingPaymentTest extends TestCase
         // Force order review expiry.
         $order->forceFill(['review_expires_at' => $at->addDays(7), 'status' => CoreBillingOrder::STATUS_REVIEW_EXPIRED])->save();
 
-        $this->expectException(\App\Core\Billing\BillingDomainException::class);
+        $this->expectException(BillingDomainException::class);
         $this->payments()->initiate($this->actor, $owner, $order->fresh(), 'i-ex');
     }
 
@@ -277,7 +276,7 @@ class BillingPaymentTest extends TestCase
         $sub->refresh();
         // Renewal stacked: new expiry = first expiry + 30 days, not "now + 30".
         $expectedExpiry = CarbonImmutable::instance($sub->expires_at);
-        $this->assertSame((int) (30*24*60*60), $expectedExpiry->getTimestamp() - $firstExpiry);
+        $this->assertSame((int) (30 * 24 * 60 * 60), $expectedExpiry->getTimestamp() - $firstExpiry);
         $periods = $sub->periods()->orderBy('id')->get();
         $this->assertCount(2, $periods);
         $this->assertSame(SubscriptionPeriod::OPERATION_PAID_ACTIVATION, $periods[0]->operation);
@@ -381,13 +380,13 @@ class BillingPaymentTest extends TestCase
     private function createPlanIfMissing(string $key, string $audience, int $version): void
     {
         $provisioner = app(PlanProvisioner::class);
-        $plan = \App\Core\Plans\CorePlan::query()->where('key', $key)->first();
+        $plan = CorePlan::query()->where('key', $key)->first();
         if ($plan !== null) {
             return;
         }
         $provisioner->createPlan($key, "Plan {$key}", $audience);
         $provisioner->createDraftVersion($key, $version);
         $provisioner->publish($key, $version);
-        $provisioner->setPlanStatus($key, \App\Core\Plans\CorePlan::STATUS_ACTIVE);
+        $provisioner->setPlanStatus($key, CorePlan::STATUS_ACTIVE);
     }
 }

@@ -8,12 +8,11 @@ use App\Core\Platform\Operations\OperationTokenVerifier;
 use App\Core\Platform\Operations\PlatformOperationService;
 use App\Core\Platform\PlatformAdministrationControl;
 use App\Core\Platform\PlatformAssignmentService;
+use App\Core\Platform\PlatformOperationRequest;
 use App\Core\Platform\PlatformRole;
 use App\Core\Platform\PlatformRoleAssignment;
 use App\Core\Platform\PlatformRoleProvisioner;
 use App\Core\Rbac\PermissionCatalog;
-use App\Models\Permission;
-use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
@@ -64,7 +63,7 @@ class PlatformAuditFailureTest extends TestCase
         } catch (RuntimeException) {
             $this->assertSame(0, PlatformRoleAssignment::count());
             $this->assertNull(PlatformAdministrationControl::singleton()->bootstrap_completed_at);
-            $this->assertSame(0, \App\Core\Platform\PlatformOperationRequest::where('status', 'consumed')->count());
+            $this->assertSame(0, PlatformOperationRequest::where('status', 'consumed')->count());
         }
     }
 
@@ -86,7 +85,7 @@ class PlatformAuditFailureTest extends TestCase
             $this->assertSame(0, PlatformRoleAssignment::whereHas('user', fn ($q) => $q->where('username', 'af.new'))->count());
             $this->assertSame(
                 1,
-                \App\Core\Platform\PlatformOperationRequest::where('status', 'consumed')->count(),
+                PlatformOperationRequest::where('status', 'consumed')->count(),
                 'Only the original bootstrap consumption may remain.',
             );
         }
@@ -134,5 +133,5 @@ class PlatformAuditFailureTest extends TestCase
 
 function DB_count_operation_requests(): int
 {
-    return \App\Core\Platform\PlatformOperationRequest::where('status', 'consumed')->count();
+    return PlatformOperationRequest::where('status', 'consumed')->count();
 }

@@ -8,7 +8,6 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
-
     /*
     |--------------------------------------------------------------------------
     | Third Party Services
