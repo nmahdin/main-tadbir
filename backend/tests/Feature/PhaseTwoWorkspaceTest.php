@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Bot\Bale\Notifications\NotificationAccess;
+use App\Modules\Messaging\Bot\Bale\Notifications\NotificationAccess;
 use App\Models\Content;
 use App\Models\DomainRecord;
 use App\Models\Permission;
@@ -10,9 +10,9 @@ use App\Models\Project;
 use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
-use App\Services\ContentReview;
-use App\Services\ContentStageTaskSync;
-use App\Services\Organization\OrganizationSettings;
+use App\Modules\Contents\Services\ContentReview;
+use App\Modules\Contents\Services\ContentStageTaskSync;
+use App\Modules\Administration\Services\OrganizationSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;

@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Services\ContentAccess;
+use App\Modules\Contents\Services\ContentAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 

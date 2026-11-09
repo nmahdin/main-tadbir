@@ -1,5 +1,8 @@
 # راهنمای تست دستی سامانه تدبیر (Test Guide)
 
+> **Stage 02.5 note (2026-10-15):** This manual guide predates the department consolidation — sections referring to «تیم‌ها» (teams) describe the retired team concept; teams were replaced by departments (see `docs/deployment/departments-consolidation.md`). Scenarios are otherwise retained as manual QA material; the authoritative test baseline is `docs/migration/00-current-state-audit.md` §8.
+
+
 این سند سناریوهای تست دستی برای قابلیت‌های اخیر را پوشش می‌دهد.
 پیش‌نیاز: اجرای فرانت‌اند (`frontend/`) و بک‌اند لاراول با دیتابیس مایگریت‌شده.
 

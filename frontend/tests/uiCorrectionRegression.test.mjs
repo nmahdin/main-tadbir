@@ -6,8 +6,8 @@ const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('data tables use the system palette, omit Bale department access, and show column-save progress', async () => {
   const [tables, library] = await Promise.all([
-    source('../src/components/dam/DamDataTables.tsx'),
-    source('../src/components/dam/DamLibrary.tsx'),
+    source('../src/features/dam/DamDataTables.tsx'),
+    source('../src/features/dam/DamLibrary.tsx'),
   ]);
 
   assert.doesNotMatch(tables, /BaleTableDepartments|تنظیم دسترسی دپارتمان‌ها در بله/);
@@ -21,9 +21,9 @@ test('data tables use the system palette, omit Bale department access, and show 
 
 test('content creation and workflow corrections retain required and themed behavior', async () => {
   const [create, workflow, detail] = await Promise.all([
-    source('../src/components/content/CreateContentModal.tsx'),
-    source('../src/components/content/EditWorkflowModal.tsx'),
-    source('../src/components/content/ContentDetailView.tsx'),
+    source('../src/features/contents/CreateContentModal.tsx'),
+    source('../src/features/contents/EditWorkflowModal.tsx'),
+    source('../src/features/contents/ContentDetailView.tsx'),
   ]);
 
   for (const requiredLabel of ['نوع محتوا', 'مدیر پرونده', 'پلتفرم‌های انتشار', 'عنوان مرحله', 'دپارتمان مسئول']) {
@@ -41,13 +41,13 @@ test('content creation and workflow corrections retain required and themed behav
 
 test('compact form-action styling is explicit and does not leak into headers, tabs, menus, or cards', async () => {
   const [primitives, css, createContent, editContent, detail, sidebar, assetCard, docs] = await Promise.all([
-    source('../src/components/common/Primitives.tsx'),
-    source('../src/index.css'),
-    source('../src/components/content/CreateContentModal.tsx'),
-    source('../src/components/content/EditContentModal.tsx'),
-    source('../src/components/content/ContentDetailView.tsx'),
-    source('../src/components/layout/Sidebar.tsx'),
-    source('../src/components/dam/AssetCard.tsx'),
+    source('../src/shared/ui/Primitives.tsx'),
+    source('../src/styles/index.css'),
+    source('../src/features/contents/CreateContentModal.tsx'),
+    source('../src/features/contents/EditContentModal.tsx'),
+    source('../src/features/contents/ContentDetailView.tsx'),
+    source('../src/app/shell/Sidebar.tsx'),
+    source('../src/features/dam/AssetCard.tsx'),
     source('../../docs/ui-standards.md'),
   ]);
 
@@ -80,8 +80,8 @@ test('compact form-action styling is explicit and does not leak into headers, ta
 
 test('queued files keep editable display titles while original browser filenames remain intact', async () => {
   const [composer, library] = await Promise.all([
-    source('../src/components/common/AttachmentComposer.tsx'),
-    source('../src/components/dam/DamLibrary.tsx'),
+    source('../src/shared/ui/AttachmentComposer.tsx'),
+    source('../src/features/dam/DamLibrary.tsx'),
   ]);
 
   assert.match(composer, /fileDisplayNames\?: Record<string, string>/);
@@ -98,7 +98,7 @@ test('queued files keep editable display titles while original browser filenames
 test('the cached theme is restored before first paint and refreshed only after hydration', async () => {
   const [html, app] = await Promise.all([
     source('../index.html'),
-    source('../src/App.tsx'),
+    source('../src/app/App.tsx'),
   ]);
 
   assert.ok(html.indexOf("localStorage.getItem('tadbir:theme-color')") < html.indexOf('<div id="root">'));

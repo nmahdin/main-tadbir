@@ -1,0 +1,393 @@
+<?php
+
+namespace App\Core\Billing;
+
+use App\Core\Audit\AuditWriter;
+use App\Core\Plans\CorePlan;
+use App\Core\Plans\CorePlanVersion;
+use App\Models\User;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * C5-M2-S1+S2 price-revision publication service.
+ *
+ * Enforces the published-price concurrency invariant (SPEC-C5-M2
+ * §3.2) using three cooperating mechanisms:
+ *  1. Canonical nullable FK pointers (published_monthly_price_id,
+ *     published_quarterly_price_id, published_annual_price_id) on
+ *     core_plan_versions — the published price for a period IS the
+ *     pointed row.
+ *  2. A serialized publication transaction that locks the
+ *     plan-version row FOR UPDATE first, supersedes the previously
+ *     pointed revision(s) for the periods being published (is_published=false,
+ *     superseded_at), inserts/reuses the new revision(s), and updates
+ *     the canonical pointer(s) in one commit.
+ *  3. Defensive unique index on (plan_version_id, period,
+ *     amount_toman).
+ *
+ * Quarterly was added in M2-S2 (Stage A); the pointer map is built
+ * from CorePlanPrice::PERIODS so future periods extend automatically.
+ *
+ * Period enablement is expressed exclusively by the presence (non-NULL)
+ * or absence (NULL) of a canonical pointer for that period. Republishing
+ * a subset of periods never clears the other periods' pointers; callers
+ * must create a new plan version to change an already-published period
+ * or to retire a previously offered period.
+ *
+ * Draft price revisions are mutable until published; once published
+ * the CorePlanPrice model guard rejects further mutation, and
+ * CorePlanVersion blocks pointer changes to already-published plan
+ * versions.
+ */
+final class PlanPricePublisher
+{
+    public function __construct(private readonly AuditWriter $audit) {}
+
+    /**
+     * Create a new DRAFT price revision for a plan version. The
+     * version must be a draft itself (published versions cannot
+     * receive new prices — the caller creates a new version and
+     * publishes it atomically with its prices).
+     */
+    public function createDraftPrice(
+        CorePlanVersion $version,
+        string $period,
+        int $amountToman,
+        User $actor,
+    ): CorePlanPrice {
+        $this->assertValidPeriod($period);
+        $this->assertValidAmount($amountToman);
+
+        return DB::transaction(function () use ($version, $period, $amountToman, $actor): CorePlanPrice {
+            $locked = CorePlanVersion::query()
+                ->whereKey($version->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($locked->isPublished()) {
+                throw new BillingDomainException(
+                    'plan_version_published',
+                    'Cannot add a price revision to a published plan version.',
+                );
+            }
+
+            $price = CorePlanPrice::create([
+                'plan_version_id' => $locked->id,
+                'period' => $period,
+                'amount_toman' => $amountToman,
+                'is_published' => false,
+                'superseded_at' => null,
+                'published_at' => null,
+                'created_by' => $actor->id,
+            ]);
+
+            $this->audit->record(
+                $actor,
+                'billing.price.draft_created',
+                ['plan_version_id' => $locked->id, 'period' => $period, 'amount_toman' => $amountToman],
+                'platform',
+                null,
+                'core_plan_prices',
+                (int) $price->id,
+            );
+
+            return $price;
+        });
+    }
+
+    /**
+     * Atomically publish a set of prices on a plan version and mark
+     * the version published. The first successful call flips
+     * published_at and sets canonical pointers for the supplied
+     * periods; subsequent calls on an already-published version
+     * return the existing pointers idempotently (the originally-
+     * published set wins — republication never changes amounts,
+     * never clears or adds period pointers, and never emits new
+     * rows). To retire or add a period after publication the
+     * administrator creates a new plan version (M2-S1 immutable-
+     * version invariant).
+     *
+     * @param  array<string, int>  $pricesByPeriod  period => amount_toman
+     * @return array{version: CorePlanVersion, prices: array<string, CorePlanPrice>}
+     */
+    public function publishPrices(
+        CorePlanVersion $version,
+        array $pricesByPeriod,
+        User $actor,
+    ): array {
+        foreach ($pricesByPeriod as $period => $amount) {
+            $this->assertValidPeriod((string) $period);
+            $this->assertValidAmount((int) $amount);
+        }
+
+        return DB::transaction(function () use ($version, $pricesByPeriod, $actor): array {
+            // 1. Lock the stable plan-version row first (SPEC §3.2).
+            $locked = CorePlanVersion::query()
+                ->whereKey($version->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            // Idempotent: if already published, return the current
+            // pointer set without emitting new rows or altering
+            // pointers for periods not in $pricesByPeriod.
+            if ($locked->isPublished()) {
+                $locked->load($this->pointerRelations());
+
+                return [
+                    'version' => $locked,
+                    'prices' => $this->currentPrices($locked),
+                ];
+            }
+
+            $now = now();
+            $publishedPrices = [];
+            $pointerUpdates = [];
+            $hadAnyPointer = false;
+
+            foreach ($pricesByPeriod as $period => $amountToman) {
+                $amountToman = (int) $amountToman;
+                $period = (string) $period;
+                $pointerColumn = self::pointerColumnFor($period);
+
+                // If an unpublished, unsuperseded draft already exists
+                // for this (version, period, amount), publish that row
+                // in place instead of inserting a duplicate — the
+                // unique index (plan_version_id, period, amount_toman)
+                // guards against an accidental history duplicate when
+                // a caller prepared a draft through createDraftPrice
+                // and then publishes the exact same set.
+                $existing = CorePlanPrice::query()
+                    ->where('plan_version_id', $locked->id)
+                    ->where('period', $period)
+                    ->where('amount_toman', $amountToman)
+                    ->where('is_published', false)
+                    ->whereNull('superseded_at')
+                    ->first();
+
+                if ($existing !== null) {
+                    $existing->forceFill([
+                        'is_published' => true,
+                        'superseded_at' => null,
+                        'published_at' => $now,
+                    ])->save();
+                    $newPrice = $existing;
+                } else {
+                    // Insert the newly-published revision (not upserted;
+                    // each publication without a matching draft produces
+                    // a fresh history row).
+                    $newPrice = CorePlanPrice::create([
+                        'plan_version_id' => $locked->id,
+                        'period' => $period,
+                        'amount_toman' => $amountToman,
+                        'is_published' => true,
+                        'superseded_at' => null,
+                        'published_at' => $now,
+                        'created_by' => $actor->id,
+                    ]);
+                }
+
+                $publishedPrices[$period] = $newPrice;
+                $pointerUpdates[$pointerColumn] = (int) $newPrice->id;
+                $hadAnyPointer = true;
+            }
+
+            if (! $hadAnyPointer) {
+                throw new BillingDomainException(
+                    'price_period_required',
+                    'At least one period price is required to publish.',
+                );
+            }
+
+            // 2. Supersede previously pointed rows of matching
+            // periods on the same plan version (defensive — a draft
+            // version normally has none; subsequent publishPrices
+            // calls on the same draft may supersede earlier revisions).
+            foreach ($pointerUpdates as $column => $priceId) {
+                $previousId = (int) $locked->{$column};
+                if ($previousId > 0 && $previousId !== $priceId) {
+                    CorePlanPrice::whereKey($previousId)->update([
+                        'is_published' => false,
+                        'superseded_at' => $now,
+                    ]);
+                }
+            }
+
+            // 3. Flip the canonical pointers in the same commit. The
+            // version's published_at is set on first publication and
+            // left untouched on republication of additional periods.
+            if ($locked->published_at === null) {
+                $pointerUpdates['published_at'] = $now;
+            }
+            $locked->forceFill($pointerUpdates)->save();
+
+            $this->audit->record(
+                $actor,
+                'billing.prices.published',
+                [
+                    'plan_version_id' => $locked->id,
+                    'plan_id' => (int) $locked->plan_id,
+                    'prices' => array_map(
+                        fn (CorePlanPrice $p): array => [
+                            'id' => (int) $p->id,
+                            'period' => $p->period,
+                            'amount_toman' => (int) $p->amount_toman,
+                        ],
+                        $publishedPrices,
+                    ),
+                ],
+                'platform',
+                null,
+                'core_plan_versions',
+                (int) $locked->id,
+            );
+
+            $locked->load($this->pointerRelations());
+
+            return [
+                'version' => $locked,
+                'prices' => $publishedPrices + $this->currentPrices($locked),
+            ];
+        });
+    }
+
+    /**
+     * All draft (unpublished, unsuperseded) price revisions on a
+     * plan version, ordered by creation time.
+     *
+     * @return Collection<int, CorePlanPrice>
+     */
+    public function draftPrices(CorePlanVersion $version): Collection
+    {
+        return CorePlanPrice::query()
+            ->where('plan_version_id', $version->id)
+            ->where('is_published', false)
+            ->whereNull('superseded_at')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Read-only resolution of the published price for a plan
+     * version and period. Returns null when no price is published
+     * for that period (e.g. quarterly not offered) — callers must
+     * treat null as "period unavailable", never derive from another
+     * period (M2-D5=A).
+     */
+    public function publishedPrice(CorePlanVersion $version, string $period): ?CorePlanPrice
+    {
+        $this->assertValidPeriod($period);
+
+        $column = self::pointerColumnFor($period);
+        $priceId = $version->{$column};
+
+        return $priceId === null ? null : CorePlanPrice::find((int) $priceId);
+    }
+
+    /**
+     * Resolve the currently published version of a plan and its
+     * published prices. The plan must be active; returns null when
+     * the plan has no published version.
+     *
+     * @return array{plan: CorePlan, version: CorePlanVersion, monthly: ?CorePlanPrice, quarterly: ?CorePlanPrice, annual: ?CorePlanPrice}|null
+     */
+    public function currentCatalogEntry(CorePlan $plan): ?array
+    {
+        if ($plan->status !== CorePlan::STATUS_ACTIVE) {
+            return null;
+        }
+
+        $version = $plan->versions()
+            ->whereNotNull('published_at')
+            ->orderByDesc('version')
+            ->first();
+
+        if ($version === null) {
+            return null;
+        }
+
+        $version->load($this->pointerRelations());
+
+        return [
+            'plan' => $plan,
+            'version' => $version,
+            'monthly' => $version->publishedMonthlyPrice,
+            'quarterly' => $version->publishedQuarterlyPrice,
+            'annual' => $version->publishedAnnualPrice,
+        ];
+    }
+
+    /**
+     * Canonical pointer column name for a supported period.
+     */
+    public static function pointerColumnFor(string $period): string
+    {
+        return match ($period) {
+            CorePlanPrice::PERIOD_MONTHLY => 'published_monthly_price_id',
+            CorePlanPrice::PERIOD_QUARTERLY => 'published_quarterly_price_id',
+            CorePlanPrice::PERIOD_ANNUAL => 'published_annual_price_id',
+            default => throw new BillingDomainException(
+                'price_period_invalid',
+                "Billing period [{$period}] is not supported.",
+            ),
+        };
+    }
+
+    /** @return array<string, CorePlanPrice> */
+    private function currentPrices(CorePlanVersion $version): array
+    {
+        $prices = [];
+        foreach (CorePlanPrice::PERIODS as $period) {
+            $relation = self::relationNameFor($period);
+            if ($version->{$relation} !== null) {
+                $prices[$period] = $version->{$relation};
+            }
+        }
+
+        return $prices;
+    }
+
+    /** @return list<string> */
+    private function pointerRelations(): array
+    {
+        return array_map(self::relationNameFor(...), CorePlanPrice::PERIODS);
+    }
+
+    private static function relationNameFor(string $period): string
+    {
+        return match ($period) {
+            CorePlanPrice::PERIOD_MONTHLY => 'publishedMonthlyPrice',
+            CorePlanPrice::PERIOD_QUARTERLY => 'publishedQuarterlyPrice',
+            CorePlanPrice::PERIOD_ANNUAL => 'publishedAnnualPrice',
+            default => throw new BillingDomainException(
+                'price_period_invalid',
+                "Billing period [{$period}] is not supported.",
+            ),
+        };
+    }
+
+    private function assertValidPeriod(string $period): void
+    {
+        if (! in_array($period, CorePlanPrice::PERIODS, true)) {
+            throw new BillingDomainException(
+                'price_period_invalid',
+                "Billing period [{$period}] is not supported.",
+            );
+        }
+    }
+
+    private function assertValidAmount(int $amountToman): void
+    {
+        if ($amountToman < 0) {
+            throw new BillingArithmeticException('money_negative', 'Price amounts must be non-negative.');
+        }
+
+        $cap = (int) config('billing.max_amount_toman', 9_000_000_000_000_000);
+        if ($amountToman > $cap) {
+            throw new BillingArithmeticException(
+                'money_overflow',
+                'Price amount exceeds the configured service-level maximum.',
+            );
+        }
+    }
+}

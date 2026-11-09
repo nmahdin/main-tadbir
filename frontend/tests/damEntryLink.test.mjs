@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readDamEntryLink } from '../src/utils/damEntryLink.ts';
+import { readDamEntryLink } from '../src/shared/lib/damEntryLink.ts';
 test('file entry navigation accepts only one known hint without a task context', () => {
   assert.equal(readDamEntryLink('?dam_entry=file'), true);
   assert.equal(readDamEntryLink('?other=1&dam_entry=file'), true);

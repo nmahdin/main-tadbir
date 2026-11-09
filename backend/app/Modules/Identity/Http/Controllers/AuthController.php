@@ -1,0 +1,394 @@
+<?php
+
+namespace App\Modules\Identity\Http\Controllers;
+
+use App\Core\Identity\Devices\DeviceTrust;
+use App\Core\Identity\EmailVerificationService;
+use App\Core\Identity\UsernamePolicy;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\RegisterRequest;
+use App\Http\Resources\UserResource;
+use App\Models\ActivityLog;
+use App\Models\Role;
+use App\Models\User;
+use App\Modules\Messaging\Services\BaleAuthChallenge;
+use App\Modules\Messaging\Services\BalePanelSession;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
+
+class AuthController extends Controller
+{
+    /**
+     * حداکثر تلاش ناموفق ورود پیش از قفل موقت.
+     */
+    private const MAX_LOGIN_ATTEMPTS = 5;
+
+    /**
+     * ورود پنل وب فقط با نشست امن سمت سرور انجام می‌شود.
+     *
+     * این مسیر عمداً token برنمی‌گرداند. middleware وب، نشست را آغاز می‌کند و
+     * Laravel کوکی نشست/remember را در پاسخ Set-Cookie قرار می‌دهد.
+     */
+    public function login(LoginRequest $request): JsonResponse
+    {
+        $user = $this->authenticate($request);
+
+        if (! $request->hasSession()) {
+            return response()->json([
+                'message' => 'نشست امن ورود در سرور فعال نیست. تنظیمات session را بررسی کنید.',
+                'code' => 'session_unavailable',
+            ], 503);
+        }
+
+        // AMB-05=A: during the deletion grace period the account may
+        // only reach the deletion status/cancellation flow.
+        if ($user->deletion_requested_at !== null) {
+            Auth::guard('web')->login($user, $request->boolean('remember'));
+            $request->session()->regenerate();
+            $request->session()->put('deletion_pending_only', true);
+
+            return response()->json([
+                'message' => 'حساب شما در صف حذف است؛ فقط می‌توانید درخواست حذف را لغو کنید.',
+                'code' => 'deletion_pending',
+                'data' => ['deletion_effective_at' => $user->deletion_requested_at->copy()->addDays(14)->toIso8601String()],
+            ], 403);
+        }
+
+        // AMB-04=A: unknown device + 30 days inactive => step-up
+        // (password re-entry) before the session is issued.
+        $devices = app(DeviceTrust::class);
+        if ($devices->stepUpRequired($request, $user) && ! $request->session()->get('step_up_verified')) {
+            $request->session()->put('step_up_user_id', $user->id);
+
+            return response()->json([
+                'message' => 'برای امنیت حساب، احراز هویت مجدد لازم است.',
+                'code' => 'reauth_required',
+            ], 403);
+        }
+
+        Auth::guard('web')->login($user, $request->boolean('remember'));
+        $request->session()->regenerate();
+        $devices->remember($user);
+
+        $this->recordSuccessfulLogin($user, 'ورود از طریق نشست امن پنل وب');
+
+        return $this->userResponse($user, 'ورود با موفقیت انجام شد.');
+    }
+
+    /** Send a short-lived code to the private Bale chat already linked to this account. */
+    public function baleCode(Request $request, BaleAuthChallenge $challenges): JsonResponse
+    {
+        $data = $request->validate([
+            'login' => ['required', 'string', 'max:255'],
+            'purpose' => ['required', 'in:login,password_reset'],
+        ]);
+        $challenges->issue($data['login'], $data['purpose'], (string) $request->ip());
+
+        // The same response prevents username/link-status enumeration.
+        return response()->json([
+            'message' => 'اگر حساب فعال و به بله متصل باشد، کد یک‌بارمصرف ارسال شد.',
+            'expires_in' => BaleAuthChallenge::LIFETIME_MINUTES * 60,
+        ], 202)->header('Cache-Control', 'no-store, private');
+    }
+
+    public function baleLogin(Request $request, BaleAuthChallenge $challenges): JsonResponse
+    {
+        $data = $request->validate([
+            'login' => ['required', 'string', 'max:255'],
+            'code' => ['required', 'string', 'regex:/^\\d{6}$/'],
+            'remember' => ['sometimes', 'boolean'],
+        ]);
+        $user = $challenges->verify($data['login'], BaleAuthChallenge::LOGIN, $data['code'], (string) $request->ip());
+        if (! $request->hasSession()) {
+            return response()->json(['message' => 'نشست امن ورود در سرور فعال نیست.', 'code' => 'session_unavailable'], 503);
+        }
+        Auth::guard('web')->login($user, $request->boolean('remember'));
+        $request->session()->regenerate();
+        $this->recordSuccessfulLogin($user, 'ورود با کد یک‌بارمصرف ربات بله');
+
+        return $this->userResponse($user, 'ورود امن با ربات بله انجام شد.');
+    }
+
+    public function balePanelLogin(Request $request, BalePanelSession $sessions): JsonResponse
+    {
+        $data = $request->validate([
+            'token' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/D'],
+        ]);
+        if (! $request->hasSession()) {
+            return response()->json(['message' => 'نشست امن ورود در سرور فعال نیست.', 'code' => 'session_unavailable'], 503);
+        }
+
+        $user = $sessions->consume($data['token']);
+        Auth::guard('web')->login($user, false);
+        $request->session()->regenerate();
+        $this->recordSuccessfulLogin($user, 'ورود مستقیم از مینی‌اپ ربات بله');
+
+        return $this->userResponse($user, 'ورود مستقیم از ربات بله انجام شد.')
+            ->header('Cache-Control', 'no-store, private');
+    }
+
+    public function baleResetPassword(Request $request, BaleAuthChallenge $challenges): JsonResponse
+    {
+        $data = $request->validate([
+            'login' => ['required', 'string', 'max:255'],
+            'code' => ['required', 'string', 'regex:/^\\d{6}$/'],
+            'password' => ['required', 'string', 'min:8', 'max:128', 'confirmed'],
+        ], [
+            'login.required' => 'نام کاربری یا شماره تماس را وارد کنید.',
+            'code.required' => 'کد تأیید را وارد کنید.',
+            'code.regex' => 'کد تأیید باید دقیقاً ۶ رقم باشد.',
+            'password.required' => 'رمز عبور جدید را وارد کنید.',
+            'password.min' => 'رمز عبور جدید باید حداقل ۸ نویسه باشد.',
+            'password.max' => 'رمز عبور جدید نمی‌تواند بیشتر از ۱۲۸ نویسه باشد.',
+            'password.confirmed' => 'رمز عبور و تکرار آن یکسان نیستند.',
+        ]);
+        $user = $challenges->verify($data['login'], BaleAuthChallenge::PASSWORD_RESET, $data['code'], (string) $request->ip());
+        DB::transaction(function () use ($user, $data): void {
+            $user->forceFill(['password' => $data['password'], 'remember_token' => Str::random(60)])->save();
+            $user->tokens()->delete();
+            DB::table('sessions')->where('user_id', $user->id)->delete();
+            ActivityLog::create([
+                'user_id' => $user->id,
+                'action' => 'بازیابی امن رمز عبور',
+                'type' => 'auth_password_reset',
+                'details' => 'رمز عبور با کد یک‌بارمصرف ربات بله تغییر کرد.',
+            ]);
+        });
+
+        return response()->json(['message' => 'رمز عبور تغییر کرد؛ اکنون با رمز جدید وارد شوید.'])
+            ->header('Cache-Control', 'no-store, private');
+    }
+
+    /**
+     * صدور token فقط برای کلاینت‌های غیرمرورگری؛ پنل وب از این مسیر استفاده نمی‌کند.
+     */
+    public function token(LoginRequest $request): JsonResponse
+    {
+        $user = $this->authenticate($request);
+        $token = $user->createToken($request->userAgent() ?? 'api-token')->plainTextToken;
+
+        $this->recordSuccessfulLogin($user, 'ورود از طریق توکن API');
+
+        return $this->userResponse($user, 'توکن ورود با موفقیت صادر شد.', $token);
+    }
+
+    public function register(RegisterRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+        $status = (string) config('auth.registration.status', 'active');
+        $roleKey = (string) config('auth.registration.role', 'team_member');
+        $role = Role::query()->where('key', $roleKey)->first();
+
+        $user = DB::transaction(function () use ($data, $status, $role, $roleKey): User {
+            $user = User::create([
+                'name' => $data['name'],
+                'username' => $data['username'],
+                'password' => $data['password'],
+                'email' => isset($data['email']) ? strtolower(trim($data['email'])) : null,
+                'phone' => $data['phone'] ?? null,
+                'title' => $data['title'] ?? null,
+                'department_id' => null,
+                'role_id' => $role?->id,
+                'role_key' => $roleKey,
+                'status' => $status,
+            ]);
+            DB::table('user_terms_acceptances')->insert([
+                'user_id' => $user->id,
+                'document_key' => 'terms',
+                'document_version' => (string) ($data['terms_version'] ?? config('auth.terms.current_version')),
+                'accepted_at' => now(),
+                'ip' => request()->ip(),
+            ]);
+
+            return $user;
+        });
+
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => sprintf('ثبت‌نام کاربر «%s» در سامانه', $user->name),
+            'type' => 'user_created',
+            'details' => $status === 'pending'
+                ? 'حساب در انتظار تأیید مدیر سیستم است.'
+                : 'حساب کاربری فعال شد.',
+        ]);
+
+        if ($user->email) {
+            app(EmailVerificationService::class)->requestChallenge($user, $user->email);
+        }
+
+        $autoLogin = (bool) config('auth.registration.auto_login', false) && $status === 'active';
+        if ($autoLogin) {
+            if (! $request->hasSession()) {
+                return response()->json([
+                    'message' => 'حساب ساخته شد، اما نشست امن ورود در سرور فعال نیست.',
+                    'code' => 'session_unavailable',
+                ], 503);
+            }
+
+            Auth::guard('web')->login($user);
+            $request->session()->regenerate();
+        }
+
+        $message = $status === 'pending'
+            ? 'ثبت‌نام شما انجام شد و پس از تأیید مدیر سیستم فعال می‌شود.'
+            : 'ثبت‌نام با موفقیت انجام شد.';
+
+        return $this->userResponse($user, $message, status: 201);
+    }
+
+    public function me(Request $request): JsonResponse
+    {
+        return $this->userResponse(
+            $request->user(),
+            null,
+        );
+    }
+
+    public function logout(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $token = $user?->currentAccessToken();
+        if ($token instanceof PersonalAccessToken) {
+            $token->delete();
+        }
+
+        if ($request->hasSession()) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
+
+        return response()->json([
+            'message' => 'خروج از حساب کاربری انجام شد.',
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
+    /**
+     * اعتبارسنجی مشترک credential برای ورود نشستی و صدور token.
+     */
+    private function authenticate(LoginRequest $request): User
+    {
+        $credentials = $request->validated();
+        $throttleKey = $this->throttleKey($credentials['login'], $request);
+
+        if (RateLimiter::tooManyAttempts($throttleKey, self::MAX_LOGIN_ATTEMPTS)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+
+            throw new HttpResponseException(
+                response()->json([
+                    'message' => sprintf('تلاش‌های ناموفق زیاد بوده است. لطفاً %d ثانیه دیگر تلاش کنید.', $seconds),
+                ], 429)->header('Retry-After', (string) $seconds),
+            );
+        }
+
+        $user = $this->findByLogin($credentials['login']);
+
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+            RateLimiter::hit($throttleKey, 60);
+
+            throw ValidationException::withMessages([
+                'login' => 'نام کاربری یا رمز عبور نادرست است.',
+            ]);
+        }
+
+        if ($blockedMessage = $this->blockedMessage($user)) {
+            throw new HttpResponseException(
+                response()->json(['message' => $blockedMessage], 403),
+            );
+        }
+
+        RateLimiter::clear($throttleKey);
+
+        return $user;
+    }
+
+    private function recordSuccessfulLogin(User $user, string $details): void
+    {
+        $user->forceFill(['last_login_at' => now()])->save();
+
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => 'ورود موفق به سامانه تدبیر',
+            'type' => 'auth_login',
+            'details' => $details,
+        ]);
+    }
+
+    private function findByLogin(string $login): ?User
+    {
+        // AMB-01=B: sign-in accepts the user-chosen username OR a
+        // VERIFIED email. An unverified address is never an identity
+        // proof merely because it is stored on a profile.
+        $identifier = trim($login);
+
+        return User::query()
+            ->with(['role.permissions', 'department'])
+            ->where(function ($query) use ($identifier): void {
+                // Raw `username` fallback keeps pre-normalization accounts
+                // (created before username_normalized existed) sign-in-able.
+                $query->where('username_normalized', UsernamePolicy::normalize($identifier))
+                    ->orWhere('username', $identifier)
+                    ->orWhere(function ($emailQuery) use ($identifier): void {
+                        $emailQuery->where('email', strtolower($identifier))
+                            ->whereNotNull('email_verified_at');
+                    });
+            })
+            ->first();
+    }
+
+    private function throttleKey(string $login, Request $request): string
+    {
+        return Str::transliterate(Str::lower($login).'|'.$request->ip());
+    }
+
+    /**
+     * پیام مناسب برای حساب‌هایی که اجازه ورود ندارند.
+     */
+    private function blockedMessage(User $user): ?string
+    {
+        return match ($user->status) {
+            'blocked' => 'حساب کاربری شما مسدود شده است. با مدیر سیستم تماس بگیرید.',
+            'inactive' => 'حساب کاربری شما غیرفعال است. با مدیر سیستم تماس بگیرید.',
+            'suspended' => 'حساب کاربری شما به حالت تعلیق درآمده است. با مدیر سیستم تماس بگیرید.',
+            'deactivated' => 'حساب کاربری شما غیرفعال شده است. با مدیر سیستم تماس بگیرید.',
+            // C6 amendment: a pending account may authenticate so an
+            // invited user can complete email verification (the only
+            // surface reachable while pending — EnsureActiveAccount
+            // scopes it). Login alone never activates the account;
+            // activation happens only when email verification matches
+            // a live invitation (EmailVerificationService). Suspension,
+            // deactivation, blocking and inactivity still deny here.
+            'pending' => null,
+            'active' => null,
+            default => 'حساب کاربری شما هنوز اجازه ورود ندارد؛ با مدیر سیستم تماس بگیرید.',
+        };
+    }
+
+    private function userResponse(
+        User $user,
+        ?string $message = null,
+        ?string $token = null,
+        int $status = 200,
+    ): JsonResponse {
+        $user->loadMissing(['role.permissions', 'department']);
+
+        $resource = (new UserResource($user))->additional(array_filter([
+            'message' => $message,
+            'token' => $token,
+        ]));
+
+        return $resource->response()
+            ->setStatusCode($status)
+            ->header('Cache-Control', 'no-store, private');
+    }
+}

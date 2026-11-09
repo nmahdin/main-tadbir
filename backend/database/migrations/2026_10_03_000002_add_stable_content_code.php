@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
  * for them; a code is never reused, so a plain UNIQUE index is the right domain
  * rule (SQL NULLs never collide, so pre-code rows are unaffected). The prefix and
  * sequence policy is operational configuration, not a hardcoded rule: see
- * App\Support\Content\ContentCodePolicy and the `content_code_policies` setting.
+ * App\Modules\Contents\Support\ContentCodePolicy and the `content_code_policies` setting.
  */
 return new class extends Migration
 {

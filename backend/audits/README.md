@@ -1,5 +1,8 @@
 # Opt-in access-control acceptance audit
 
+> **Stage 02.5 note (2026-10-15):** The baseline counts below are historical (2026-09-28). Current per-item status of A01–A16 is maintained in `docs/migration/security-audit-status.md` (13 verified fixed, 3 still open); the suite in this directory remains runnable and is the recommended re-verification tool for Stage 04.
+
+
 These tests assert the **required secure behavior**, not the existing vulnerable behavior. They are outside normal PHPUnit discovery intentionally: this is an open security backlog, not a passing regression suite or a production patch. Promote each test into `tests/Feature` with its corresponding fix; do not invert its assertion just to get a green run.
 
 Run only against an isolated test database. The test explicitly refuses anything other than testing + in-memory SQLite. It creates/deletes fixture records and never exercises the deployed host or real Bale.

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { followTaskLink, readTaskLink, taskLink, readTaskAssetLink } from '../src/utils/taskDeepLink.ts';
+import { followTaskLink, readTaskLink, taskLink, readTaskAssetLink } from '../src/shared/lib/taskDeepLink.ts';
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
 test('only one positive decimal task ID is accepted, without number precision loss', () => {

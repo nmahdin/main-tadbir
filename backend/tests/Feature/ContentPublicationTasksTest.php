@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Events\ContentPublished;
+use App\Modules\Contents\Events\ContentPublished;
 use App\Models\ActivityLog;
 use App\Models\Content;
 use App\Models\Permission;
@@ -10,9 +10,9 @@ use App\Models\Project;
 use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
-use App\Services\ContentPublication;
-use App\Services\TaskAutomationProcessor;
-use App\Services\TaskOperations;
+use App\Modules\Contents\Services\ContentPublication;
+use App\Modules\Tasks\Services\TaskAutomationProcessor;
+use App\Modules\Tasks\Services\TaskOperations;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Event;

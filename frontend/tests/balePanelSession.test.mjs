@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { takeBalePanelToken } from '../src/auth/balePanelSession.ts';
+import { takeBalePanelToken } from '../src/features/messaging/balePanelSession.ts';
 
 const token = 'a'.repeat(64);
 

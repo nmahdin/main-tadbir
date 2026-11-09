@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { baleDeliveryLabel, baleErrorLabel } from '../src/components/bale/balePresentation.ts';
+import { baleDeliveryLabel, baleErrorLabel } from '../src/features/messaging/bale/balePresentation.ts';
 
 const source = path => readFile(new URL(path, import.meta.url), 'utf8');
 
@@ -14,8 +14,8 @@ test('Bale operational codes are translated into actionable Persian states', () 
 
 test('Bale management separates automation and delivery while removing manual processing UX', async () => {
   const [settings, account] = await Promise.all([
-    source('../src/components/bale/BaleSettingsPanel.tsx'),
-    source('../src/components/bale/BaleAccountPanel.tsx'),
+    source('../src/features/messaging/bale/BaleSettingsPanel.tsx'),
+    source('../src/features/messaging/bale/BaleAccountPanel.tsx'),
   ]);
   assert.match(settings, /id: 'automations'/);
   assert.match(settings, /id: 'delivery'/);
