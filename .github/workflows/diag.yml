@@ -1,4 +1,4 @@
-name: diag-pint
+name: diag-pint-ann
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
@@ -17,15 +17,31 @@ jobs:
           tools: composer:v2
       - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: pint verbose
+      - name: pint json output
         working-directory: backend
         run: |
           set +e
-          php vendor/bin/pint -v --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php app/Providers 2>&1 | tee /tmp/pint.txt
-          echo EXIT=${PIPESTATUS[0]} > /tmp/rc.txt
-      - name: show output
+          php vendor/bin/pint --test --format=json app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php app/Providers routes > /tmp/pint.json
+          echo EXIT=$? > /tmp/rc.txt
+      - name: surface
         if: always()
-        run: tail -200 /tmp/pint.txt; echo "==="; cat /tmp/rc.txt
+        run: |
+          python3 <<'PY'
+          import json
+          try:
+            with open('/tmp/pint.json') as f:
+                d=json.load(f)
+          except Exception as e:
+              print('NO_PINT_JSON',e); raise SystemExit
+          for f in d.get('files',{}).get('changed',[]) or []:
+              p = f.get('path','')
+              for diff in (f.get('diff') or []):
+                  print(f'::error file={p}::pint diff on {p}')
+                  break
+          print("TOTAL_CHANGED", len(d.get('files',{}).get('changed',[])))
+          print("errors:", d.get('errors',''))
+          PY
+          echo "==="; cat /tmp/rc.txt
       - name: exit rc
         if: always()
         run: exit $(grep EXIT /tmp/rc.txt | cut -d= -f2)
