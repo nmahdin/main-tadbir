@@ -17,21 +17,13 @@ jobs:
           tools: composer:v2
       - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: pint
+      - name: apply
         working-directory: backend
-        run: |
-          set +e
-          php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 > /tmp/pint.txt
-          rc=${PIPESTATUS[0]}
-          cat /tmp/pint.txt
-          python3 <<'PY'
-import re
-with open('/tmp/pint.txt') as f:
-    for line in f:
-        # match like "app/Core/X.php:line" in verbose mode
-        m = re.search(r'([\w/]+\.php):(\d+).*?(\w+(?:_\w+)+)', line)
-        if m:
-            fn, ln, rule = m.groups()
-            print(f'::error file={fn},line={ln}::{rule}')
-PY
-          exit $rc
+        run: php vendor/bin/pint app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
+      - name: diff
+        run: git diff > /tmp/diff.txt; wc -l /tmp/diff.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: diff
+          path: /tmp/diff.txt
+          retention-days: 1
