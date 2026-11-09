@@ -1,0 +1,28 @@
+name: diag
+on:
+  push:
+    branches: [arena/582a70e5-main-tadbir]
+  workflow_dispatch:
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
+          coverage: none
+          tools: composer:v2
+      - working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: pint
+        working-directory: backend
+        run: |
+          set +e
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.txt 2>&1
+          rc=$?
+          cat /tmp/pint.txt
+          echo "PINT_RC=$rc"
+          exit $rc
