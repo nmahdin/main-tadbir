@@ -2,6 +2,7 @@
 
 namespace App\Core\Billing;
 
+use App\Core\Billing\Documents\BillingDocumentType;
 use App\Core\Organizations\Organization;
 use App\Core\Workspaces\Workspace;
 use App\Models\User;
@@ -192,6 +193,26 @@ class CoreBillingOrder extends Model
     public function reservations(): HasMany
     {
         return $this->hasMany(CorePromoReservation::class, 'order_id');
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(CoreBillingPayment::class, 'order_id');
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(CoreBillingDocument::class, 'order_id');
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->documents()->where('doc_type', BillingDocumentType::INVOICE->value);
+    }
+
+    public function receipts(): HasMany
+    {
+        return $this->documents()->where('doc_type', BillingDocumentType::RECEIPT->value);
     }
 
     public function scopeForOwnerKey(Builder $query, string $ownerKey): Builder

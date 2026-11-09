@@ -92,6 +92,11 @@ class CoreBillingPayment extends Model
         return $this->hasMany(CoreBillingPaymentEvent::class, 'payment_id')->orderBy('occurred_at');
     }
 
+    public function documents(): HasMany
+    {
+        return $this->hasMany(CoreBillingDocument::class, 'payment_id');
+    }
+
     public function isTerminal(): bool
     {
         return in_array($this->status, [
