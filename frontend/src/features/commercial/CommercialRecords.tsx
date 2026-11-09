@@ -30,7 +30,7 @@ function QuoteView({scope,id}:{scope:OwnerScope;id:number}){
   </div>
   {(!convertible(quote)||remaining===0)&&<div className="c5-message c5-message--warning" role="status">امکان تبدیل این پیش‌فاکتور وجود ندارد؛ مهلت یا وضعیت آن معتبر نیست.</div>}
   {convert.isError&&<ServerError error={convert.error} retry={()=>void query.refetch()}/>}
-  <div className="c5-actions"><Button disabled={!convertible(quote)||remaining===0||convert.isPending} loading={convert.isPending} onClick={()=>convert.mutate()}>تبدیل به سفارش برای بررسی</Button>
+  <div className="c5-actions"><Button disabled={!convertible(quote)||remaining===0||convert.isPending} loading={convert.isPending} onClick={()=>{if(window.confirm("با ثبت سفارش، فقط مرحلهٔ بررسی ایجاد می‌شود و هیچ پرداختی انجام نمی‌شود. ادامه می‌دهید؟"))convert.mutate();}}>ثبت سفارش برای بررسی</Button>
    <Link className="c5-text-link" to="/billing/quotes">فهرست پیش‌فاکتورها</Link></div>
   <p className="c5-muted">تبدیل به سفارش به معنای پرداخت یا فعال‌شدن اشتراک نیست.</p>
  </Surface>;

@@ -8,5 +8,6 @@ test('C5 A02/A03 catalog shows only published periods and server amounts',()=>{
 test('C5 A04/A05 owner-scoped records, expiry, idempotency, conflicts, no payment CTA',()=>{
  const s=read('src/features/commercial/CommercialRecords.tsx');
  for(const k of ['commercialApi.quote','commercialApi.convertQuote','commercialApi.orders','commercialApi.order','commercialApi.cancelOrder','owns(quote,scope)','owns(order,scope)','useRemaining','MoneyBreakdown'])assert.ok(s.includes(k),k);
+ assert.ok(s.includes('window.confirm("با ثبت سفارش'), 'quote conversion must confirm the owner intent');
  for(const unsafe of ['payment/start','payment/success','payment/verify'])assert.ok(!s.includes(unsafe));
 });
