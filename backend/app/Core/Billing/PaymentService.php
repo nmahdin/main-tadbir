@@ -34,7 +34,8 @@ final class PaymentService
         private readonly PaymentGateway $gateway,
         private readonly AuditWriter $audit,
         private readonly OrderService $orders,
-    ) {}
+    ) {
+    }
 
     /**
      * Initiate a payment for an in_review order.
@@ -166,6 +167,7 @@ final class PaymentService
         ?CarbonImmutable $at = null,
     ): array {
         $at ??= CarbonImmutable::now('UTC');
+
         return DB::transaction(function () use ($actor, $payment, $callbackQuery, $headers, $at): array {
             $locked = CoreBillingPayment::query()->lockForUpdate()->findOrFail($payment->id);
             $order = CoreBillingOrder::query()->lockForUpdate()->findOrFail($locked->order_id);

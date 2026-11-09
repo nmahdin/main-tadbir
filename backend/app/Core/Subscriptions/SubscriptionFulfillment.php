@@ -38,7 +38,8 @@ final class SubscriptionFulfillment
         private readonly SubscriptionOwnerResolver $owners,
         private readonly PlanProvisioner $plans,
         private readonly SubscriptionLifecycle $lifecycle,
-    ) {}
+    ) {
+    }
 
     /**
      * Fulfill an outbox event. Called from PaymentService::dispatchOutbox
