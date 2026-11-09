@@ -1,4 +1,4 @@
-<? php
+<?php
 
 namespace App\Core\Billing\Reconciliation;
 
@@ -33,9 +33,9 @@ final class FinancialReconciliationService
      * Run the full reconciliation sweep. Returns a summary of
      * findings opened/resolved during this pass.
      *
-     * @return array{opened:int,resolved:int,total_open:int}
+     * @return array{opened: int, resolved: int, total_open: int}
      */
-    public function sweep(? CarbonImmutable $at = null): array
+    public function sweep(?CarbonImmutable $at = null): array
     {
         $at ??= CarbonImmutable::now('UTC');
         $opened = 0;
@@ -103,7 +103,8 @@ final class FinancialReconciliationService
      */
     private function checkSettledWithoutFulfillment(CarbonImmutable $at): array
     {
-        $opened = 0; $resolved = 0;
+        $opened = 0;
+        $resolved = 0;
         $payments = CoreBillingPayment::query()
             ->whereIn('status', [CoreBillingPayment::STATUS_PAID, CoreBillingPayment::STATUS_ZERO_SETTLED])
             ->get();
@@ -141,7 +142,8 @@ final class FinancialReconciliationService
      */
     private function checkOrderMissingInvoice(CarbonImmutable $at): array
     {
-        $opened = 0; $resolved = 0;
+        $opened = 0;
+        $resolved = 0;
         $orders = CoreBillingOrder::query()
             ->where('status', CoreBillingOrder::STATUS_PAID)
             ->whereDoesntHave('documents', fn ($q) => $q->where('doc_type', BillingDocumentType::INVOICE->value))
@@ -163,7 +165,8 @@ final class FinancialReconciliationService
      */
     private function checkPaidPaymentMissingReceipt(CarbonImmutable $at): array
     {
-        $opened = 0; $resolved = 0;
+        $opened = 0;
+        $resolved = 0;
         $payments = CoreBillingPayment::query()
             ->whereIn('status', [CoreBillingPayment::STATUS_PAID, CoreBillingPayment::STATUS_ZERO_SETTLED])
             ->whereDoesntHave('documents', fn ($q) => $q->where('doc_type', BillingDocumentType::RECEIPT->value))
@@ -185,7 +188,8 @@ final class FinancialReconciliationService
      */
     private function checkAmountMismatches(CarbonImmutable $at): array
     {
-        $opened = 0; $resolved = 0;
+        $opened = 0;
+        $resolved = 0;
         $payments = CoreBillingPayment::query()
             ->whereIn('status', [CoreBillingPayment::STATUS_FAILED, CoreBillingPayment::STATUS_PAID, CoreBillingPayment::STATUS_ZERO_SETTLED])
             ->whereNotNull('verified_amount_toman')
@@ -224,7 +228,8 @@ final class FinancialReconciliationService
      */
     private function checkDuplicateOrStuckPayments(CarbonImmutable $at): array
     {
-        $opened = 0; $resolved = 0;
+        $opened = 0;
+        $resolved = 0;
         $orders = CoreBillingOrder::query()
             ->where('status', CoreBillingOrder::STATUS_PAYABLE_PENDING)
             ->where('review_expires_at', '<', $at)
@@ -246,7 +251,8 @@ final class FinancialReconciliationService
      */
     private function checkPromoInconsistencies(CarbonImmutable $at): array
     {
-        $opened = 0; $resolved = 0;
+        $opened = 0;
+        $resolved = 0;
         // promo reservations in STATE_CONVERTED whose order is cancelled/review_expired but never rolled back are out of scope here.
         // check redeemed promo with non-paid order
         $promos = CorePromoReservation::query()
@@ -347,7 +353,7 @@ final class FinancialReconciliationService
     private function upsertFinding(
         string $type, string $subjectType, int $subjectId,
         string $severity, bool $safeToRetry, string $message, array $evidence,
-        ? string $ownerKey, ? int $paymentId, ? int $orderId, CarbonImmutable $at,
+        ?string $ownerKey, ?int $paymentId, ?int $orderId, CarbonImmutable $at,
     ): bool {
         $existing = DB::table('core_billing_reconciliation_findings')
             ->where('finding_type', $type)

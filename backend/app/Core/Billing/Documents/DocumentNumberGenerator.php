@@ -1,4 +1,4 @@
-<? php
+<?php
 
 namespace App\Core\Billing\Documents;
 
@@ -21,7 +21,7 @@ final class DocumentNumberGenerator
      *
      * Returns [year, month] in Jalali for the given UTC datetime.
      *
-     * @return array{0:int,1:int}
+     * @return array{0: int, 1: int}
      */
     public static function jalaliYearMonth(CarbonImmutable $at): array
     {
@@ -55,7 +55,7 @@ final class DocumentNumberGenerator
      * inside the caller's transaction so that the sequence row lock
      * is held until commit.
      *
-     * @return array{number:int, doc_number:string, year:int, month:int}
+     * @return array{number: int, doc_number: string, year: int, month: int}
      */
     public function allocate(string $ownerKey, BillingDocumentType $type, CarbonImmutable $at): array
     {
