@@ -1,0 +1,59 @@
+name: diag
+on:
+  push:
+    branches: [arena/582a70e5-main-tadbir]
+  workflow_dispatch:
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, fileinfo, zip
+          coverage: none
+          tools: composer:v2
+      - working-directory: backend
+        run: composer validate --no-check-publish --strict
+      - working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: pint
+        working-directory: backend
+        run: |
+          set +e
+          out=$(php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1)
+          rc=$?
+          python3 <<PY
+out = """$out"""
+for i, line in enumerate(out.split('\n')):
+    if '⨯' in line or 'FAIL' in line:
+        msg = line.strip()[:400]
+        print(f'::error file=pint,line={i+1}::{msg}')
+PY
+          exit $rc
+      - name: Migrate
+        if: always()
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/ci.sqlite
+        run: |
+          touch database/ci.sqlite
+          php artisan migrate:fresh --force --no-interaction
+      - name: PHPUnit
+        if: always()
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php vendor/bin/phpunit --colors=never
