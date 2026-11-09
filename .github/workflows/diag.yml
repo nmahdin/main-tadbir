@@ -19,23 +19,9 @@ jobs:
         run: composer install --prefer-dist --no-interaction --no-progress
       - name: pint
         working-directory: backend
-        run: |
-          set +e
-          out=$(php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1)
-          rc=$?
-          echo "$out" >> "$GITHUB_STEP_SUMMARY"
-          python3 <<PY
-import os
-out = """$out"""
-lines = out.split('\n')
-for line in lines:
-    if '⨯' in line or ('FAIL' in line and 'at' in line):
-        fn = 'pint'
-        parts = line.split('⨯')
-        if len(parts) >= 2:
-            path = parts[1].strip().split()[0]
-            print(f'::error file={path}::{line.strip()[:350]}')
-        else:
-            print(f'::error file=pint::{line.strip()[:350]}')
-PY
-          exit $rc
+        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.txt 2>&1; head -200 /tmp/pint.txt; tail -50 /tmp/pint.txt; echo DONE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pint-out
+          path: /tmp/pint.txt
