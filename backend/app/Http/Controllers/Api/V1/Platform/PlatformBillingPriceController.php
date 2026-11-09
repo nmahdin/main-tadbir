@@ -42,6 +42,50 @@ final class PlatformBillingPriceController extends Controller
         'annual' => 'annual_amount_toman',
     ];
 
+    public function indexPlans(Request $request, PlanPricePublisher $publisher): JsonResponse
+    {
+        return $this->platformRespond(function () use ($request, $publisher): JsonResponse {
+            $this->platformActor($request, self::PERMISSION);
+
+            $plans = CorePlan::query()->with('versions')->orderBy('key')->get();
+            $data = [];
+            foreach ($plans as $plan) {
+                $versions = [];
+                foreach ($plan->versions()->orderBy('version')->get() as $version) {
+                    $version->load(['publishedMonthlyPrice', 'publishedQuarterlyPrice', 'publishedAnnualPrice']);
+                    $draftPrices = $version->published_at === null
+                        ? $publisher->draftPrices($version)
+                        : collect();
+                    $versions[] = [
+                        'id' => (int) $version->id,
+                        'version' => (int) $version->version,
+                        'status' => $version->published_at === null ? 'draft' : 'published',
+                        'published_at' => $version->published_at?->toIso8601String(),
+                        'grace_days' => (int) $version->grace_days,
+                        'prices' => [
+                            'monthly' => $this->serializePrice($version->publishedMonthlyPrice),
+                            'quarterly' => $this->serializePrice($version->publishedQuarterlyPrice),
+                            'annual' => $this->serializePrice($version->publishedAnnualPrice),
+                        ],
+                        'draft_prices' => $draftPrices->map(fn ($p) => $this->serializePrice($p))->values()->all(),
+                    ];
+                }
+                $current = $plan->versions()->whereNotNull('published_at')->orderByDesc('published_at')->first();
+                $data[] = [
+                    'id' => (int) $plan->id,
+                    'key' => $plan->key,
+                    'name' => $plan->name,
+                    'audience' => $plan->audience,
+                    'status' => $plan->status,
+                    'current_published_version_id' => $current?->id,
+                    'versions' => $versions,
+                ];
+            }
+
+            return response()->json(['data' => ['plans' => $data]]);
+        });
+    }
+
     public function showPlanPrices(Request $request, string $planKey, PlanPricePublisher $publisher): JsonResponse
     {
         return $this->platformRespond(function () use ($request, $planKey, $publisher): JsonResponse {

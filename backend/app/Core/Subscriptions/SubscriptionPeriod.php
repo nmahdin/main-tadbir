@@ -75,4 +75,9 @@ class SubscriptionPeriod extends Model
     {
         return $this->belongsTo(CorePlanVersion::class, 'plan_version_id');
     }
+
+    public function paidByPayment(): BelongsTo
+    {
+        return $this->belongsTo(\App\Core\Billing\CoreBillingPayment::class, 'paid_by_payment_id');
+    }
 }

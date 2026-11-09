@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Core\Billing\CorePlanPrice;
 use App\Core\Organizations\Organization;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Rbac\MembershipPermissions;
 use App\Core\Subscriptions\CoreSubscription;
-use App\Core\Subscriptions\SubscriptionFulfillment;
 use App\Core\Subscriptions\SubscriptionLifecycle;
 use App\Core\Subscriptions\SubscriptionOwnerResolver;
+use App\Core\Subscriptions\SubscriptionPeriod;
 use App\Core\Subscriptions\SubscriptionService;
 use App\Core\Workspaces\PersonalWorkspaceProvisioner;
 use App\Core\Workspaces\Workspace;
@@ -68,11 +69,68 @@ final class BillingSubscriptionController extends Controller
             'state' => $state->value,
             'plan_key' => $plan->key,
             'plan_version' => (int) $version->version,
+            'billing_period' => $this->currentBillingPeriod($sub),
             'starts_at' => $sub->starts_at?->toIso8601String(),
             'expires_at' => $sub->expires_at?->toIso8601String(),
             'grace_ends_at' => $sub->grace_ends_at?->toIso8601String(),
             'entitlements' => $snapshot->entitlements,
             'limits' => collect($snapshot->limits)->map(fn ($l, $k) => ['key' => $k, 'limit_value' => $l['limit_value'], 'is_unlimited' => $l['is_unlimited']])->values()->all(),
         ];
+    }
+
+    /**
+     * Determine the current purchase period (monthly|quarterly|annual) when
+     * the subscription was established or last paid-renewed, or null for
+     * Free / legacy subscriptions where we cannot derive an authoritative
+     * billing period from the period history.
+     */
+    private function currentBillingPeriod(CoreSubscription $sub): ?string
+    {
+        $version = $sub->planVersion;
+        $plan = $version?->plan;
+        if ($plan === null || $plan->key === (string) config('billing.free.personal_plan_key', 'free-personal')
+            || $plan->key === (string) config('billing.free.organization_plan_key', 'free-organization')) {
+            return null;
+        }
+
+        $paidPeriod = SubscriptionPeriod::query()
+            ->where('subscription_id', $sub->id)
+            ->whereIn('operation', [
+                SubscriptionPeriod::OPERATION_PAID_ACTIVATION,
+                SubscriptionPeriod::OPERATION_PAID_RENEWAL,
+                SubscriptionPeriod::OPERATION_RENEWAL,
+            ])
+            ->orderByDesc('id')
+            ->first();
+
+        if ($paidPeriod === null || $paidPeriod->paid_by_payment_id === null) {
+            return $this->derivePeriodFromTerm($sub);
+        }
+
+        $payment = $paidPeriod->paidByPayment;
+        if ($payment === null) {
+            return $this->derivePeriodFromTerm($sub);
+        }
+
+        $order = $payment->order;
+        if ($order !== null && in_array($order->period, CorePlanPrice::PERIODS, true)) {
+            return $order->period;
+        }
+
+        return $this->derivePeriodFromTerm($sub);
+    }
+
+    private function derivePeriodFromTerm(CoreSubscription $sub): ?string
+    {
+        if ($sub->starts_at === null || $sub->expires_at === null) {
+            return null;
+        }
+        $days = (int) round($sub->starts_at->diffInDays($sub->expires_at));
+        return match (true) {
+            $days >= 350 && $days <= 380 => 'annual',
+            $days >= 80 && $days <= 100 => 'quarterly',
+            $days >= 25 && $days <= 35 => 'monthly',
+            default => null,
+        };
     }
 }
