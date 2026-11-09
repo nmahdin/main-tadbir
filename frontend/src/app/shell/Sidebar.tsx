@@ -90,6 +90,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const canManagePlatformBilling = currentEnvironment?.kind === 'platform' &&
     Boolean(environmentPayload?.platform.eligible && environmentPayload.platform.permissions.includes('platform.billing.manage'));
   const commercialActive = location.pathname === '/billing' || location.pathname.startsWith('/billing/');
+  const canViewPersonalBilling = currentEnvironment?.kind === 'workspace' &&
+    (currentEnvironment.id === null || Boolean(environmentPayload?.workspaces.some(ws => ws.id === currentEnvironment.id && ws.organization_id === null && ws.relation === 'owner')));
   const environmentKind = currentEnvironment?.kind ?? 'workspace';
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return window.localStorage.getItem('tadbir:sidebar-collapsed') === '1'; } catch { return false; }
@@ -518,6 +520,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <>
           {/* Main workspaces grouped by intent, so long menus remain scannable. */}
           <nav className="space-y-4" aria-label="منوی اصلی سامانه">
+            {canViewPersonalBilling && <section aria-label="اشتراک شخصی">
+              <button type="button" id="nav-item-workspace-billing" title="اشتراک و منابع"
+                aria-label="اشتراک و منابع" aria-current={commercialActive ? 'page' : undefined}
+                className={envItemClassName(commercialActive)} onClick={() => { navigate('/billing/subscription'); onClose(); }}>
+                {envItemContent(<CreditCard className="w-4 h-4" />, 'اشتراک و منابع', commercialActive)}
+              </button>
+            </section>}
             {navSections.map(section => (
               <section key={section.title} aria-label={section.title}>
                 <div className={`mb-1.5 px-3 ${collapsed ? 'lg:hidden' : ''}`}>
