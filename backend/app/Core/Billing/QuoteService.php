@@ -166,6 +166,7 @@ final class QuoteService
             if ($ttlMinutes <= 0) {
                 $ttlMinutes = 30;
             }
+            $at = $at->startOfSecond();
             $expiresAt = $at->addMinutes($ttlMinutes);
 
             $quote = CoreBillingQuote::create([
