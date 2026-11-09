@@ -9,12 +9,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
           extensions: mbstring, pdo_sqlite, fileinfo, zip
           coverage: none
           tools: composer:v2
+      - working-directory: backend
+        run: composer validate --no-check-publish --strict
       - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
       - name: pint
@@ -22,8 +25,9 @@ jobs:
         run: |
           set +e
           php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tee /tmp/pint.txt
-          echo "## Pint Output" >> $GITHUB_STEP_SUMMARY
+          rc=${PIPESTATUS[0]}
+          echo "## Pint" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat /tmp/pint.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          exit ${PIPESTATUS[0]}
+          exit $rc
