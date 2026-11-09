@@ -140,7 +140,7 @@ The following entries are **brainstorming candidates**, not an assertion that th
 | ID | Candidate | Why it may matter | Core dependencies |
 |---|---|---|---|
 | FUT-MOD-01 | Knowledge base / Wiki | Shared institutional knowledge | Content, Notes, permissions, search |
-| FUT-MOD-02 | Help desk / Service desk | Internal service requests beyond platform SUP-01 | CORE-REQ, Forms, Workflows |
+| FUT-MOD-02 / IDEA-MOD-TICKETING-01 | Ticketing / Service desk module | Configurable ticket management for organizations and eligible workspaces (internal and customer-facing service requests), with a shared domain engine evaluated alongside platform Support (SUP); distinct owner scopes, permissions, visibility and administration; no cross-tenant disclosure; no duplicate authorization/attachment/notification infrastructure (replaces the prior lightweight brainstorm entry). See IDEA-MOD-TICKETING-01 below for full outline. | CORE-REQ, Forms, Workflows, Notifications, Attachments, CRM, HRM |
 | FUT-MOD-03 | Inventory / Asset tracking | Stock and physical assets | Procurement, Operational Records |
 | FUT-MOD-04 | Sales pipeline & quotations | Sales operations | CRM, Finance, Forms |
 | FUT-MOD-05 | Time tracking & timesheets | Work analysis and labor hours | Tasks, HRM, Projects |
@@ -156,6 +156,92 @@ The following entries are **brainstorming candidates**, not an assertion that th
 | FUT-MOD-15 | Public API / Developer center | Third-party integrations | API governance, identity, audit |
 
 **Decision rule:** Never treat these candidates as approved requirements or launch scope until product-owner review and a domain-specific spec.
+
+## 5b. IDEA-CMS-01 — Official TADBIR Website and Content Management
+
+**Category:** Core/Public Experience
+**Status:** Future roadmap — not authorized for implementation
+**Priority proposal:** High
+
+### Purpose
+
+Provide the official public website of TADBIR Comprehensive and its native content-management capability.
+
+### Planned features
+
+- Home page and product introduction.
+- Features and module presentation pages.
+- Pricing and subscription information sourced from the published commercial catalog.
+- Articles, tutorials, news and announcements.
+- Categories, tags, authors and content search.
+- SEO metadata, canonical URLs, structured data, sitemap and redirects.
+- Media management integrated with existing DAM capabilities where appropriate.
+- Draft, preview, publish, unpublish and revision history.
+- Editorial permissions and approval workflow.
+- Persian-first RTL content, with an extensible multilingual architecture.
+- Contact, registration and conversion journeys.
+
+### Architecture constraints
+
+- Reuse or extend `/site-studio` where appropriate.
+- Site Studio must not become a fourth operational shell.
+- Keep public published content separate from drafts and administrative APIs.
+- Do not create an independent competing CMS without evaluating the existing implementation.
+- Reuse existing authentication, authorization, media and audit infrastructure.
+- Public plan prices must come from verified published billing data rather than manually duplicated amounts.
+
+### MVP scope
+
+Home page, product/module pages, article management, SEO basics, media, draft/preview/publish, and public rendering.
+
+> Do not implement in this documentation task.
+
+## 5c. IDEA-MOD-TICKETING-01 — Ticketing and Service Desk Module
+
+**Category:** Shared/Organization Workspace Module
+**Status:** Future module candidate — pending product approval and prioritization
+**Priority proposal:** High
+**Replaces / expands:** Prior FUT-MOD-02 brainstorm entry (above table renamed in place).
+
+### Purpose
+
+Offer a configurable ticket-management module for organizations and eligible workspaces, supporting internal and customer-facing service requests.
+
+### Planned features
+
+- Create, classify, prioritize and track tickets.
+- Ticket numbering, title, description and status.
+- Assignment to users or teams.
+- Queue management and status transitions.
+- Threaded responses and internal notes.
+- Attachments and activity history.
+- SLA, deadlines, escalation and reminders.
+- Tags, custom fields and saved filters.
+- Access control, tenant isolation and audit logs.
+- Reporting on ticket volume, response times and resolution.
+- Integrations with Tasks, Projects, CRM, HRM, Workflows and Notifications.
+- Optional customer portal in a later phase.
+
+### Architecture constraints
+
+- Evaluate a reusable ticket-domain engine shared with platform Support (SUP).
+- Platform-support tickets and organization tickets must have distinct owner scopes, permissions, visibility and administration.
+- No cross-tenant disclosure.
+- No duplicate authorization, attachment or notification infrastructure.
+- Ticket workflows must be configurable within server-enforced limits.
+- Integrations with specialized modules should use explicit extension contracts.
+
+### MVP scope
+
+Ticket creation, queue/list, assignment, status workflow, responses, attachments, audit history and basic notifications.
+
+Defer advanced SLA automation, customer portal and sophisticated reports unless approved.
+
+### Distinction from CORE Support (SUP)
+
+SUP is the platform-level support channel operated by the TADBIR platform team; IDEA-MOD-TICKETING-01 is an optional per-organization service-desk module that lets an organization run its own internal/customer tickets within its tenant. The two share a domain engine (evaluated during design) but never share owner scope, permissions or visibility.
+
+> Do not implement in this documentation task.
 
 ## 6. What Frontend Agent can do next
 
