@@ -402,6 +402,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('billing/payments/{payment}/callback', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'callbackReturn'])->name('api.v1.billing.payments.callback.return')->whereNumber('payment');
         Route::post('billing/payments/{payment}/callback', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'callbackWebhook'])->name('api.v1.billing.payments.callback.webhook')->whereNumber('payment')->middleware('throttle:60,1');
         Route::post('billing/payments/{payment}/reconcile', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'reconcile'])->name('api.v1.billing.payments.reconcile')->whereNumber('payment')->middleware('throttle:10,1');
+        // C5-M5 financial document history (owner-scoped).
+        Route::get('billing/documents', [\App\Http\Controllers\Api\V1\BillingDocumentController::class, 'indexForPersonal'])->name('api.v1.billing.documents.personal.index');
+        Route::get('billing/documents/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingDocumentController::class, 'indexForOrganization'])->name('api.v1.billing.documents.org.index');
+        Route::get('billing/documents/{document}', [\App\Http\Controllers\Api\V1\BillingDocumentController::class, 'show'])->name('api.v1.billing.documents.show')->whereNumber('document');
+        Route::get('billing/documents/{document}/render', [\App\Http\Controllers\Api\V1\BillingDocumentController::class, 'render'])->name('api.v1.billing.documents.render')->whereNumber('document');
 
         // C5-M4 read-only current subscription endpoint.
         Route::get('billing/subscription', [\App\Http\Controllers\Api\V1\BillingSubscriptionController::class, 'showForPersonal'])->name('api.v1.billing.subscription.personal');

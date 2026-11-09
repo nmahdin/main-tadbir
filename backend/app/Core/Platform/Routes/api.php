@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\Platform\PlatformAssignmentController;
 use App\Http\Controllers\Api\V1\Platform\PlatformAuditController;
+use App\Http\Controllers\Api\V1\Platform\PlatformBillingFinanceController;
 use App\Http\Controllers\Api\V1\Platform\PlatformBillingPriceController;
 use App\Http\Controllers\Api\V1\Platform\PlatformOrganizationController;
 use App\Http\Controllers\Api\V1\Platform\PlatformPromotionController;
@@ -61,4 +62,9 @@ Route::prefix('platform')->name('api.v1.platform.')->group(function (): void {
     Route::get('billing/promotions', [PlatformPromotionController::class, 'index'])->name('billing.promos.index');
     Route::post('billing/promotions', [PlatformPromotionController::class, 'store'])->name('billing.promos.store');
     Route::post('billing/promotions/{promotion}/deactivate', [PlatformPromotionController::class, 'deactivate'])->name('billing.promos.deactivate');
+    // C5-M5/M6 — financial document inspection & reconciliation (platform.billing.manage).
+    Route::get('billing/findings', [PlatformBillingFinanceController::class, 'findings'])->name('billing.findings.index');
+    Route::get('billing/findings/{finding}', [PlatformBillingFinanceController::class, 'showFinding'])->name('billing.findings.show')->whereNumber('finding');
+    Route::post('billing/findings/{finding}/resolve', [PlatformBillingFinanceController::class, 'resolve'])->name('billing.findings.resolve')->whereNumber('finding');
+    Route::post('billing/reconcile', [PlatformBillingFinanceController::class, 'sweep'])->name('billing.reconcile.run');
 });
