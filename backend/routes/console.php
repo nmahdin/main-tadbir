@@ -51,6 +51,21 @@ Schedule::command('billing:expire-orders')
     ->hourly()
     ->withoutOverlapping(2);
 
+// C5-M3: re-verify pending payments and dispatch the fulfillment
+// outbox every five minutes. Server-side callbacks run immediately
+// on return; this job covers timeouts, browser-closes and webhook
+// out-of-order deliveries.
+Schedule::command('billing:reconcile-payments')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(2);
+
+// C5-M4: apply due pending downgrades and transition grace-expired
+// subscriptions to Free hourly. Safe to run more often; lazy checks
+// also enforce at read-time.
+Schedule::command('billing:sweep-subscriptions')
+    ->hourly()
+    ->withoutOverlapping(2);
+
 // Overdue reminders are idempotent, so they may run as often or as rarely as the
 // host allows. Nothing below assumes a permanent cron: the command is safe to
 // call from the Bale tick above, from an external scheduler, or by hand.

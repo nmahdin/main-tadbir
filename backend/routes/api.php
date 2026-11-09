@@ -393,6 +393,19 @@ Route::prefix('v1')->group(function (): void {
         Route::get('billing/orders/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'indexForOrganization'])->name('api.v1.billing.orders.org.index');
         Route::get('billing/orders/{order}', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'show'])->name('api.v1.billing.orders.show')->whereNumber('order');
         Route::post('billing/orders/{order}/cancel', [\App\Http\Controllers\Api\V1\BillingOrderController::class, 'cancel'])->name('api.v1.billing.orders.cancel')->whereNumber('order');
+        // C5-M3 payment endpoints. Cached CSRF/session state is NOT
+        // consulted; the `callback` endpoints accept signed provider
+        // returns and perform authoritative server-side verification
+        // before marking payment paid.
+        Route::post('billing/orders/{order}/pay', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'initiate'])->name('api.v1.billing.orders.pay')->whereNumber('order')->middleware('throttle:10,1');
+        Route::get('billing/payments/{payment}', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'show'])->name('api.v1.billing.payments.show')->whereNumber('payment');
+        Route::get('billing/payments/{payment}/callback', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'callbackReturn'])->name('api.v1.billing.payments.callback.return')->whereNumber('payment');
+        Route::post('billing/payments/{payment}/callback', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'callbackWebhook'])->name('api.v1.billing.payments.callback.webhook')->whereNumber('payment')->middleware('throttle:60,1');
+        Route::post('billing/payments/{payment}/reconcile', [\App\Http\Controllers\Api\V1\BillingPaymentController::class, 'reconcile'])->name('api.v1.billing.payments.reconcile')->whereNumber('payment')->middleware('throttle:10,1');
+
+        // C5-M4 read-only current subscription endpoint.
+        Route::get('billing/subscription', [\App\Http\Controllers\Api\V1\BillingSubscriptionController::class, 'showForPersonal'])->name('api.v1.billing.subscription.personal');
+        Route::get('billing/subscription/organizations/{organization}', [\App\Http\Controllers\Api\V1\BillingSubscriptionController::class, 'showForOrganization'])->name('api.v1.billing.subscription.org');
         Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('permission:users.delete');
         // UX-02-3-FINAL: bulk status reuses the single-record service per task.
         Route::post('tasks/bulk-status', [TaskController::class, 'bulkStatus'])->middleware('permission:tasks.view')->name('api.v1.tasks.bulk-status');

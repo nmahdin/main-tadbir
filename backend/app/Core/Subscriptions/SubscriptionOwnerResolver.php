@@ -54,6 +54,11 @@ final class SubscriptionOwnerResolver
             : $this->subscriptionForPersonalWorkspace($owner->personalWorkspace);
     }
 
+    public function ownerForOrganization(Organization $organization): SubscriptionOwner
+    {
+        return new SubscriptionOwner('organization', $organization, null);
+    }
+
     public function subscriptionForOrganization(Organization $organization): ?CoreSubscription
     {
         return CoreSubscription::query()

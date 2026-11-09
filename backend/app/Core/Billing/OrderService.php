@@ -324,6 +324,9 @@ final class OrderService
             if ($order->status === CoreBillingOrder::STATUS_REVIEW_EXPIRED) {
                 throw new BillingDomainException('order_review_expired', 'This order has already expired and cannot be cancelled.');
             }
+            if (in_array($order->status, [CoreBillingOrder::STATUS_PAYABLE_PENDING, CoreBillingOrder::STATUS_PAID], true)) {
+                throw new BillingDomainException('order_payment_in_progress', 'Payment has been initiated; cannot cancel during processing.');
+            }
             if (! $order->isCancellableAt($at)) {
                 // Expire defensively then throw.
                 $this->expireOrderLocked($order, $at);

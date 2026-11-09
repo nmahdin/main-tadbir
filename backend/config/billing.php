@@ -46,4 +46,15 @@ return [
     'provisional' => [
         'order_review_ttl_days' => (int) env('BILLING_ORDER_REVIEW_TTL_DAYS', 7),
     ],
+
+    // C5-M4: fixed paid term durations (calendar days). Approved
+    // baseline per AMB-C5-03; renewal stacks after the current
+    // paid end regardless of wall-clock, so drift against Gregorian
+    // month boundaries is intentional and kept simple.
+    'terms' => [
+        'monthly_days' => (int) env('BILLING_MONTHLY_DAYS', 30),
+        'quarterly_days' => (int) env('BILLING_QUARTERLY_DAYS', 90),
+        'annual_days' => (int) env('BILLING_ANNUAL_DAYS', 365),
+        'grace_days' => (int) env('BILLING_PAID_GRACE_DAYS', 7),
+    ],
 ];

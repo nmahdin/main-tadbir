@@ -25,12 +25,23 @@ class SubscriptionPeriod extends Model
 
     public const OPERATION_PLAN_CHANGE = 'plan_change';
 
+    public const OPERATION_PAID_ACTIVATION = 'paid_activation';
+
+    public const OPERATION_PAID_RENEWAL = 'paid_renewal';
+
+    public const OPERATION_UPGRADE = 'upgrade';
+
+    public const OPERATION_DOWNGRADE = 'downgrade';
+
+    public const OPERATION_GRACE_EXPIRY_FREE = 'grace_expiry_free';
+
     protected $table = 'core_subscription_periods';
 
     protected $fillable = [
         'subscription_id', 'plan_version_id', 'operation',
         'effective_starts_at', 'expires_at', 'grace_ends_at',
         'reason', 'correlation_id', 'created_by_user_id',
+        'paid_by_payment_id',
     ];
 
     protected function casts(): array

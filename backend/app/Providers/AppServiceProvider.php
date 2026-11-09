@@ -28,6 +28,16 @@ class AppServiceProvider extends ServiceProvider
                 default => new \App\Core\Identity\Otp\UnavailableSmsOtpDelivery,
             };
         });
+        // C5-M3: provider-neutral payment gateway. Default
+        // 'unavailable' for production; 'sandbox' in testing only
+        // (bound by PaymentGatewayServiceProvider below so that
+        // environments can swap real PSP adapters via config).
+        $this->app->bind(\App\Core\Billing\PaymentGateway::class, function () {
+            return match ((string) config('billing.gateway', 'unavailable')) {
+                'sandbox' => new \App\Core\Billing\Gateways\SandboxPaymentGateway,
+                default => new \App\Core\Billing\Gateways\UnavailablePaymentGateway,
+            };
+        });
     }
 
     /**
