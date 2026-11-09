@@ -17,12 +17,39 @@ jobs:
           tools: composer:v2
       - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: apply pint
+      - name: pintdiff
         working-directory: backend
+        id: pd
         run: |
-          php vendor/bin/pint app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
-      - uses: actions/upload-artifact@v4
+          set +e
+          php vendor/bin/pint --test --format=checkstyle app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.xml 2>&1
+          rc=$?
+          cat /tmp/pint.xml
+          echo "rc=$rc" >> $GITHUB_OUTPUT
+          exit 0
+      - name: parse
         if: always()
-        with:
-          name: pint-fixed
-          path: backend/app/Core/**/*.php
+        run: |
+          python3 <<'PY'
+          import xml.etree.ElementTree as ET
+          try:
+              tree = ET.parse('/tmp/pint.xml')
+              root = tree.getroot()
+              for f in root:
+                  fn = f.attrib.get('name','')
+                  for err in f:
+                      line = err.attrib.get('line','')
+                      col = err.attrib.get('column','')
+                      src = err.attrib.get('source','')
+                      msg = err.attrib.get('message','')
+                      severity = err.attrib.get('severity','')
+                      print(f'::error file={fn},line={line},col={col},title={severity}::{msg} ({src})')
+          except Exception as e:
+              print('parse error',e)
+              with open('/tmp/pint.xml') as fh:
+                print(fh.read()[:2000])
+          PY
+      - name: fail
+        if: always()
+        run: |
+          if [ "${{ steps.pd.outputs.rc }}" != "0" ]; then exit ${{ steps.pd.outputs.rc }}; fi
