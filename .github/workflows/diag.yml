@@ -19,4 +19,6 @@ jobs:
         run: composer install --prefer-dist --no-interaction --no-progress
       - name: pint
         working-directory: backend
-        run: php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | sed -n '1,80p'
+        run: |
+          set -o pipefail
+          php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | head -200
