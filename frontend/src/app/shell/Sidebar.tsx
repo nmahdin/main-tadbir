@@ -40,7 +40,8 @@ import {
   LayoutGrid,
   PanelRightClose,
   PanelRightOpen,
-  SlidersHorizontal
+  SlidersHorizontal,
+  CreditCard,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -83,7 +84,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // navigation instead. Environment is a navigation context only —
   // every destination keeps authorizing on the server (K2).
   const navigate = useNavigate();
-  const { current: currentEnvironment } = useEnvironment();
+  const { current: currentEnvironment, payload: environmentPayload } = useEnvironment();
+  const canManageOrganizationBilling = currentEnvironment?.kind === 'organization' &&
+    Boolean(environmentPayload?.organizations.find(org => org.id === currentEnvironment.id && org.status === 'active')?.permissions.includes('organization.billing.manage'));
+  const canManagePlatformBilling = currentEnvironment?.kind === 'platform' &&
+    Boolean(environmentPayload?.platform.eligible && environmentPayload.platform.permissions.includes('platform.billing.manage'));
+  const commercialActive = location.pathname === '/billing' || location.pathname.startsWith('/billing/');
   const environmentKind = currentEnvironment?.kind ?? 'workspace';
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return window.localStorage.getItem('tadbir:sidebar-collapsed') === '1'; } catch { return false; }
@@ -469,6 +475,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </button>
                     );
                   })}
+                  {canManageOrganizationBilling && <button type="button" id="nav-item-org-billing" title="اشتراک و صورتحساب سازمان"
+                    aria-label="اشتراک و صورتحساب سازمان" aria-current={commercialActive ? 'page' : undefined}
+                    className={envItemClassName(commercialActive)} onClick={() => { navigate('/billing/subscription'); onClose(); }}>
+                    {envItemContent(<CreditCard className="w-4 h-4" />, 'اشتراک و صورتحساب', commercialActive)}
+                  </button>}
                 </div>
                 <p className={`mt-3 px-3 text-[10px] leading-5 text-slate-400 ${collapsed ? 'lg:hidden' : ''}`}>
                   تنظیمات سازمان فقط برای اعضایی نمایش داده می‌شود که مجوز مدیریت سازمان دارند؛ سرور هر درخواست را جداگانه بررسی می‌کند.
@@ -492,6 +503,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </button>
                     );
                   })}
+                  {canManagePlatformBilling && <button type="button" id="nav-item-platform-billing" title="مدیریت مالی پلتفرم"
+                    aria-label="مدیریت مالی پلتفرم" aria-current={commercialActive ? 'page' : undefined}
+                    className={envItemClassName(commercialActive)} onClick={() => { navigate('/billing/platform'); onClose(); }}>
+                    {envItemContent(<CreditCard className="w-4 h-4" />, 'مدیریت طرح‌ها و قیمت‌ها', commercialActive)}
+                  </button>}
                 </div>
                 <p className={`mt-3 px-3 text-[10px] leading-5 text-slate-400 ${collapsed ? 'lg:hidden' : ''}`}>
                   دسترسی پلتفرم جدا از عضویت سازمان و فضای کاری است و فقط از نقش پلتفرمی شما می‌آید.
