@@ -51,8 +51,8 @@ final class SandboxPaymentGateway implements PaymentGateway
 
     public function verify(CoreBillingPayment $payment, array $context = []): VerificationResult
     {
-        $outcome = (string) ($context['sandbox_outcome'] ?? 'settle');
-        $authority = (string) ($context['authority'] ?? $payment->provider_authority ?? '');
+        $outcome = (string) ($context['sandbox_outcome'] ?? $context['sandbox'] ?? 'settle');
+        $authority = (string) ($context['authority'] ?? $context['sandbox_authority'] ?? $payment->provider_authority ?? '');
         $verifiedAmount = (int) ($context['verified_amount_toman'] ?? $payment->requested_amount_toman);
 
         if ($outcome === 'pending') {

@@ -5,7 +5,9 @@ namespace App\Core\Billing\Payments;
 final class VerificationResult
 {
     public const PAID = 'paid';
+
     public const PENDING = 'pending';
+
     public const FAILED = 'failed';
 
     public function __construct(

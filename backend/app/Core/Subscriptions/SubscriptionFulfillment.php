@@ -434,14 +434,17 @@ final class SubscriptionFulfillment
         CoreSubscription $subscription,
         string $operation,
         CorePlanVersion $version,
-        CarbonImmutable $startsAt,
-        CarbonImmutable $expiresAt,
-        CarbonImmutable $graceEndsAt,
+        \Carbon\CarbonInterface $startsAt,
+        \Carbon\CarbonInterface $expiresAt,
+        \Carbon\CarbonInterface $graceEndsAt,
         string $reason,
         string $correlationId,
         ?int $actorUserId,
         ?int $paymentId,
     ): void {
+        $startsAt = CarbonImmutable::instance($startsAt);
+        $expiresAt = CarbonImmutable::instance($expiresAt);
+        $graceEndsAt = CarbonImmutable::instance($graceEndsAt);
         DB::table('core_subscription_periods')->insert([
             'subscription_id' => (int) $subscription->id,
             'plan_version_id' => (int) $version->id,

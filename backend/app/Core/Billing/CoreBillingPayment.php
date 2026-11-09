@@ -6,7 +6,6 @@ use App\Core\Organizations\Organization;
 use App\Core\Subscriptions\SubscriptionOwner;
 use App\Core\Workspaces\Workspace;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -39,8 +38,12 @@ class CoreBillingPayment extends Model
         'idempotency_key', 'payload_hash',
         'provider', 'provider_method', 'provider_payment_id', 'provider_authority',
         'requested_amount_toman', 'requested_currency',
+        'verified_amount_toman', 'verified_currency',
+        'provider_transaction_id', 'provider_trace_id',
         'status', 'return_url', 'created_by_user_id',
-        'initiated_at',
+        'failure_code', 'failure_reason',
+        'initiated_at', 'verified_at', 'finalized_at', 'fulfilled_at',
+        'fulfillment_event_id',
     ];
 
     protected function casts(): array

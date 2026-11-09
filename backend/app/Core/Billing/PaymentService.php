@@ -121,7 +121,7 @@ final class PaymentService
             $result = $this->gateway->initiate($payment, $req);
             $diag = $this->gateway->redactDiagnostics($result->diagnostics);
 
-            if (! $result->ok) {
+            if (!$result->ok) {
                 $payment->forceFill([
                     'status' => CoreBillingPayment::STATUS_FAILED,
                     'failure_code' => $result->errorCode,
@@ -184,7 +184,7 @@ final class PaymentService
             // parameters alone are NOT settlement proof; server-side
             // verification below is the source of truth, but we reject
             // obviously-forged callbacks early).
-            if ($callbackQuery !== [] && ! $this->gateway->verifyCallbackSignature($callbackQuery, $headers)) {
+            if ($callbackQuery !== [] && !$this->gateway->verifyCallbackSignature($callbackQuery, $headers)) {
                 $this->recordEvent($locked, 'callback_rejected', $locked->status, $locked->status, ['reason' => 'bad_signature'], $actor);
                 throw new BillingDomainException('payment_callback_invalid', 'Callback signature/token is invalid.');
             }
@@ -216,7 +216,7 @@ final class PaymentService
                 return ['payment' => $locked, 'outcome' => 'pending', 'is_replay' => false];
             }
 
-            if (! $result->isPaid()) {
+            if (!$result->isPaid()) {
                 $locked->forceFill([
                     'status' => CoreBillingPayment::STATUS_FAILED,
                     'failure_code' => $result->errorCode ?? 'payment_failed',
@@ -260,7 +260,7 @@ final class PaymentService
             // Promo reservation redeemed exactly once.
             CorePromoReservation::query()
                 ->where('order_id', (int) $order->id)
-                ->where('state', CorePromoReservation::STATE_RESERVED)
+                ->where('state', CorePromoReservation::STATE_CONVERTED)
                 ->update([
                     'state' => CorePromoReservation::STATE_REDEEMED,
                     'redeemed_at' => $at->toDateTimeString(),
@@ -408,7 +408,7 @@ final class PaymentService
 
             CorePromoReservation::query()
                 ->where('order_id', (int) $lockedOrder->id)
-                ->where('state', CorePromoReservation::STATE_RESERVED)
+                ->where('state', CorePromoReservation::STATE_CONVERTED)
                 ->update([
                     'state' => CorePromoReservation::STATE_REDEEMED,
                     'redeemed_at' => $at->toDateTimeString(),
