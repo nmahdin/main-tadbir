@@ -24,10 +24,7 @@ jobs:
         working-directory: backend
         run: |
           set +e
-          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tee /tmp/pint.txt
-          rc=${PIPESTATUS[0]}
-          echo "## Pint" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/pint.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          php vendor/bin/pint -v --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.txt 2>&1
+          rc=$?
+          cat /tmp/pint.txt
           exit $rc
