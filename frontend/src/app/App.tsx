@@ -26,6 +26,7 @@ import type { ActiveView } from '../shared/types';
 // Views. Keep every page outside the initial route bundle; the active page is
 // downloaded in parallel with its data and all other pages stay off the hot path.
 const ContextDashboard = React.lazy(() => import('../features/dashboard/ContextDashboard').then(m => ({default:m.ContextDashboard})));
+const CommercialPage = React.lazy(() => import('../features/commercial/CommercialPage').then(m => ({default:m.CommercialPage})));
 const WorkspaceList = React.lazy(() => import('../features/workspace/WorkspaceList').then(m => ({default:m.WorkspaceList})));
 const ApprovalCenter = React.lazy(() => import('../features/workspace/ApprovalCenter').then(m => ({default:m.ApprovalCenter})));
 const NotificationInbox = React.lazy(() => import('../features/workspace/NotificationInbox').then(m => ({default:m.NotificationInbox})));
@@ -107,6 +108,7 @@ const MainLayout: React.FC = () => {
   } = useApp();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentInvalid, isSwitching, isOnline, resetToDefault } = useEnvironment();
   const [pendingSidebarView, setPendingSidebarView] = React.useState<ActiveView | null>(null);
   React.useEffect(() => {
@@ -147,6 +149,7 @@ const MainLayout: React.FC = () => {
     || hasPermission('content.edit');
 
   const renderActiveView = () => {
+    if (location.pathname === '/billing' || location.pathname.startsWith('/billing/')) return <CommercialPage />;
     switch (activeView) {
       case 'dashboard':
         return <ContextDashboard />;
