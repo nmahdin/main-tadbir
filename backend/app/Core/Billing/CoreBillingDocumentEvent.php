@@ -11,7 +11,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class CoreBillingDocumentEvent extends Model
 {
+    public const CREATED_AT = 'occurred_at';
+
     public const UPDATED_AT = null;
+
+    public $timestamps = false;
 
     protected $table = 'core_billing_document_events';
 

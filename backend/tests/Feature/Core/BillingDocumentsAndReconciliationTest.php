@@ -424,7 +424,7 @@ class BillingDocumentsAndReconciliationTest extends TestCase
             'status' => 'published', 'published_at' => now(),
         ]);
         CorePlanPrice::query()->create([
-            'plan_version_id' => $v->id, 'billing_period' => 'monthly',
+            'plan_version_id' => $v->id, 'period' => 'monthly',
             'price_toman' => 0, 'currency' => 'TOMAN', 'is_active' => true,
         ]);
     }
