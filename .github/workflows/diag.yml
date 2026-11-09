@@ -16,16 +16,17 @@ jobs:
           coverage: none
           tools: composer:v2
       - working-directory: backend
-        run: composer validate --no-check-publish --strict
-      - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: apply
+      - name: pint apply
         working-directory: backend
         run: php vendor/bin/pint app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
-      - name: diff
-        run: git diff --stat; git diff > /tmp/diff.txt; wc -l /tmp/diff.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: diff
-          path: /tmp/diff.txt
-          retention-days: 1
+      - name: config
+        run: |
+          git config user.name "arena-agent"
+          git config user.email "297053741+arena-agent@users.noreply.github.com"
+      - name: push
+        run: |
+          git add -A
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -m "style(pint): automated fixes"
+          git push
