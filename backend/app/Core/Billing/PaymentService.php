@@ -33,6 +33,7 @@ final class PaymentService
         private readonly PaymentGateway $gateway,
         private readonly AuditWriter $audit,
         private readonly OrderService $orders,
+        private readonly FinancialDocumentService $documents,
     ) {}
 
     /**
@@ -294,6 +295,14 @@ final class PaymentService
                 'dispatch_attempts' => 0,
             ]);
 
+            // M5: Idempotently issue invoice + receipt AFTER confirming
+            // settlement and writing the outbox. Lock order per the
+            // document service; the UNIQUE(order_id,doc_type,payment_id)
+            // guards against double issuance on replay.
+            $invoiceResult = $this->documents->issueInvoiceForOrder($order, $locked, $actor, $at);
+            $this->documents->issueReceiptForPayment($locked, $order, $actor, $at);
+            $invoice = $invoiceResult['document'];
+
             $this->audit->record($actor, 'billing.payment.paid', [
                 'payment_id' => (int) $locked->id,
                 'order_id' => (int) $order->id,
@@ -301,6 +310,7 @@ final class PaymentService
                 'amount_toman' => (int) $locked->requested_amount_toman,
                 'provider_transaction_id' => $result->providerTransactionId,
                 'fulfillment_event_id' => $locked->fulfillment_event_id,
+                'invoice_number' => $invoice->doc_number,
             ], $this->scopeTypeFor($locked), $this->scopeIdFor($locked), 'billing_payment', (int) $locked->id);
 
             return ['payment' => $locked, 'outcome' => 'paid', 'is_replay' => false];
@@ -438,10 +448,18 @@ final class PaymentService
 
             $this->recordEvent($payment, 'zero_settled', null, CoreBillingPayment::STATUS_ZERO_SETTLED, ['amount' => 0], $actor);
 
+            // M5: Issue invoice + truthful zero-amount receipt for the
+            // zero-payable pair. The receipt's provider is 'internal'
+            // so no PSP trace is fabricated.
+            $invoiceResult = $this->documents->issueInvoiceForOrder($lockedOrder, $payment, $actor, $at);
+            $this->documents->issueReceiptForPayment($payment, $lockedOrder, $actor, $at);
+            $invoice = $invoiceResult['document'];
+
             $this->audit->record($actor, 'billing.payment.zero_settled', [
                 'payment_id' => (int) $payment->id,
                 'order_id' => (int) $lockedOrder->id,
                 'fulfillment_event_id' => $payment->fulfillment_event_id,
+                'invoice_number' => $invoice->doc_number,
             ], $this->scopeTypeFor($payment), $this->scopeIdFor($payment), 'billing_payment', (int) $payment->id);
 
             return ['payment' => $payment, 'redirect_url' => null, 'is_replay' => false];
