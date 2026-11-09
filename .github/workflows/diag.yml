@@ -17,30 +17,21 @@ jobs:
           tools: composer:v2
       - working-directory: backend
         run: composer install --prefer-dist --no-interaction --no-progress
-      - name: pintdiff
+      - name: pint
         working-directory: backend
         run: |
           set +e
-          php vendor/bin/pint --test --format=json app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.json 2>&1
-          rc=$?
+          php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 > /tmp/pint.txt
+          rc=${PIPESTATUS[0]}
+          cat /tmp/pint.txt
           python3 <<'PY'
-import json
-with open('/tmp/pint.json') as f:
-    txt = f.read()
-# find JSON in output
-try:
-    data = json.loads(txt)
-except:
-    # strip prefix
-    start = txt.find('{')
-    data = json.loads(txt[start:])
-for f in data.get('files',[]):
-    fn = f.get('file','')
-    for v in f.get('violations',[]):
-        line = v.get('line',0)
-        msg = v.get('message','')
-        src = v.get('source','')
-        print(f'::error file={fn},line={line}::{msg} ({src})')
-print(f"TOTAL {len(data.get('files',[]))} files, errors in {sum(1 for f in data.get('files',[]) if f.get('violations'))}")
+import re
+with open('/tmp/pint.txt') as f:
+    for line in f:
+        # match like "app/Core/X.php:line" in verbose mode
+        m = re.search(r'([\w/]+\.php):(\d+).*?(\w+(?:_\w+)+)', line)
+        if m:
+            fn, ln, rule = m.groups()
+            print(f'::error file={fn},line={ln}::{rule}')
 PY
           exit $rc
