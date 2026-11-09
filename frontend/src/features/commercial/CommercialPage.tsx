@@ -12,6 +12,7 @@ import {CommercialRecords} from './CommercialRecords';
 import {PlatformCommerce} from './PlatformCommerce';
 import {SubscriptionPage} from './SubscriptionPage';
 import './commercial.css';
+import './subscription.css';
 
 export const fa=(v:number|null|undefined)=>v===null||v===undefined?'—':v.toLocaleString('fa-IR');
 export const date=(v:string|null|undefined)=>v?formatPersianDate(v):'—';
