@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
-import {assessUsage} from '../src/features/commercial/SubscriptionPage.tsx';
+import {assessUsage} from '../src/features/commercial/resourceStatus.ts';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('C5 A01 server-backed resource consumption distinguishes unknown/unlimited/exceeded',()=>{
  assert.equal(assessUsage({resource_key:'projects',limit_value:10,is_unlimited:false,usage:null}),'unknown');

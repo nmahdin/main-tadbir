@@ -4,16 +4,9 @@ import {useQuery} from '@tanstack/react-query';
 import {Button,Badge,LoadingState,EmptyState} from '../../shared/ui/Primitives';
 import {dashboardApi,type SubscriptionLimit} from '../dashboard/dashboardApi';
 import {type OwnerScope} from './commercialApi';
+import {assessUsage} from './resourceStatus';
 import {Surface,ServerError,Status,date,fa} from './CommercialPage';
 export type SubscriptionSnapshot={state:string;plan:{key:string;version:number}|null;starts_at:string|null;expires_at:string|null;grace_ends_at:string|null;limits:SubscriptionLimit[]};
-export type UsageAssessment='unlimited'|'unknown'|'over'|'full'|'within';
-export function assessUsage(limit:SubscriptionLimit):UsageAssessment{
- if(limit.is_unlimited)return 'unlimited';
- if(limit.usage===null||limit.limit_value===null)return 'unknown';
- if(limit.usage>limit.limit_value)return 'over';
- if(limit.usage===limit.limit_value)return 'full';
- return 'within';
-}
 const humanResource=(key:string)=>{
  const labels:Record<string,string>={storage_bytes:'فضای ذخیره‌سازی',users:'کاربران',workspaces:'فضاهای کاری',projects:'پروژه‌ها',tasks:'وظایف'};
  return labels[key]??key;
