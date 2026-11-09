@@ -19,37 +19,28 @@ jobs:
         run: composer install --prefer-dist --no-interaction --no-progress
       - name: pintdiff
         working-directory: backend
-        id: pd
         run: |
           set +e
-          php vendor/bin/pint --test --format=checkstyle app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.xml 2>&1
+          php vendor/bin/pint --test --format=json app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php > /tmp/pint.json 2>&1
           rc=$?
-          cat /tmp/pint.xml
-          echo "rc=$rc" >> $GITHUB_OUTPUT
-          exit 0
-      - name: parse
-        if: always()
-        run: |
           python3 <<'PY'
-          import xml.etree.ElementTree as ET
-          try:
-              tree = ET.parse('/tmp/pint.xml')
-              root = tree.getroot()
-              for f in root:
-                  fn = f.attrib.get('name','')
-                  for err in f:
-                      line = err.attrib.get('line','')
-                      col = err.attrib.get('column','')
-                      src = err.attrib.get('source','')
-                      msg = err.attrib.get('message','')
-                      severity = err.attrib.get('severity','')
-                      print(f'::error file={fn},line={line},col={col},title={severity}::{msg} ({src})')
-          except Exception as e:
-              print('parse error',e)
-              with open('/tmp/pint.xml') as fh:
-                print(fh.read()[:2000])
-          PY
-      - name: fail
-        if: always()
-        run: |
-          if [ "${{ steps.pd.outputs.rc }}" != "0" ]; then exit ${{ steps.pd.outputs.rc }}; fi
+import json
+with open('/tmp/pint.json') as f:
+    txt = f.read()
+# find JSON in output
+try:
+    data = json.loads(txt)
+except:
+    # strip prefix
+    start = txt.find('{')
+    data = json.loads(txt[start:])
+for f in data.get('files',[]):
+    fn = f.get('file','')
+    for v in f.get('violations',[]):
+        line = v.get('line',0)
+        msg = v.get('message','')
+        src = v.get('source','')
+        print(f'::error file={fn},line={line}::{msg} ({src})')
+print(f"TOTAL {len(data.get('files',[]))} files, errors in {sum(1 for f in data.get('files',[]) if f.get('violations'))}")
+PY
+          exit $rc
