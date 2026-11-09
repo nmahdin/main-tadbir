@@ -21,4 +21,9 @@ jobs:
         working-directory: backend
         run: |
           set -o pipefail
-          php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | head -200
+          php vendor/bin/pint --test -v app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tee /tmp/pint.txt
+          echo "## Pint results" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/pint.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit ${PIPESTATUS[0]}
