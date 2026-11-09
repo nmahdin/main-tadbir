@@ -24,8 +24,8 @@ use App\Core\Plans\CorePlanVersion;
 use App\Core\Plans\PlanProvisioner;
 use App\Core\Rbac\PermissionCatalog;
 use App\Core\Subscriptions\CoreSubscription;
-use App\Core\Subscriptions\CoreSubscriptionPeriod;
 use App\Core\Subscriptions\SubscriptionFulfillment;
+use App\Core\Subscriptions\SubscriptionPeriod;
 use App\Core\Subscriptions\SubscriptionLifecycle;
 use App\Core\Subscriptions\SubscriptionOwner;
 use App\Core\Subscriptions\SubscriptionState;
@@ -110,7 +110,7 @@ class BillingPaymentTest extends TestCase
         // Period row present with paid_by_payment_id.
         $period = $sub->periods()->first();
         $this->assertNotNull($period);
-        $this->assertSame(CoreSubscriptionPeriod::OPERATION_PAID_ACTIVATION, $period->operation);
+        $this->assertSame(SubscriptionPeriod::OPERATION_PAID_ACTIVATION, $period->operation);
         $this->assertSame((int) $payment->id, (int) $period->paid_by_payment_id);
     }
 
@@ -145,7 +145,6 @@ class BillingPaymentTest extends TestCase
         $this->assertSame('pending', $result['outcome']);
         $init['payment']->refresh();
         $this->assertSame(CoreBillingPayment::STATUS_PENDING, $init['payment']->status);
-        $this->assertSame('resolved', null); // reconciliation state = pending
         $this->assertSame('pending', $init['payment']->reconciliation_state);
     }
 
@@ -281,8 +280,8 @@ class BillingPaymentTest extends TestCase
         $this->assertSame((int) (30*24*60*60), $expectedExpiry->getTimestamp() - $firstExpiry);
         $periods = $sub->periods()->orderBy('id')->get();
         $this->assertCount(2, $periods);
-        $this->assertSame(CoreSubscriptionPeriod::OPERATION_PAID_ACTIVATION, $periods[0]->operation);
-        $this->assertSame(CoreSubscriptionPeriod::OPERATION_PAID_RENEWAL, $periods[1]->operation);
+        $this->assertSame(SubscriptionPeriod::OPERATION_PAID_ACTIVATION, $periods[0]->operation);
+        $this->assertSame(SubscriptionPeriod::OPERATION_PAID_RENEWAL, $periods[1]->operation);
     }
 
     // ---- M4: seven-day grace + Free transition ----

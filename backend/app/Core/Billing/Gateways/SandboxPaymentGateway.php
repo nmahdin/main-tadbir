@@ -58,8 +58,13 @@ final class SandboxPaymentGateway implements PaymentGateway
         if ($outcome === 'pending') {
             return VerificationResult::pending('Provider has not finalized.', ['outcome' => 'pending']);
         }
-        if ($outcome === 'fail' || $outcome === 'badamount' || $authority === '' || ! str_starts_with($authority, self::TOKEN_PREFIX)) {
+        if ($outcome === 'fail' || $authority === '' || ! str_starts_with($authority, self::TOKEN_PREFIX)) {
             return VerificationResult::failed('payment_failed', 'Payment was not settled at provider.', ['outcome' => $outcome]);
+        }
+        if ($outcome === 'badamount' || $verifiedAmount !== (int) $payment->requested_amount_toman) {
+            return VerificationResult::paid($verifiedAmount,
+                (string) ($payment->requested_currency ?? 'TOMAN'),
+                'TXN-BAD', null, null, ['outcome' => 'badamount']);
         }
 
         return VerificationResult::paid(

@@ -14,6 +14,7 @@ use App\Core\Plans\PlanProvisioner;
 use App\Core\Workspaces\Workspace;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -344,15 +345,18 @@ final class SubscriptionFulfillment
             if ((int) $locked->plan_version_id === (int) $freeVersion->id) {
                 return false; // already on Free
             }
+            $freeStarts = CarbonImmutable::now('UTC');
+            $freeExpires = $freeStarts->addYears(100);
+            $freeGrace = $freeExpires->addDays((int) $freeVersion->grace_days ?: 7);
             $locked->forceFill([
                 'plan_version_id' => (int) $freeVersion->id,
-                'starts_at' => $at,
-                'expires_at' => $at->addYears(100),
-                'grace_ends_at' => $at->addYears(100)->addDays((int) $freeVersion->grace_days ?: 7),
+                'starts_at' => $freeStarts,
+                'expires_at' => $freeExpires,
+                'grace_ends_at' => $freeGrace,
                 'status_version' => (int) $locked->status_version + 1,
             ])->save();
             $this->recordPeriod($locked, SubscriptionPeriod::OPERATION_GRACE_EXPIRY_FREE, $freeVersion,
-                $at, $locked->expires_at, $locked->grace_ends_at,
+                $freeStarts, $freeExpires, $freeGrace,
                 'Grace expired — transitioned to Free plan (data preserved).',
                 'grace_expiry_free:'.$locked->id.':'.$at->getTimestamp(), null, null);
             $this->audit->record(null, 'subscription.grace_expired_to_free', [
