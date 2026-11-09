@@ -21,9 +21,17 @@ jobs:
         working-directory: backend
         run: |
           set +e
-          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php app/Providers routes 2>&1 | tee /tmp/pint.txt
-          echo PINT_RC=${PIPESTATUS[0]}
-          tail -100 /tmp/pint.txt
+          out=$(php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php app/Providers routes 2>&1)
+          rc=$?
+          echo "$out"
+          python3 -c "
+import sys
+out = '''$out'''
+for line in out.split('\n'):
+    if ' ⨯ ' in line or line.startswith('⨯') or 'FAIL' in line:
+        print(f'::error file=pint::{line.strip()[:400]}')
+"
+          exit $rc
       - name: Migrate
         if: always()
         working-directory: backend
