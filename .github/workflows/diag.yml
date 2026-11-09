@@ -1,4 +1,4 @@
-name: diag-junit
+name: diag-pint-php
 on:
   push:
     branches: [arena/582a70e5-main-tadbir]
@@ -19,7 +19,27 @@ jobs:
         run: composer install --prefer-dist --no-interaction --no-progress
       - name: pint
         working-directory: backend
-        run: php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php
+        run: |
+          set +e
+          php vendor/bin/pint --test app/Core app/Modules tests/Unit/Architecture bootstrap/providers.php 2>&1 | tee /tmp/pint.txt
+          echo ${PIPESTATUS[0]} > /tmp/prc.txt
+      - name: pint ann
+        if: always()
+        run: |
+          python3 <<'PY'
+          import re
+          try:
+              out=open('/tmp/pint.txt').read()
+          except: out=''
+          for line in out.splitlines():
+              if '.php' in line or 'FAIL' in line or 'failed' in line or 'fixed' in line:
+                  short=line.strip()[:300]
+                  if short:
+                      print(f'::error file=pint::{short}')
+          PY
+          echo "=== pint tail ==="
+          tail -30 /tmp/pint.txt
+          echo "rc:"; cat /tmp/prc.txt
       - name: Migrate
         working-directory: backend
         env:
@@ -50,9 +70,7 @@ jobs:
           python3 <<'PY'
           import xml.etree.ElementTree as ET
           try:
-              tree = ET.parse('/tmp/junit.xml')
-              root = tree.getroot()
-              failures=[]
+              tree=ET.parse('/tmp/junit.xml'); root=tree.getroot(); failures=[]
               for ts in root.iter('testsuite'):
                   for tc in ts.findall('testcase'):
                       for f in tc.findall('failure')+tc.findall('error'):
@@ -66,4 +84,8 @@ jobs:
           PY
       - name: exit rc
         if: always()
-        run: exit $(cat /tmp/rc.txt 2>/dev/null || echo 1)
+        run: |
+          PINT=$(cat /tmp/prc.txt 2>/dev/null || echo 0)
+          UT=$(cat /tmp/rc.txt 2>/dev/null || echo 0)
+          if [ "$PINT" != "0" ]; then exit $PINT; fi
+          exit $UT
