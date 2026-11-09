@@ -7,6 +7,7 @@ import {type OwnerScope} from './commercialApi';
 import {assessUsage} from './resourceStatus';
 import {Surface,ServerError,Status,date,fa} from './CommercialPage';
 export type SubscriptionSnapshot={state:string;plan:{key:string;version:number}|null;starts_at:string|null;expires_at:string|null;grace_ends_at:string|null;limits:SubscriptionLimit[]};
+export type SubscriptionSummary={subscription:SubscriptionSnapshot|null;pending_free_activation:boolean};
 const humanResource=(key:string)=>{
  const labels:Record<string,string>={storage_bytes:'فضای ذخیره‌سازی',users:'کاربران',workspaces:'فضاهای کاری',projects:'پروژه‌ها',tasks:'وظایف'};
  return labels[key]??key;
@@ -29,11 +30,14 @@ function ResourceCard({limit}:{limit:SubscriptionLimit}){
  </div>;
 }
 export function SubscriptionPage({scope}:{scope:OwnerScope}){
- const q=useQuery({queryKey:['c5','subscription',scope.kind,scope.kind==='organization'?scope.organizationId:0],
-  queryFn:()=>scope.kind==='personal'?dashboardApi.personalSummary():dashboardApi.organizationSummary(scope.organizationId),retry:false});
+ const q=useQuery<SubscriptionSummary>({queryKey:['c5','subscription',scope.kind,scope.kind==='organization'?scope.organizationId:0],
+  queryFn:async()=>{
+   const data=scope.kind==='personal'?(await dashboardApi.personalSummary()).data:(await dashboardApi.organizationSummary(scope.organizationId)).data;
+   return {subscription:data.subscription,pending_free_activation:Boolean(data.pending_free_activation)};
+  },retry:false});
  if(q.isPending)return <Surface title="اشتراک و مصرف منابع"><LoadingState/></Surface>;
  if(q.isError)return <ServerError error={q.error} retry={()=>void q.refetch()}/>;
- const summary=q.data?.data;
+ const summary=q.data;
  const subscription:SubscriptionSnapshot|null|undefined=summary?.subscription;
  const pending=Boolean(summary?.pending_free_activation);
  const isMissing=!subscription||subscription.state==='missing';
@@ -58,7 +62,7 @@ export function SubscriptionPage({scope}:{scope:OwnerScope}){
  <Surface title="مصرف منابع و سهمیه‌ها" description="برای هر منبع، مصرف و سقف عین پاسخ سرور است؛ مقدار ناشناخته صفر تلقی نمی‌شود.">
   {!subscription?<EmptyState title="مصرف در دسترس نیست" description="سرور اطلاعات اشتراک این محدوده را بازنگردانده است."/>:
   subscription.limits.length===0?<EmptyState title="سهمیه‌ای در این طرح تعریف نشده است" description="برای این طرح، فهرست محدودیت‌ها خالی است."/>:
-  <div className="c5-grid c5-grid--two">{subscription.limits.map(limit=><ResourceCard key={limit.resource_key} limit={limit}/>)}</div>}
+  <div className="c5-grid c5-grid--two">{subscription.limits.map(limit=><div key={limit.resource_key}><ResourceCard limit={limit}/></div>)}</div>}
  </Surface>
  </>;
 }

@@ -39,7 +39,7 @@ export function CommercialCatalog({scope}:{scope:OwnerScope}){
  const selected=selectedId===null?null:plans.find(x=>x.version.id===selectedId);
  if(catalog.isPending)return <Surface title="مقایسه طرح‌ها"><LoadingState/></Surface>;
  if(catalog.isError)return <ServerError error={catalog.error} retry={()=>void catalog.refetch()}/>;
- if(selectedId!==null)return selected?<PlanDetail key={selected.version.id} entry={selected} scope={scope}/>:<Surface title="طرح در دسترس نیست"><EmptyState title="این نسخهٔ منتشرشده برای محیط شما یافت نشد" description="طرح‌ها را دوباره بررسی کنید."/>;
+ if(selectedId!==null)return selected?<div key={selected.version.id}><PlanDetail entry={selected} scope={scope}/></div>:<Surface title="طرح در دسترس نیست"><EmptyState title="این نسخهٔ منتشرشده برای محیط شما یافت نشد" description="طرح‌ها را دوباره بررسی کنید."/>;
   <Link className="c5-text-link" to="/billing/catalog">بازگشت به فهرست طرح‌ها</Link></Surface>;
  return <Surface title="مقایسه طرح‌ها" description="A02 — دوره‌های ماهانه، سه‌ماهه و سالانه مستقل هستند و قیمت ناموجود از دورهٔ دیگر محاسبه نمی‌شود.">
   {!plans.length?<EmptyState title="طرح منتشرشده‌ای وجود ندارد" description="هنوز طرح قابل خرید برای این نوع حساب منتشر نشده است."/>:

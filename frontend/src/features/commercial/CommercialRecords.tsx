@@ -93,7 +93,7 @@ export function CommercialRecords({scope}:{scope:OwnerScope}){
  const id=Number(path.split('/').pop());
  if(path==='/billing/quotes')return <QuotesList scope={scope}/>;
  if(path==='/billing/orders')return <OrdersList scope={scope}/>;
- if(path.startsWith('/billing/quotes/')&&Number.isSafeInteger(id)&&id>0)return <QuoteView key={id} id={id} scope={scope}/>;
- if(path.startsWith('/billing/orders/')&&Number.isSafeInteger(id)&&id>0)return <OrderView key={id} id={id} scope={scope}/>;
+ if(path.startsWith('/billing/quotes/')&&Number.isSafeInteger(id)&&id>0)return <div key={id}><QuoteView id={id} scope={scope}/></div>;
+ if(path.startsWith('/billing/orders/')&&Number.isSafeInteger(id)&&id>0)return <div key={id}><OrderView id={id} scope={scope}/></div>;
  return <Surface title="صفحه‌ای یافت نشد"><EmptyState title="مسیر مالی معتبر نیست" description="یکی از صفحات ثبت‌شده را از نوار بالا انتخاب کنید."/></Surface>;
 }

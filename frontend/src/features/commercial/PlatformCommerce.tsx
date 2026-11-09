@@ -54,7 +54,7 @@ function PlanAdmin(){
  versions.isPending?<Surface><LoadingState/></Surface>:versions.isError?
  <ServerError error={versions.error} retry={()=>void versions.refetch()}/>:
  <Surface title={'قیمت‌های طرح '+(versions.data?.data.plan.name??key)} description="A10 — انتشار قیمت فقط برای نسخهٔ پیش‌نویس مجاز است؛ مبلغ نهایی در سرور ثبت می‌شود.">
-  {!versions.data?.data.versions.length?<EmptyState title="نسخه‌ای یافت نشد"/>:<div className="c5-grid c5-grid--two">{versions.data.data.versions.map(v=><PriceVersion key={v.id} version={v} planKey={key}/>)}</div>}
+  {!versions.data?.data.versions.length?<EmptyState title="نسخه‌ای یافت نشد"/>:<div className="c5-grid c5-grid--two">{versions.data.data.versions.map(v=><div key={v.id}><PriceVersion version={v} planKey={key}/></div>)}</div>}
  </Surface>}
  </>;
 }
