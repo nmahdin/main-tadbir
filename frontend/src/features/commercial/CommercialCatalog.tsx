@@ -3,7 +3,7 @@ import {Link,useLocation,useNavigate} from 'react-router-dom';
 import {useQuery,useMutation} from '@tanstack/react-query';
 import {Button,Badge,LoadingState,EmptyState} from '../../shared/ui/Primitives';
 import {commercialApi,PERIODS,PERIOD_LABELS,toman,type Entry,type OwnerScope,type Period} from './commercialApi';
-import {Surface,PeriodSelect,ServerError} from './CommercialPage';
+import {Surface,PeriodSelect,ServerError} from './CommercialUi';
 
 function PlanDetail({entry,scope}:{entry:Entry;scope:OwnerScope}){
  const navigate=useNavigate();

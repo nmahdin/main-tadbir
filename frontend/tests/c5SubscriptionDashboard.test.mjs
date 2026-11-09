@@ -10,6 +10,6 @@ test('C5 A01 server-backed resource consumption distinguishes unknown/unlimited/
 });
 test('C5 A01 does not fabricate purchase period or payment status',()=>{
  const s=read('src/features/commercial/SubscriptionPage.tsx');
- for(const k of ['dashboardApi.personalSummary','dashboardApi.organizationSummary','pending_free_activation','grace_ends_at','is_unlimited','limit_value','usage===null','disabled'])assert.ok(s.includes(k),k);
+ for(const k of ['commercialApi.personalSummary','commercialApi.organizationSummary','pending_free_activation','grace_ends_at','is_unlimited','limit_value','usage===null','disabled'])assert.ok(s.includes(k),k);
  for(const bad of ['payment/start','subscription/renew','plan-change-preview'])assert.ok(!s.includes(bad),bad);
 });

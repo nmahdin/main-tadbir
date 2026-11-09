@@ -235,7 +235,7 @@ function PersonalSubscriptionCard() {
   const subscription = summary?.subscription;
 
   return (
-    <WidgetCard title="اشتراک شخصی" description="وضعیت و سهمیه‌های واقعی اشتراک شخصی" icon={CreditCard} to="/billing/subscription" linkLabel="جزئیات اشتراک و طرح‌ها">
+    <WidgetCard title="اشتراک شخصی" description="طرح رایگان شخصی و سقف‌های مصرف فضای کاری شما" icon={CreditCard}>
       {query.isPending ? <WidgetSkeleton /> : query.isError ? <WidgetError onRetry={() => void query.refetch()} />
         : !subscription ? <WidgetEmpty text="هنوز فضای کاری شخصی برای شما ساخته نشده است." />
         : subscription.state === 'missing' ? (

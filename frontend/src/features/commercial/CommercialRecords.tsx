@@ -3,7 +3,7 @@ import {Link,useLocation,useNavigate} from 'react-router-dom';
 import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';
 import {Button,LoadingState,EmptyState,Badge} from '../../shared/ui/Primitives';
 import {commercialApi,convertible,cancellable,owns,PERIOD_LABELS,toman,type Quote,type Order,type OwnerScope} from './commercialApi';
-import {Surface,MoneyBreakdown,ServerError,Status,date,fa,useRemaining} from './CommercialPage';
+import {Surface,MoneyBreakdown,ServerError,Status,date,fa,useRemaining} from './CommercialUi';
 
 function QuoteView({scope,id}:{scope:OwnerScope;id:number}){
  const navigate=useNavigate();

@@ -3,7 +3,7 @@ import {useLocation,useSearchParams} from 'react-router-dom';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {Button,Badge,EmptyState,LoadingState} from '../../shared/ui/Primitives';
 import {commercialApi,PERIODS,PERIOD_LABELS,toman,type Period,type Promotion,type TaxRule,type VersionPrice} from './commercialApi';
-import {Surface,ServerError,Status,date,fa} from './CommercialPage';
+import {Surface,ServerError,Status,date,fa} from './CommercialUi';
 
 function PriceVersion({version,planKey}:{version:VersionPrice;planKey:string}){
  const cache=useQueryClient();

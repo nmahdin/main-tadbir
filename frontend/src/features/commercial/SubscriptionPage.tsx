@@ -2,10 +2,10 @@ import React from 'react';
 import {Link} from 'react-router-dom';
 import {useQuery} from '@tanstack/react-query';
 import {Button,Badge,LoadingState,EmptyState} from '../../shared/ui/Primitives';
-import {dashboardApi,type SubscriptionLimit} from '../dashboard/dashboardApi';
-import {type OwnerScope} from './commercialApi';
-import {assessUsage} from './resourceStatus';
-import {Surface,ServerError,Status,date,fa} from './CommercialPage';
+import {type SubscriptionLimit,assessUsage} from './resourceStatus';
+import {commercialApi,type OwnerScope} from './commercialApi';
+
+import {Surface,ServerError,Status,date,fa} from './CommercialUi';
 export type SubscriptionSnapshot={state:string;plan:{key:string;version:number}|null;starts_at:string|null;expires_at:string|null;grace_ends_at:string|null;limits:SubscriptionLimit[]};
 export type SubscriptionSummary={subscription:SubscriptionSnapshot|null;pending_free_activation:boolean};
 const humanResource=(key:string)=>{
@@ -32,7 +32,7 @@ function ResourceCard({limit}:{limit:SubscriptionLimit}){
 export function SubscriptionPage({scope}:{scope:OwnerScope}){
  const q=useQuery<SubscriptionSummary>({queryKey:['c5','subscription',scope.kind,scope.kind==='organization'?scope.organizationId:0],
   queryFn:async()=>{
-   const data=scope.kind==='personal'?(await dashboardApi.personalSummary()).data:(await dashboardApi.organizationSummary(scope.organizationId)).data;
+   const data=scope.kind==='personal'?(await commercialApi.personalSummary()).data:(await commercialApi.organizationSummary(scope.organizationId)).data;
    return {subscription:data.subscription,pending_free_activation:Boolean(data.pending_free_activation)};
   },retry:false});
  if(q.isPending)return <Surface title="اشتراک و مصرف منابع"><LoadingState/></Surface>;

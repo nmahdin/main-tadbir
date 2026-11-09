@@ -25,11 +25,14 @@ export type VersionPrice={id:number;version:number;published_at:string|null;grac
 export type PlanPrices={plan:Plan;versions:VersionPrice[]};
 export type TaxRule={id:number;label:string;rate_basis_points:number;is_active:boolean;valid_from:string|null;valid_until:string|null};
 export type Promotion={id:number;code:string;label:string;discount_type:'fixed'|'percent';discount_value_bp:number|null;discount_value_toman:number|null;is_active:boolean};
+export type SubscriptionSummary={subscription:{state:string;plan:{key:string;version:number}|null;starts_at:string|null;expires_at:string|null;grace_ends_at:string|null;limits:import('./resourceStatus').SubscriptionLimit[]}|null;pending_free_activation:boolean};
 export const toman=(n:number|null|undefined)=>n===null||n===undefined?'—':n.toLocaleString('fa-IR')+' تومان';
 const ownerPath=(s:OwnerScope,kind:'quotes'|'orders')=>s.kind==='personal'?'/billing/'+kind:'/billing/'+kind+'/organizations/'+s.organizationId;
 const post=(key:string,body:unknown)=>({method:'POST',headers:{'Idempotency-Key':key},body});
 export const commercialApi={
  catalog:()=>request<ApiResponse<{plans:Entry[]}>>('/billing/catalog'),
+ personalSummary:()=>request<ApiResponse<SubscriptionSummary>>('/core/personal/dashboard-summary'),
+ organizationSummary:(id:number)=>request<ApiResponse<SubscriptionSummary>>('/core/organizations/'+id+'/dashboard-summary'),
  quotes:(scope:OwnerScope)=>request<ApiResponse<{quotes:Quote[]}>>(ownerPath(scope,'quotes')),
  quote:(id:number)=>request<ApiResponse<{quote:Quote}>>('/billing/quotes/'+id),
  createQuote:(scope:OwnerScope,versionId:number,period:Period,promo:string|undefined,key:string)=>request<ApiResponse<{quote:Quote;is_replay:boolean}>>(
