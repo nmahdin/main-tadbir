@@ -8,6 +8,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Service layer for CORE-REQ. Origin modules publish action items via
@@ -17,7 +18,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class ActionInboxService
 {
-    public function __construct(private readonly AuditWriter $audit) {}
+    public function __construct(private readonly AuditWriter $audit)
+    {
+    }
 
     /**
      * Publish (upsert) an action item. Returns the saved model.

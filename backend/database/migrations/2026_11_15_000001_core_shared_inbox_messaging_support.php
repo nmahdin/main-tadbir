@@ -51,7 +51,7 @@ return new class extends Migration
         // -------- SYS-MSG: core_system_messages -----------------------
         Schema::create('core_system_messages', function (Blueprint $table): void {
             $table->id();
-            $table->string('slug', 100);
+            $table->string('slug', 100);       // multiple versions share a slug; uniqueness is (slug, version)
             $table->unsignedInteger('version')->default(1);
             $table->string('audience', 20);           // platform|organization|personal
             $table->unsignedBigInteger('organization_id')->nullable();

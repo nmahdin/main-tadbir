@@ -13,7 +13,9 @@ use Illuminate\Support\Str;
 
 final class SystemMessageService
 {
-    public function __construct(private readonly AuditWriter $audit) {}
+    public function __construct(private readonly AuditWriter $audit)
+    {
+    }
 
     /**
      * Create a new draft (or new version of an existing slug). Passing
