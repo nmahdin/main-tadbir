@@ -99,11 +99,12 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
         run: |
-          set +e
-          script -q -c "php vendor/bin/phpunit --colors=never" phpunit.log
-          RC=$?
-          tail -n 40 phpunit.log
-          exit $RC
+          # -e: propagate the child (php) exit status so phpunit failures fail the job;
+          # -q: quiet script header/footer; pipe through tee so output is visible live
+          # in the Actions log as well as captured to phpunit.log.
+          set -o pipefail
+          rm -f phpunit.log
+          script -e -q -c "php vendor/bin/phpunit --colors=never" /dev/null 2>&1 | tee phpunit.log
 
   backend-mysql:
     name: Backend migration gate on MySQL
