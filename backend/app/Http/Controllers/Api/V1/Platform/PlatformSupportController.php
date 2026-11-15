@@ -21,7 +21,9 @@ final class PlatformSupportController extends Controller
 {
     use AuthorizesPlatformRequests;
 
-    public function __construct(private readonly SupportTicketService $service) {}
+    public function __construct(private readonly SupportTicketService $service)
+    {
+    }
 
     public function queue(Request $request): JsonResponse
     {

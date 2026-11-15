@@ -15,7 +15,9 @@ use Illuminate\Validation\Rule;
  */
 final class SystemMessageController extends Controller
 {
-    public function __construct(private readonly SystemMessageService $service) {}
+    public function __construct(private readonly SystemMessageService $service)
+    {
+    }
 
     public function index(Request $request): JsonResponse
     {

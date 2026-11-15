@@ -3,13 +3,13 @@
 namespace App\Core\Messaging;
 
 use App\Core\Audit\AuditWriter;
+use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 final class SystemMessageService
 {
@@ -225,7 +225,7 @@ final class SystemMessageService
                 });
                 $orgIds = OrganizationMembership::query()
                     ->where('user_id', $user->id)
-                    ->where('status', \App\Core\Memberships\MembershipStatus::Active->value)
+                    ->where('status', MembershipStatus::Active->value)
                     ->pluck('organization_id');
                 $root->orWhere(function ($org) use ($orgIds): void {
                     $org->where('audience', SystemMessageAudience::Organization->value)
@@ -275,7 +275,7 @@ final class SystemMessageService
                 && OrganizationMembership::query()
                     ->where('organization_id', $msg->organization_id)
                     ->where('user_id', $user->id)
-                    ->where('status', \App\Core\Memberships\MembershipStatus::Active->value)
+                    ->where('status', MembershipStatus::Active->value)
                     ->exists(),
             default => false,
         };

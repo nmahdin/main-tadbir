@@ -8,7 +8,6 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Throwable;
 
 /**
  * Service layer for CORE-REQ. Origin modules publish action items via
