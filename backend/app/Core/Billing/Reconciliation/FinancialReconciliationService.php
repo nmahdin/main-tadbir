@@ -124,7 +124,7 @@ final class FinancialReconciliationService
             if ($periodExists && $p->status === CoreBillingPayment::STATUS_FULFILLED) {
                 continue;
             }
-            if ((int) $p->finalized_at === 0 || $p->finalized_at === null) {
+            if ($p->finalized_at === null) {
                 continue;
             }
             $opened += (int) $this->upsertFinding(
@@ -318,10 +318,10 @@ final class FinancialReconciliationService
         // amount does not correspond to the order total it was paid from.
         $periods = SubscriptionPeriod::query()
             ->whereNotNull('paid_by_payment_id')
-            ->with(['payment', 'payment.order'])
+            ->with(['paidByPayment', 'paidByPayment.order'])
             ->get();
         foreach ($periods as $period) {
-            $pay = $period->payment;
+            $pay = $period->paidByPayment;
             if ($pay === null) {
                 $opened += (int) $this->upsertFinding(
                     'subscription_period_orphaned_payment_reference',

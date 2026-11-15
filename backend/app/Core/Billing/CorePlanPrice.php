@@ -36,6 +36,8 @@ class CorePlanPrice extends Model
 
     protected $table = 'core_plan_prices';
 
+    public $timestamps = false;
+
     protected $fillable = [
         'plan_version_id',
         'period',

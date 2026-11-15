@@ -225,8 +225,22 @@ class BillingDocumentsAndReconciliationTest extends TestCase
         $q['sandbox'] = 'settle';
         $svc->verifyAndFinalize($this->actor, $init['payment'], $q);
 
-        // Delete the issued invoice to fake a missing document condition.
-        CoreBillingDocument::query()->where('order_id', $order->id)->delete();
+        // Delete the issued invoice (and its attached receipt + event log
+        // first) to fake a missing-document condition. We delete by primary
+        // key to respect restrictOnDelete cross-row FKs.
+        $invoiceId = (int) CoreBillingDocument::query()->where('order_id', $order->id)
+            ->where('doc_type', BillingDocumentType::INVOICE->value)->value('id');
+        $receiptId = (int) CoreBillingDocument::query()->where('payment_id', $init['payment']->id)
+            ->where('doc_type', BillingDocumentType::RECEIPT->value)->value('id');
+        \App\Core\Billing\CoreBillingDocumentEvent::query()
+            ->whereIn('document_id', array_filter([$invoiceId, $receiptId]))
+            ->delete();
+        if ($receiptId) {
+            CoreBillingDocument::query()->whereKey($receiptId)->delete();
+        }
+        if ($invoiceId) {
+            CoreBillingDocument::query()->whereKey($invoiceId)->delete();
+        }
 
         $recon = app(FinancialReconciliationService::class);
         $recon->sweep();
@@ -425,7 +439,7 @@ class BillingDocumentsAndReconciliationTest extends TestCase
         ]);
         CorePlanPrice::query()->create([
             'plan_version_id' => $v->id, 'period' => 'monthly',
-            'price_toman' => 0, 'currency' => 'TOMAN', 'is_active' => true,
+            'amount_toman' => 0, 'currency' => 'TOMAN', 'is_active' => true,
         ]);
     }
 }
