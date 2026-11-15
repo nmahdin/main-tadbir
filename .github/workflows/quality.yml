@@ -104,7 +104,28 @@ jobs:
           # in the Actions log as well as captured to phpunit.log.
           set -o pipefail
           rm -f phpunit.log
-          script -e -q -c "php vendor/bin/phpunit --colors=never" /dev/null 2>&1 | tee phpunit.log
+          script -e -q -c "php vendor/bin/phpunit --colors=never --log-junit ./phpunit-junit.xml" /dev/null 2>&1 | tee phpunit.log
+          RC=${PIPESTATUS[0]}
+          echo "phpunit-wrapper-rc=$RC"
+          exit $RC
+      - name: Summarize phpunit
+        if: failure()
+        working-directory: backend
+        run: |
+          echo "::group::PHPUnit tail (300 lines)"
+          tail -n 300 phpunit.log 2>/dev/null || echo "(no phpunit.log)"
+          echo "::endgroup::"
+          echo "::group::JUnit failure nodes"
+          if [ -f phpunit-junit.xml ]; then
+            grep -B2 -A8 '<failure\|<error' phpunit-junit.xml | head -200
+          fi
+          echo "::endgroup::"
+      - name: Upload phpunit log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phpunit-log
+          path: backend/phpunit*
 
   backend-mysql:
     name: Backend migration gate on MySQL
