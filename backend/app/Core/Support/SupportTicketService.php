@@ -27,7 +27,8 @@ final class SupportTicketService
     public function __construct(
         private readonly AuditWriter $audit,
         private readonly FilesystemFactory $filesystem,
-    ) {}
+    ) {
+    }
 
     // ---- Creation ---------------------------------------------------
 
