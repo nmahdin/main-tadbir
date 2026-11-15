@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\V1\Platform\PlatformAssignmentController;
 use App\Http\Controllers\Api\V1\Platform\PlatformAuditController;
 use App\Http\Controllers\Api\V1\Platform\PlatformBillingFinanceController;
 use App\Http\Controllers\Api\V1\Platform\PlatformBillingPriceController;
+use App\Http\Controllers\Api\V1\Platform\PlatformMessageController;
+use App\Http\Controllers\Api\V1\Platform\PlatformSupportController;
 use App\Http\Controllers\Api\V1\Platform\PlatformOrganizationController;
 use App\Http\Controllers\Api\V1\Platform\PlatformPromotionController;
 use App\Http\Controllers\Api\V1\Platform\PlatformRoleController;
@@ -67,4 +69,14 @@ Route::prefix('platform')->name('api.v1.platform.')->group(function (): void {
     Route::get('billing/findings/{finding}', [PlatformBillingFinanceController::class, 'showFinding'])->name('billing.findings.show')->whereNumber('finding');
     Route::post('billing/findings/{finding}/resolve', [PlatformBillingFinanceController::class, 'resolve'])->name('billing.findings.resolve')->whereNumber('finding');
     Route::post('billing/reconcile', [PlatformBillingFinanceController::class, 'sweep'])->name('billing.reconcile.run');
+    // Stage C6-CORE — official messages (platform.messages.manage).
+    Route::get('messages', [PlatformMessageController::class, 'index'])->name('messages.index');
+    Route::post('messages', [PlatformMessageController::class, 'store'])->name('messages.store');
+    Route::post('messages/{systemMessage}/publish', [PlatformMessageController::class, 'publish'])->name('messages.publish');
+    Route::post('messages/{systemMessage}/retire', [PlatformMessageController::class, 'retire'])->name('messages.retire');
+    Route::get('messages/{systemMessage}/deliveries', [PlatformMessageController::class, 'deliveries'])->name('messages.deliveries');
+    // Stage C6-CORE — platform support queue (platform.support.agent / manage).
+    Route::get('support/queue', [PlatformSupportController::class, 'queue'])->name('support.queue');
+    Route::post('support/tickets/{supportTicket}/status', [PlatformSupportController::class, 'transition'])->name('support.tickets.status');
+    Route::post('support/tickets/{supportTicket}/assign', [PlatformSupportController::class, 'assign'])->name('support.tickets.assign');
 });

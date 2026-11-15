@@ -79,6 +79,11 @@ Schedule::command('billing:sweep-subscriptions')
     ->hourly()
     ->withoutOverlapping(2);
 
+// C6-CORE: mark past-due action items hourly. Idempotent.
+Schedule::command('core:inbox:sweep')
+    ->hourly()
+    ->withoutOverlapping(2);
+
 // Overdue reminders are idempotent, so they may run as often or as rarely as the
 // host allows. Nothing below assumes a permanent cron: the command is safe to
 // call from the Bale tick above, from an external scheduler, or by hand.

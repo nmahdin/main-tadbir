@@ -8,6 +8,9 @@ use App\Http\Controllers\Api\V1\BillingPaymentController;
 use App\Http\Controllers\Api\V1\BillingQuoteController;
 use App\Http\Controllers\Api\V1\BillingSubscriptionController;
 use App\Http\Controllers\Api\V1\Core\AccountLifecycleController;
+use App\Http\Controllers\Api\V1\Core\InboxController;
+use App\Http\Controllers\Api\V1\Core\SupportTicketController;
+use App\Http\Controllers\Api\V1\Core\SystemMessageController;
 use App\Http\Middleware\EnsureDepartmentStructure;
 use App\Models\DomainRecord;
 use App\Models\WorkspaceRecord;
@@ -385,6 +388,23 @@ Route::prefix('v1')->group(function (): void {
         Route::post('users/{user}/account-lifecycle', AccountLifecycleController::class)->name('api.v1.users.account-lifecycle');
         // Platform domain routes (ARCH-01 registrar).
         require app_path('Core/Platform/Routes/api.php');
+
+        // Stage C6-CORE — shared consumer services (CORE-REQ / SYS-MSG / SUP).
+        Route::get('me/inbox', [InboxController::class, 'index'])->name('api.v1.me.inbox.index');
+        Route::get('me/inbox/{item}', [InboxController::class, 'show'])->name('api.v1.me.inbox.show');
+        Route::post('me/inbox/{item}/dismiss', [InboxController::class, 'dismiss'])->name('api.v1.me.inbox.dismiss');
+
+        Route::get('me/messages', [SystemMessageController::class, 'index'])->name('api.v1.me.messages.index');
+        Route::get('me/messages/pending-ack', [SystemMessageController::class, 'pendingAcks'])->name('api.v1.me.messages.pending-ack');
+        Route::post('me/messages/{delivery}/read', [SystemMessageController::class, 'markRead'])->name('api.v1.me.messages.read');
+        Route::post('me/messages/{delivery}/acknowledge', [SystemMessageController::class, 'acknowledge'])->name('api.v1.me.messages.acknowledge');
+
+        Route::get('support/tickets', [SupportTicketController::class, 'index'])->name('api.v1.support.tickets.index');
+        Route::post('support/tickets', [SupportTicketController::class, 'store'])->name('api.v1.support.tickets.store');
+        Route::get('support/tickets/{supportTicket}', [SupportTicketController::class, 'show'])->name('api.v1.support.tickets.show');
+        Route::post('support/tickets/{supportTicket}/replies', [SupportTicketController::class, 'reply'])->name('api.v1.support.tickets.reply');
+        Route::get('support/attachments/{token}', [SupportTicketController::class, 'download'])->name('api.v1.support.attachments.download')->where('token', '[A-Za-z0-9]+');
+
         // C5-M2-S2 read-only commercial catalog (any authenticated active
         // account; specific billing permissions are NOT required to read
         // catalog). Administration lives under /platform/billing above.

@@ -38,6 +38,7 @@ use Illuminate\Database\QueryException;
 final class PlatformRoleProvisioner
 {
     public const PRIMARY_ROLE_KEY = 'primary_administrator';
+    public const SUPPORT_AGENT_ROLE_KEY = 'support_agent';
 
     /** @var list<string> Previous approved set (Stage C2, frozen). */
     private const PRIMARY_PERMISSIONS_C2 = [
@@ -76,8 +77,8 @@ final class PlatformRoleProvisioner
         'platform.subscriptions.manage',
     ];
 
-    /** @var list<string> Approved set after the Stage C5-M2-S1 expansion. */
-    private const PRIMARY_PERMISSIONS = [
+    /** @var list<string> Approved set after the Stage C5-M2-S1 expansion (frozen). */
+    private const PRIMARY_PERMISSIONS_C5_M2_S1 = [
         'platform.admins.view',
         'platform.admins.manage',
         'platform.users.view',
@@ -91,10 +92,39 @@ final class PlatformRoleProvisioner
         'platform.billing.manage',
     ];
 
+    /** @var list<string> Approved set after the Stage C6-CORE expansion. */
+    private const PRIMARY_PERMISSIONS = [
+        'platform.admins.view',
+        'platform.admins.manage',
+        'platform.users.view',
+        'platform.users.manage_status',
+        'platform.organizations.view',
+        'platform.organizations.manage_status',
+        'platform.organizations.end',
+        'platform.organizations.restore',
+        'platform.audit.view',
+        'platform.subscriptions.manage',
+        'platform.billing.manage',
+        'platform.messages.manage',
+        'platform.support.manage',
+        'platform.support.agent',
+    ];
+
+    /** @var list<string> Permissions for the standalone support_agent role. */
+    private const SUPPORT_AGENT_PERMISSIONS = [
+        'platform.support.agent',
+    ];
+
     /** @return list<string> */
     public static function primaryPermissions(): array
     {
         return self::PRIMARY_PERMISSIONS;
+    }
+
+    /** @return list<string> */
+    public static function supportAgentPermissions(): array
+    {
+        return self::SUPPORT_AGENT_PERMISSIONS;
     }
 
     public function ensurePrimaryAdministrator(): PlatformRole
@@ -151,7 +181,7 @@ final class PlatformRoleProvisioner
         // holding exactly a frozen previous approved set is
         // upgraded to the current approved set. Catalog
         // synchronization alone never reaches this point.
-        foreach ([self::PRIMARY_PERMISSIONS_C2, self::PRIMARY_PERMISSIONS_C3_2, self::PRIMARY_PERMISSIONS_C5_2] as $previousSet) {
+        foreach ([self::PRIMARY_PERMISSIONS_C2, self::PRIMARY_PERMISSIONS_C3_2, self::PRIMARY_PERMISSIONS_C5_2, self::PRIMARY_PERMISSIONS_C5_M2_S1] as $previousSet) {
             $previousIds = ScopedPermission::whereIn('key', $previousSet)
                 ->pluck('id')
                 ->map(fn ($id): int => (int) $id)
@@ -169,5 +199,60 @@ final class PlatformRoleProvisioner
         throw new PlatformProvisioningException(
             'Existing [primary_administrator] permission set differs from the approved set; refusing to change privileges silently.',
         );
+    }
+
+    /**
+     * Idempotently provision the support_agent platform role.
+     * As with the primary administrator, this never auto-assigns.
+     */
+    public function ensureSupportAgentRole(): PlatformRole
+    {
+        PermissionCatalog::assertKnownKeysForScope(self::SUPPORT_AGENT_PERMISSIONS, PermissionCatalog::SCOPE_PLATFORM);
+
+        try {
+            $role = PlatformRole::firstOrCreate(
+                ['key' => self::SUPPORT_AGENT_ROLE_KEY],
+                ['name' => 'Support Agent', 'is_protected' => true],
+            );
+        } catch (QueryException) {
+            $role = PlatformRole::where('key', self::SUPPORT_AGENT_ROLE_KEY)->firstOrFail();
+        }
+
+        if (! $role->is_protected) {
+            throw new PlatformProvisioningException(
+                'Existing platform role [support_agent] is not protected; refusing to alter it silently.',
+            );
+        }
+
+        $expectedIds = ScopedPermission::whereIn('key', self::SUPPORT_AGENT_PERMISSIONS)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->sort()
+            ->values()
+            ->all();
+
+        if (count($expectedIds) !== count(self::SUPPORT_AGENT_PERMISSIONS)) {
+            throw new PlatformProvisioningException(
+                'Platform permission catalog is not synchronized for support_agent.',
+            );
+        }
+
+        if ($role->wasRecentlyCreated) {
+            $role->permissions()->attach($expectedIds);
+            return $role->refresh();
+        }
+
+        $currentIds = $role->permissions()
+            ->pluck('core_permissions.id')
+            ->map(fn ($id): int => (int) $id)
+            ->sort()
+            ->values()
+            ->all();
+
+        if ($currentIds !== $expectedIds) {
+            $role->permissions()->sync($expectedIds);
+        }
+
+        return $role->refresh();
     }
 }

@@ -1,0 +1,43 @@
+<?php
+
+namespace App\Core\Support;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+/**
+ * @property int $id
+ * @property int $ticket_id
+ * @property int $uploader_user_id
+ * @property string $storage_disk
+ * @property string $storage_path
+ * @property string $original_name
+ * @property string $mime_type
+ * @property int $size_bytes
+ * @property string $access_token
+ * @property \Illuminate\Support\Carbon|null $accessed_at
+ * @property \Illuminate\Support\Carbon $created_at
+ * @property \Illuminate\Support\Carbon $updated_at
+ */
+class CoreSupportAttachment extends Model
+{
+    protected $table = 'core_support_attachments';
+
+    protected $fillable = [
+        'ticket_id', 'uploader_user_id', 'storage_disk', 'storage_path',
+        'original_name', 'mime_type', 'size_bytes', 'access_token', 'accessed_at',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'ticket_id' => 'integer',
+            'uploader_user_id' => 'integer',
+            'size_bytes' => 'integer',
+            'accessed_at' => 'datetime',
+        ];
+    }
+
+    public function ticket(): BelongsTo { return $this->belongsTo(CoreSupportTicket::class, 'ticket_id'); }
+    public function uploader(): BelongsTo { return $this->belongsTo(\App\Models\User::class, 'uploader_user_id'); }
+}

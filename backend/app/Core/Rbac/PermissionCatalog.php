@@ -84,6 +84,9 @@ final class PermissionCatalog
         'platform.subscriptions.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Provision and renew subscriptions'],
         'platform.billing.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Manage commercial catalog, prices, tax rules, and promotions'],
         'platform.audit.view' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'View platform audit log'],
+        'platform.messages.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Publish and retire official system messages'],
+        'platform.support.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Access and manage all platform support tickets'],
+        'platform.support.agent' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Reply to and assign platform support tickets'],
 
         // Projects module (Stage 04B pilot; keys owned by the Projects
         // module, registered here per the catalog-ownership contract —
