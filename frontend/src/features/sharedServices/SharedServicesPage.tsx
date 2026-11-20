@@ -10,7 +10,7 @@ export function SharedServicesPage(){
  const path=useLocation().pathname;
  const platform=Boolean(current?.kind==='platform'&&payload?.platform.eligible);
  const messageAdmin=Boolean(platform&&payload?.platform.permissions.includes('platform.messages.manage'));
- const supportAgent=Boolean(platform&&(payload?.platform.permissions.includes('platform.support.agent')||payload?.platform.permissions.includes('platform.support.manage')));
+ const supportAgent=Boolean(platform&&(payload?.platform.permissions.includes('platform.support.agent')));
  const isAdminMessages=path.startsWith('/shared-services/messages/admin');
  const isSupportQueue=path.startsWith('/shared-services/support/queue');
  const eligible=!isLoading&&current!==null&&(!isAdminMessages||messageAdmin)&&(!isSupportQueue||supportAgent);

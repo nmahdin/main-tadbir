@@ -92,7 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const commercialActive = location.pathname === '/billing' || location.pathname.startsWith('/billing/');
   const sharedActive = (path: string) => location.pathname===path || location.pathname.startsWith(path+'/');
   const platformMessageAdmin = currentEnvironment?.kind==='platform' && Boolean(environmentPayload?.platform.eligible && environmentPayload.platform.permissions.includes('platform.messages.manage'));
-  const platformSupportAgent = currentEnvironment?.kind==='platform' && Boolean(environmentPayload?.platform.eligible && (environmentPayload.platform.permissions.includes('platform.support.agent')||environmentPayload.platform.permissions.includes('platform.support.manage')));
+  const platformSupportAgent = currentEnvironment?.kind==='platform' && Boolean(environmentPayload?.platform.eligible && environmentPayload.platform.permissions.includes('platform.support.agent'));
   const sharedNavButton = (path:string,label:string,icon:React.ReactNode) => (
     <button type="button" key={path} title={label} aria-label={label} aria-current={sharedActive(path)?'page':undefined}
       className={envItemClassName(sharedActive(path))} onClick={()=>{navigate(path);onClose();}}>

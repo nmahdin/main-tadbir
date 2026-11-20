@@ -14,7 +14,7 @@ export function SupportDesk(){
  const platform=path.startsWith('/shared-services/support/queue');
  const isDetail=path.startsWith('/shared-services/support/tickets/')&&Number.isSafeInteger(id)&&id>0;
  const agent=Boolean(current?.kind==='platform'&&payload?.platform.eligible&&(
-  payload.platform.permissions.includes('platform.support.agent')||payload.platform.permissions.includes('platform.support.manage')));
+  payload.platform.permissions.includes('platform.support.agent')));
  const manager=Boolean(current?.kind==='platform'&&payload?.platform.eligible&&payload.platform.permissions.includes('platform.support.manage'));
  const [priority,setPriority]=useState(''),[subject,setSubject]=useState(''),[category,setCategory]=useState('technical'),[body,setBody]=useState('');
  const [reply,setReply]=useState(''),[note,setNote]=useState(false),[files,setFiles]=useState<File[]>([]),[newFiles,setNewFiles]=useState<File[]>([]),[nextStatus,setNextStatus]=useState('open'),[assignee,setAssignee]=useState('');
@@ -40,7 +40,7 @@ export function SupportDesk(){
   if(detail.isError)return <SharedPanel title="جزئیات تیکت"><SharedError error={detail.error} onRetry={()=>void detail.refetch()}/></SharedPanel>;
   const ticket=detail.data.data;
   const isOwner=String(ticket.owner?.id??ticket.owner_user_id)===String(currentUser.id);
-  const staff=agent&&!isOwner;
+  const staff=(agent||manager)&&!isOwner;
   return <SharedPanel title={'تیکت '+ticket.reference} description={ticket.subject}>
    <div className="flex gap-3"><Badge tone="neutral">{ticket.status}</Badge><Badge tone="neutral">{ticket.priority}</Badge></div>
    <div className="space-y-3" aria-label="گفتگوی پشتیبانی">{ticket.messages.filter((m:SupportReply)=>staff||!m.internal_note).map(m=><article key={m.id} className={'rounded-2xl border p-4 '+(m.internal_note?'border-amber-200 bg-amber-50':'border-slate-200')}>
@@ -58,7 +58,7 @@ export function SupportDesk(){
     <Button disabled={!reply.trim()||send.isPending||files.length>6||files.some(f=>f.size>10*1024*1024)} loading={send.isPending} onClick={()=>send.mutate()}>ارسال پاسخ</Button>
     {send.isError&&<SharedError error={send.error}/>}</div>
    {staff&&<div className="rounded-2xl border p-4 space-y-3"><h3 className="font-bold">اقدامات پشتیبانی</h3>
-    {!ticket.assignee&&<Button disabled={claim.isPending} onClick={()=>{if(window.confirm('این تیکت به خودتان اختصاص داده شود؟'))claim.mutate();}}>دریافت تیکت توسط خودم</Button>}
+    {agent&&!ticket.assignee&&<Button disabled={claim.isPending} onClick={()=>{if(window.confirm('این تیکت به خودتان اختصاص داده شود؟'))claim.mutate();}}>دریافت تیکت توسط خودم</Button>}
     {manager&&<><label className="block text-sm">شناسه کاربر پشتیبان<input className={input} type="number" min={1} value={assignee} onChange={e=>setAssignee(e.target.value)}/></label>
       <Button variant="secondary" disabled={assign.isPending||!!assignee&&!Number.isSafeInteger(Number(assignee))} onClick={()=>{if(window.confirm('مسئول این تیکت تغییر کند؟'))assign.mutate();}}>تغییر مسئول / حذف تخصیص</Button>
       <label className="block text-sm">وضعیت<select className={input} value={nextStatus} onChange={e=>setNextStatus(e.target.value)}>
