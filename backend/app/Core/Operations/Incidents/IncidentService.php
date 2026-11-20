@@ -8,6 +8,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
  * Lifecycle service for operational incidents and alert deduplication
@@ -232,6 +233,6 @@ final class IncidentService
                 return $candidate;
             }
         }
-        throw new \RuntimeException('Could not allocate a unique incident reference.');
+        throw new RuntimeException('Could not allocate a unique incident reference.');
     }
 }

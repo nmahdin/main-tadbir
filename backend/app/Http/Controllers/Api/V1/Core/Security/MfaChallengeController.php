@@ -45,14 +45,14 @@ final class MfaChallengeController extends Controller
     public function verify(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'challenge_token' => ['required', 'string'],
-            'code' => ['required_without:recovery_code', 'string', 'regex:/^\d{6}$/'],
-            'recovery_code' => ['required_without:code', 'string'],
+            'challenge_token' => ['required_with:code', 'nullable', 'string'],
+            'code' => ['required_without:recovery_code', 'nullable', 'string', 'regex:/^\d{6}$/'],
+            'recovery_code' => ['required_without:code', 'nullable', 'string'],
             'scope' => ['sometimes', 'string', 'max:60'],
         ]);
         $user = $request->user();
         $ok = false;
-        if (! empty($validated['code'])) {
+        if (! empty($validated['code']) && ! empty($validated['challenge_token'])) {
             $ok = $this->mfa->verifyTotpChallenge($user, $validated['challenge_token'], $validated['code'], $request);
         } elseif (! empty($validated['recovery_code'])) {
             $ok = $this->mfa->useRecoveryCode($user, $validated['recovery_code'], $request);

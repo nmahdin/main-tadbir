@@ -27,7 +27,7 @@ final class TotpEngine
 
     public static function provisioningUri(string $secret, string $accountName, string $issuer = 'Tadbir'): string
     {
-        $label = rawurlencode($issuer).':'.rawurlencode($accountName);
+        $label = rawurlencode($issuer) . ':' . rawurlencode($accountName);
         $params = http_build_query([
             'secret' => $secret,
             'issuer' => $issuer,
@@ -36,13 +36,13 @@ final class TotpEngine
             'period' => self::PERIOD_SECONDS,
         ]);
 
-        return 'otpauth://totp/'.$label.'?'.$params;
+        return 'otpauth://totp/' . $label . '?' . $params;
     }
 
     public static function verify(string $secret, string $code, ?int $at = null): bool
     {
         $code = preg_replace('/\s+/', '', $code) ?? '';
-        if (! preg_match('/^\d{'.self::DIGITS.'}$/', $code)) {
+        if (! preg_match('/^\d{' . self::DIGITS . '}$/', $code)) {
             return false;
         }
         $key = self::base32Decode($secret);

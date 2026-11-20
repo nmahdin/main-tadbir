@@ -44,7 +44,7 @@ return new class extends Migration
             $table->string('purpose', 60); // login, step_up, recovery, factor_change
             $table->string('challenge_token_hash', 100)->nullable();
             $table->unsignedInteger('attempts')->default(0);
-            $table->timestamp('expires_at');
+            $table->timestamp('expires_at')->nullable();
             $table->timestamp('verified_at')->nullable();
             $table->string('request_ip', 45)->nullable();
             $table->string('request_correlation', 64)->nullable();
@@ -61,8 +61,8 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->string('auth_token_id', 128); // references sanctum personal_access_tokens.id? we keep it loose
             $table->string('scope', 60); // platform.admin, billing.manage, backup.restore, etc.
-            $table->timestamp('verified_at');
-            $table->timestamp('expires_at');
+            $table->timestamp('verified_at')->nullable();
+            $table->timestamp('expires_at')->nullable();
             $table->timestamp('revoked_at')->nullable();
             $table->string('request_ip', 45)->nullable();
             $table->timestamps();
@@ -85,7 +85,7 @@ return new class extends Migration
             $table->string('request_ip', 45)->nullable();
             $table->string('correlation_id', 64)->nullable();
             $table->json('metadata')->nullable(); // never contain secrets (service redacts)
-            $table->timestamp('occurred_at')->useCurrent();
+            $table->timestamp('occurred_at')->nullable()->useCurrent();
 
             $table->index(['event_type', 'occurred_at'], 'secev_type_time_idx');
             $table->index(['actor_user_id', 'occurred_at'], 'secev_actor_time_idx');
@@ -106,7 +106,7 @@ return new class extends Migration
             $table->foreignId('opened_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('assigned_to_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('resolved_by_user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->timestamp('opened_at')->useCurrent();
+            $table->timestamp('opened_at')->nullable()->useCurrent();
             $table->timestamp('acknowledged_at')->nullable();
             $table->timestamp('mitigated_at')->nullable();
             $table->timestamp('resolved_at')->nullable();
@@ -123,7 +123,7 @@ return new class extends Migration
             $table->foreignId('actor_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('event_type', 60);
             $table->json('payload')->nullable();
-            $table->timestamp('occurred_at')->useCurrent();
+            $table->timestamp('occurred_at')->nullable()->useCurrent();
 
             $table->index(['incident_id', 'occurred_at'], 'ops_inc_act_time_idx');
         });
@@ -139,8 +139,8 @@ return new class extends Migration
             $table->json('payload')->nullable();
             $table->foreignId('incident_id')->nullable()->constrained('ops_incidents')->nullOnDelete();
             $table->unsignedInteger('occurrence_count')->default(1);
-            $table->timestamp('first_observed_at')->useCurrent();
-            $table->timestamp('last_observed_at')->useCurrent();
+            $table->timestamp('first_observed_at')->nullable()->useCurrent();
+            $table->timestamp('last_observed_at')->nullable()->useCurrent();
             $table->timestamp('acknowledged_at')->nullable();
             $table->timestamp('resolved_at')->nullable();
             $table->foreignId('acknowledged_by_user_id')->nullable()->constrained('users')->nullOnDelete();
@@ -171,8 +171,8 @@ return new class extends Migration
             $table->string('scope', 60); // platform, billing, messaging, full
             $table->text('reason')->nullable();
             $table->string('status', 20); // scheduled, active, completed, cancelled
-            $table->timestamp('scheduled_start');
-            $table->timestamp('scheduled_end');
+            $table->timestamp('scheduled_start')->nullable();
+            $table->timestamp('scheduled_end')->nullable();
             $table->timestamp('started_at')->nullable();
             $table->timestamp('completed_at')->nullable();
             $table->timestamp('cancelled_at')->nullable();
