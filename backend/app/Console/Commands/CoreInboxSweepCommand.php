@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use App\Core\Audit\AuditWriter;
 use App\Core\Inbox\ActionInboxService;
-use App\Models\User;
 use Illuminate\Console\Command;
 
 /**

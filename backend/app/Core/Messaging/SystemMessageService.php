@@ -28,7 +28,7 @@ final class SystemMessageService
     {
         $audience = SystemMessageAudience::from($payload['audience']);
         if ($audience === SystemMessageAudience::Organization && ! $organization) {
-            throw new \InvalidArgumentException('Organization audience requires an organization.');
+            throw new InvalidArgumentException('Organization audience requires an organization.');
         }
 
         return DB::transaction(function () use ($actor, $slug, $payload, $audience, $organization): CoreSystemMessage {
@@ -69,7 +69,7 @@ final class SystemMessageService
     public function publish(User $actor, CoreSystemMessage $msg, ?CarbonImmutable $at = null): CoreSystemMessage
     {
         if ($msg->status !== 'draft') {
-            throw new \DomainException('Only draft messages can be published.');
+            throw new DomainException('Only draft messages can be published.');
         }
         $at ??= CarbonImmutable::now('UTC');
 
@@ -93,7 +93,7 @@ final class SystemMessageService
     public function retire(User $actor, CoreSystemMessage $msg, ?CarbonImmutable $at = null): CoreSystemMessage
     {
         if (! $msg->isPublished()) {
-            throw new \DomainException('Only published messages can be retired.');
+            throw new DomainException('Only published messages can be retired.');
         }
         $at ??= CarbonImmutable::now('UTC');
 

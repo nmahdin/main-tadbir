@@ -66,7 +66,7 @@ final class PlatformSupportController extends Controller
             ]);
             try {
                 $ticket = $this->service->transitionStatus($supportTicket, $actor, SupportTicketStatus::from($validated['status']));
-            } catch (\DomainException $e) {
+            } catch (DomainException $e) {
                 return response()->json(['message' => $e->getMessage(), 'code' => 'platform_operation_rejected'], 422);
             }
             return response()->json(['data' => ['id' => $ticket->id, 'status' => $ticket->status]]);
@@ -83,7 +83,7 @@ final class PlatformSupportController extends Controller
             $assignee = isset($validated['user_id']) ? User::query()->findOrFail((int) $validated['user_id']) : null;
             try {
                 $ticket = $this->service->assign($supportTicket, $actor, $assignee);
-            } catch (\DomainException|\InvalidArgumentException $e) {
+            } catch (DomainException|InvalidArgumentException $e) {
                 return response()->json(['message' => $e->getMessage(), 'code' => 'platform_operation_rejected'], 422);
             }
             return response()->json(['data' => ['id' => $ticket->id, 'assigned_user_id' => $ticket->assigned_user_id]]);

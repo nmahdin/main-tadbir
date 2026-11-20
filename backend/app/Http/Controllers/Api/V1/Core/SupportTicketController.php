@@ -59,7 +59,7 @@ final class SupportTicketController extends Controller
         $user = $request->user();
         try {
             $this->service->assertCanView($supportTicket, $user);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             abort(403, $e->getMessage());
         }
 
@@ -134,9 +134,9 @@ final class SupportTicketController extends Controller
         $internal = (bool) ($validated['internal_note'] ?? false);
         try {
             $this->service->addReply($supportTicket, $user, (string) $validated['body'], $internal, $files);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             abort(403, $e->getMessage());
-        } catch (\InvalidArgumentException $e) {
+        } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'support_validation'], 422);
         }
         return response()->json(['data' => $this->serializeSummary($supportTicket->refresh())], 201);
@@ -150,7 +150,7 @@ final class SupportTicketController extends Controller
         }
         try {
             return $this->service->streamAttachment($att, $request->user());
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             abort(403, $e->getMessage());
         }
     }

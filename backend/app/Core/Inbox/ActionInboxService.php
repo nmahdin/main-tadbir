@@ -33,7 +33,7 @@ final class ActionInboxService
         ?Organization $organization = null,
     ): CoreActionItem {
         if (($recipientUser === null) === ($organization === null)) {
-            throw new \InvalidArgumentException('Action item must target exactly one of user or organization.');
+            throw new InvalidArgumentException('Action item must target exactly one of user or organization.');
         }
 
         $kind = ActionItemStatus::from($payload['action_kind'] ?? ActionItemStatus::OPEN->value);

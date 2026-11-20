@@ -43,7 +43,7 @@ final class SupportTicketService
         $priority = SupportTicketPriority::from($payload['priority'] ?? SupportTicketPriority::NORMAL->value);
 
         if (count($attachments) > self::MAX_ATTACHMENTS_PER_MESSAGE) {
-            throw new \InvalidArgumentException('Too many attachments.');
+            throw new InvalidArgumentException('Too many attachments.');
         }
 
         return DB::transaction(function () use ($requester, $payload, $attachments, $category, $priority): CoreSupportTicket {
@@ -84,7 +84,7 @@ final class SupportTicketService
     {
         $this->assertCanReply($ticket, $actor, $internalNote);
         if (count($attachments) > self::MAX_ATTACHMENTS_PER_MESSAGE) {
-            throw new \InvalidArgumentException('Too many attachments.');
+            throw new InvalidArgumentException('Too many attachments.');
         }
 
         return DB::transaction(function () use ($ticket, $actor, $body, $internalNote, $attachments): CoreSupportMessage {
@@ -116,7 +116,7 @@ final class SupportTicketService
     {
         $this->assertSupportAgent($actor);
         if (! $ticket->canTransitionTo($target)) {
-            throw new \DomainException("Invalid transition from {$ticket->status} to {$target->value}.");
+            throw new DomainException("Invalid transition from {$ticket->status} to {$target->value}.");
         }
 
         return DB::transaction(function () use ($ticket, $actor, $target): CoreSupportTicket {
@@ -142,7 +142,7 @@ final class SupportTicketService
     {
         $this->assertSupportAgent($actor);
         if ($agent !== null && ! $this->isSupportAgent($agent)) {
-            throw new \InvalidArgumentException('Assignee must hold platform.support.agent.');
+            throw new InvalidArgumentException('Assignee must hold platform.support.agent.');
         }
 
         return DB::transaction(function () use ($ticket, $actor, $agent): CoreSupportTicket {
@@ -183,7 +183,7 @@ final class SupportTicketService
     public function assertSupportAgent(User $user): void
     {
         if (! $this->isSupportAgent($user)) {
-            throw new \DomainException('Support agent permission required.');
+            throw new DomainException('Support agent permission required.');
         }
     }
 
@@ -235,10 +235,10 @@ final class SupportTicketService
 
         foreach ($attachments as $file) {
             if (! $file instanceof UploadedFile || ! $file->isValid()) {
-                throw new \InvalidArgumentException('Invalid attachment.');
+                throw new InvalidArgumentException('Invalid attachment.');
             }
             if ($file->getSize() > self::MAX_ATTACHMENT_BYTES) {
-                throw new \InvalidArgumentException('Attachment exceeds 10MB limit.');
+                throw new InvalidArgumentException('Attachment exceeds 10MB limit.');
             }
             $path = $file->storeAs(
                 'support/'.$ticket->reference,
@@ -317,6 +317,6 @@ final class SupportTicketService
                 return $candidate;
             }
         }
-        throw new \RuntimeException('Could not allocate a unique support reference.');
+        throw new RuntimeException('Could not allocate a unique support reference.');
     }
 }
