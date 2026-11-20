@@ -24,8 +24,8 @@ return new class extends Migration
             $table->timestamp('resolved_at')->nullable();
             $table->string('resolved_by_module', 60)->nullable();
             $table->foreignId('resolved_by_user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('recipient_user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('organization_id')->nullable()->constrained('organizations')->nullOnDelete();
+            $table->foreignId('recipient_user_id')->nullable()->constrained('users')->restrictOnDelete();
+            $table->foreignId('organization_id')->nullable()->constrained('organizations')->restrictOnDelete();
             $table->foreignId('assigned_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->json('allowed_actions')->nullable();
             $table->json('origin_context')->nullable();
@@ -147,6 +147,10 @@ return new class extends Migration
             $table->index(['ticket_id', 'created_at'], 'support_activity_ticket_idx');
         });
 
+        // Recipient foreign keys above use RESTRICT, not SET NULL: MySQL/MariaDB
+        // forbid CHECK expressions referencing columns used in ON DELETE SET NULL
+        // referential actions. Restriction preserves the exactly-one-recipient
+        // invariant under both inserts and parent deletion.
         // CHECK constraints (MySQL 8 / MariaDB enforce these; SQLite skips).
         // Pattern matches existing Stage C2-C3 migrations: direct ALTER TABLE.
         if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
