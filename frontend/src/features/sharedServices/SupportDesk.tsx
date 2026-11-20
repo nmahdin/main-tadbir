@@ -17,13 +17,13 @@ export function SupportDesk(){
   payload.platform.permissions.includes('platform.support.agent')||payload.platform.permissions.includes('platform.support.manage')));
  const manager=Boolean(current?.kind==='platform'&&payload?.platform.eligible&&payload.platform.permissions.includes('platform.support.manage'));
  const [priority,setPriority]=useState(''),[subject,setSubject]=useState(''),[category,setCategory]=useState('technical'),[body,setBody]=useState('');
- const [reply,setReply]=useState(''),[note,setNote]=useState(false),[files,setFiles]=useState<File[]>([]),[nextStatus,setNextStatus]=useState('open'),[assignee,setAssignee]=useState('');
+ const [reply,setReply]=useState(''),[note,setNote]=useState(false),[files,setFiles]=useState<File[]>([]),[newFiles,setNewFiles]=useState<File[]>([]),[nextStatus,setNextStatus]=useState('open'),[assignee,setAssignee]=useState('');
  const qc=useQueryClient();const scope=current?.kind+':'+current?.id;
  const list=useQuery({queryKey:['c6','tickets',scope],queryFn:sharedServicesApi.tickets,enabled:!platform&&!isDetail,retry:false});
  const queue=useQuery({queryKey:['c6','support-queue',scope,priority],queryFn:()=>sharedServicesApi.queue(priority),enabled:platform&&agent&&!isDetail,retry:false});
  const detail=useQuery({queryKey:['c6','ticket',scope,id],queryFn:()=>sharedServicesApi.ticket(id),enabled:isDetail,retry:false});
  const refresh=()=>{void qc.invalidateQueries({queryKey:['c6','tickets']});void qc.invalidateQueries({queryKey:['c6','support-queue']});void qc.invalidateQueries({queryKey:['c6','ticket']});};
- const create=useMutation({mutationFn:()=>sharedServicesApi.createTicket({subject:subject.trim(),category,body:body.trim()}),onSuccess:r=>{refresh();navigate('/shared-services/support/tickets/'+r.data.id);}});
+ const create=useMutation({mutationFn:()=>newFiles.length?sharedServicesApi.createTicketWithAttachments(subject.trim(),category,body.trim(),newFiles):sharedServicesApi.createTicket({subject:subject.trim(),category,body:body.trim()}),onSuccess:r=>{refresh();navigate('/shared-services/support/tickets/'+r.data.id);}});
  const send=useMutation({mutationFn:()=>files.length?sharedServicesApi.replyWithAttachments(id,reply,files,note):sharedServicesApi.reply(id,reply,note),onSuccess:()=>{setReply('');setFiles([]);setNote(false);refresh();}});
  const claim=useMutation({mutationFn:()=>sharedServicesApi.claim(id,Number(currentUser.id)),onSuccess:refresh});
  const assign=useMutation({mutationFn:()=>sharedServicesApi.assign(id,assignee.trim()?Number(assignee):null),onSuccess:refresh});
@@ -82,7 +82,9 @@ export function SupportDesk(){
    <div className="mt-3 space-y-3"><label className="block text-sm">موضوع<input className={input} value={subject} onChange={e=>setSubject(e.target.value)} maxLength={200}/></label>
     <label className="block text-sm">دسته<select className={input} value={category} onChange={e=>setCategory(e.target.value)}>{categoryOptions.map(c=><option key={c}>{c}</option>)}</select></label>
     <label className="block text-sm">شرح<textarea className={input} rows={5} value={body} onChange={e=>setBody(e.target.value)} maxLength={20000}/></label>
-    <Button disabled={subject.trim().length<3||body.trim().length<2||create.isPending} loading={create.isPending} onClick={()=>create.mutate()}>ثبت درخواست</Button>
+    <label className="block text-sm">پیوست اولیه (تا ۶ فایل، حداکثر ۱۰ مگابایت برای هر فایل)
+      <input className={input} type="file" multiple onChange={e=>setNewFiles(Array.from(e.target.files??[]))}/></label>
+    <Button disabled={subject.trim().length<3||body.trim().length<2||newFiles.length>6||newFiles.some(f=>f.size>10*1024*1024)||create.isPending} loading={create.isPending} onClick={()=>create.mutate()}>ثبت درخواست</Button>
     {create.isError&&<SharedError error={create.error}/>}</div>
   </details>
   {list.isPending?<LoadingState/>:list.isError?<SharedError error={list.error} onRetry={()=>void list.refetch()}/>:list.data.data.length?<div className="space-y-3">{list.data.data.map(listing)}</div>:<SharedEmpty message="درخواست پشتیبانی ثبت نشده است."/>}

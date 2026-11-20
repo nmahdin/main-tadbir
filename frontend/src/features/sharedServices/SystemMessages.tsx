@@ -10,7 +10,7 @@ const field='block w-full rounded-xl border border-slate-200 p-2 text-sm';
 export function SystemMessages(){
  const {current,payload}=useEnvironment();const loc=useLocation();const platform=loc.pathname.startsWith('/shared-services/messages/admin');
  const admin=Boolean(current?.kind==='platform'&&payload?.platform.eligible&&payload.platform.permissions.includes('platform.messages.manage'));
- const [unread,setUnread]=useState(false),[status,setStatus]=useState(''),[slug,setSlug]=useState(''),[title,setTitle]=useState(''),[body,setBody]=useState(''),[ack,setAck]=useState(false),[version,setVersion]=useState(''),[bump,setBump]=useState(false);
+ const [unread,setUnread]=useState(false),[status,setStatus]=useState(''),[slug,setSlug]=useState(''),[title,setTitle]=useState(''),[body,setBody]=useState(''),[ack,setAck]=useState(false),[version,setVersion]=useState(''),[bump,setBump]=useState(false),[audience,setAudience]=useState<'platform'|'organization'>('platform'),[organizationId,setOrganizationId]=useState('');
  const qc=useQueryClient(),scope=(current?.kind??'none')+':'+current?.id;
  const messages=useQuery({queryKey:['c6','messages',scope,unread],queryFn:()=>sharedServicesApi.messages(unread),enabled:!platform,retry:false});
  const pending=useQuery({queryKey:['c6','pending-acks',scope],queryFn:sharedServicesApi.pendingAcks,enabled:!platform,retry:false});
@@ -18,7 +18,7 @@ export function SystemMessages(){
  const refresh=()=>{void qc.invalidateQueries({queryKey:['c6','messages']});void qc.invalidateQueries({queryKey:['c6','pending-acks']});void qc.invalidateQueries({queryKey:['c6','admin-messages']});};
  const mark=useMutation({mutationFn:(id:number)=>sharedServicesApi.markRead(id),onSuccess:refresh});
  const acknowledge=useMutation({mutationFn:(id:number)=>sharedServicesApi.acknowledge(id),onSuccess:refresh});
- const create=useMutation({mutationFn:()=>sharedServicesApi.createMessage({slug:slug.trim(),title:title.trim(),body_markdown:body.trim(),audience:'platform',ack_required:ack,ack_policy_version:ack?version.trim():undefined,publish:false,bump_version:bump}),onSuccess:()=>{setTitle('');setBody('');refresh();}});
+ const create=useMutation({mutationFn:()=>sharedServicesApi.createMessage({slug:slug.trim(),title:title.trim(),body_markdown:body.trim(),audience,organization_id:audience==='organization'?Number(organizationId):undefined,ack_required:ack,ack_policy_version:ack?version.trim():undefined,publish:false,bump_version:bump}),onSuccess:()=>{setTitle('');setBody('');refresh();}});
  const change=useMutation({mutationFn:({id,action}:{id:number;action:'publish'|'retire'})=>action==='publish'?sharedServicesApi.publishMessage(id):sharedServicesApi.retireMessage(id),onSuccess:refresh});
  if(platform&&!admin)return <SharedPanel title="مدیریت پیام‌های رسمی"><SharedEmpty message="مجوز platform.messages.manage برای این محیط وجود ندارد."/></SharedPanel>;
  if(platform)return <SharedPanel title="مدیریت پیام‌های رسمی پلتفرم" description="نسخه‌های منتشرشده تغییرناپذیرند. انتشار و بازنشانی تأیید نیازمند اقدام صریح است.">
@@ -26,10 +26,13 @@ export function SystemMessages(){
    <label className="block text-sm">شناسه یکتا انگلیسی<input className={field} value={slug} onChange={e=>setSlug(e.target.value)} pattern="[a-z0-9.-]+" maxLength={100}/></label>
    <label className="block text-sm">عنوان<input className={field} value={title} onChange={e=>setTitle(e.target.value)} maxLength={200}/></label>
    <label className="block text-sm">متن پیام (Markdown به صورت متن ساده)<textarea className={field} value={body} onChange={e=>setBody(e.target.value)} rows={5}/></label>
+   <label className="block text-sm">مخاطبان<select className={field} value={audience} onChange={e=>setAudience(e.target.value as 'platform'|'organization')}>
+     <option value="platform">تمام کاربران واجد شرایط پلتفرم</option><option value="organization">اعضای سازمان مشخص</option></select></label>
+   {audience==='organization'&&<label className="block text-sm">شناسه سازمان<input className={field} type="number" min={1} value={organizationId} onChange={e=>setOrganizationId(e.target.value)}/></label>}
    <label className="flex gap-2"><input type="checkbox" checked={ack} onChange={e=>setAck(e.target.checked)}/> نیازمند تأیید صریح دریافت</label>
    {ack&&<label className="block text-sm">شناسه سیاست تأیید<input className={field} value={version} onChange={e=>setVersion(e.target.value)} maxLength={64}/></label>}
    <label className="flex gap-2"><input type="checkbox" checked={bump} onChange={e=>setBump(e.target.checked)}/> ایجاد نسخه جدید برای شناسه قبلی</label>
-   <Button disabled={!/^[a-z0-9.-]+$/.test(slug)||!title.trim()||!body.trim()||(ack&&!version.trim())||create.isPending} loading={create.isPending} onClick={()=>create.mutate()}>ذخیره پیش‌نویس (بدون انتشار)</Button>
+   <Button disabled={!/^[a-z0-9.-]+$/.test(slug)||!title.trim()||!body.trim()||(audience==='organization'&&(!Number.isSafeInteger(Number(organizationId))||Number(organizationId)<1))||(ack&&!version.trim())||create.isPending} loading={create.isPending} onClick={()=>create.mutate()}>ذخیره پیش‌نویس (بدون انتشار)</Button>
    {create.isError&&<SharedError error={create.error}/>}
   </div>
   <label className="text-sm">وضعیت <select className={field} value={status} onChange={e=>setStatus(e.target.value)}><option value="">همه</option><option value="draft">پیش‌نویس</option><option value="published">منتشرشده</option><option value="retired">بازنشسته</option></select></label>

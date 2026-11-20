@@ -25,6 +25,7 @@ export const sharedServicesApi={
  tickets:()=>request<ApiCollection<SupportSummary>>('/support/tickets'),
  ticket:(id:number)=>request<ApiResponse<SupportDetail>>('/support/tickets/'+id),
  createTicket:(body:{subject:string;category:string;body:string})=>request<ApiResponse<SupportSummary>>('/support/tickets',{method:'POST',body}),
+ createTicketWithAttachments:(subject:string,category:string,body:string,files:File[])=>{const data=new FormData();data.set('subject',subject);data.set('category',category);data.set('body',body);files.forEach(f=>data.append('attachments[]',f));return uploadRequest<ApiResponse<SupportSummary>>('/support/tickets',data);},
  reply:(id:number,body:string,internal_note=false)=>request<ApiResponse<SupportSummary>>('/support/tickets/'+id+'/replies',{method:'POST',body:{body,internal_note}}),
  replyWithAttachments:(id:number,body:string,files:File[],internalNote=false)=>{const data=new FormData();data.set('body',body);data.set('internal_note',internalNote?'1':'0');files.forEach(f=>data.append('attachments[]',f));return uploadRequest<ApiResponse<SupportSummary>>('/support/tickets/'+id+'/replies',data);},
  downloadAttachment:(token:string)=>downloadRequest('/support/attachments/'+encodeURIComponent(token)),
