@@ -4,6 +4,7 @@ import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';
 import {Button,LoadingState,EmptyState,Badge} from '../../shared/ui/Primitives';
 import {commercialApi,convertible,cancellable,owns,PERIOD_LABELS,toman,type Quote,type Order,type OwnerScope} from './commercialApi';
 import {Surface,MoneyBreakdown,ServerError,Status,date,fa,useRemaining} from './CommercialUi';
+import {PaymentEntry} from './PaymentEntry';
 
 function QuoteView({scope,id}:{scope:OwnerScope;id:number}){
  const navigate=useNavigate();
@@ -85,7 +86,7 @@ function OrderView({scope,id}:{scope:OwnerScope;id:number}){
   <div className="c5-actions"><Button variant="danger" disabled={!cancellable(order)||remaining===0||mutation.isPending} loading={mutation.isPending}
    onClick={()=>{if(window.confirm('این سفارش هنوز پرداخت نشده است. آیا لغو شود؟'))mutation.mutate();}}>لغو سفارش</Button>
    <Link className="c5-text-link" to="/billing/orders">بازگشت به فهرست سفارش‌ها</Link></div>
-  <div className="c5-message c5-message--warning" role="status">پرداخت فعال نیست. سفارش برای بررسی ایجاد شده و اشتراک شما تغییر نکرده است.</div>
+  <PaymentEntry orderId={order.id} orderStatus={order.status} payable={order.total_toman}/>
  </Surface>;
 }
 export function CommercialRecords({scope}:{scope:OwnerScope}){

@@ -11,6 +11,7 @@ import {CommercialCatalog} from './CommercialCatalog';
 import {CommercialRecords} from './CommercialRecords';
 import {PlatformCommerce} from './PlatformCommerce';
 import {SubscriptionPage} from './SubscriptionPage';
+import {CommercialFlows} from './CommercialFlows';
 import {Surface,ServerError} from './CommercialUi';
 import './commercial.css';
 import './subscription.css';
@@ -28,16 +29,16 @@ export function CommercialPage(){
  const tabs=isPlatform?[
   ['/billing/platform','مدیریت طرح‌ها'],['/billing/platform/taxes','قوانین مالیات'],['/billing/platform/promotions','کدهای تخفیف']
  ]:[
-  ['/billing/subscription','اشتراک و منابع'],['/billing/catalog','انتخاب طرح'],['/billing/quotes','پیش‌فاکتورها'],['/billing/orders','سفارش‌ها']
+  ['/billing/subscription','اشتراک و منابع'],['/billing/catalog','انتخاب طرح'],['/billing/quotes','پیش‌فاکتورها'],['/billing/orders','سفارش‌ها'],['/billing/documents','اسناد مالی']
  ];
  const view=isPlatform?<PlatformCommerce/>:path==='/billing/subscription'||path==='/billing'?
   <SubscriptionPage scope={access.scope}/>:path==='/billing/catalog'||path.startsWith('/billing/plan/')?
-  <CommercialCatalog scope={access.scope}/>:<CommercialRecords scope={access.scope}/>;
+  <CommercialCatalog scope={access.scope}/>:path.startsWith('/billing/payments/')||path==='/billing/documents'||path.startsWith('/billing/documents/')||path==='/billing/subscription-details'?<CommercialFlows scope={access.scope}/>:<CommercialRecords scope={access.scope}/>;
  return <section className="c5" dir="rtl" aria-label="امور مالی تدبیر">
   <header className="c5-heading"><div><p>تدبیر / امور مالی</p><h1>{isPlatform?'مدیریت طرح‌ها و قیمت‌ها':'اشتراک و خرید طرح'}</h1>
    <span>{access.label} · اطلاعات واقعی از سرور تدبیر</span></div><Badge tone="neutral">Ocean / C5</Badge></header>
   <nav className="c5-tabs" aria-label="بخش‌های امور مالی">{tabs.map(([to,title])=><Link key={to} aria-current={path===to?'page':undefined} to={to}>{title}</Link>)}</nav>
   {view}
-  <p className="c5-disclaimer">صدور پیش‌فاکتور و سفارش به معنی پرداخت، فعال‌شدن اشتراک یا برداشت وجه نیست. مرحلهٔ پرداخت هنوز فعال نشده است.</p>
+  <p className="c5-disclaimer">صدور پیش‌فاکتور و سفارش به معنی پرداخت یا فعال‌شدن اشتراک نیست؛ تنها وضعیت سرور معتبر است.</p>
  </section>;
 }
