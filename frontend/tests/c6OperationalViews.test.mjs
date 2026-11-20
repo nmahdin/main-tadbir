@@ -2,7 +2,8 @@ import test from 'node:test';import assert from 'node:assert/strict';import {rea
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 test('C6 shared services maintain platform and owner authorization boundaries',()=>{
  const shell=read('src/app/shell/Sidebar.tsx'),page=read('src/features/sharedServices/SharedServicesPage.tsx'),desk=read('src/features/sharedServices/SupportDesk.tsx');
- for(const p of ['platform.messages.manage','platform.support.agent','platform.support.manage'])assert.ok(page.includes(p),p);
+ for(const p of ['platform.messages.manage','platform.support.agent'])assert.ok(page.includes(p),p);
+ assert.ok(desk.includes('platform.support.manage'),'manager-only status/reassignment remains separately gated');
  assert.ok(shell.includes('/shared-services/inbox')&&shell.includes('/shared-services/messages')&&shell.includes('/shared-services/support'));
  assert.ok(desk.includes('staff||!m.internal_note'));
  assert.ok(desk.includes('manager&&'));
