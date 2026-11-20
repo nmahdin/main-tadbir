@@ -6,3 +6,9 @@ export const safeInternalActionPath=(value:string|null):string|null=>{
  const roots=['/dashboard','/projects','/tasks','/contents','/billing','/settings','/invitations','/support','/shared-services'];
  return roots.some(root=>path===root||path.startsWith(root+'/'))?value:null;
 };
+
+export function visibleActionScope(item:{recipient_scope:'personal'|'organization';organization_id:number|null},scope:string,organizationId:number|null):boolean{
+ if(scope==='platform')return true;
+ if(scope.startsWith('org:'))return item.recipient_scope==='organization'&&item.organization_id===organizationId;
+ return scope==='personal'&&item.recipient_scope==='personal';
+}
