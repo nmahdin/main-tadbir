@@ -15,9 +15,9 @@ use Illuminate\Http\Request;
  */
 final class InboxController extends Controller
 {
-    public function __construct(private readonly ActionInboxService $service)
-    {
-    }
+    public function __construct(
+        private readonly ActionInboxService $service,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {

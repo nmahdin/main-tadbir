@@ -21,9 +21,9 @@ final class PlatformMessageController extends Controller
 {
     use AuthorizesPlatformRequests;
 
-    public function __construct(private readonly SystemMessageService $service)
-    {
-    }
+    public function __construct(
+        private readonly SystemMessageService $service,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {

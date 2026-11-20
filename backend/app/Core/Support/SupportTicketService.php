@@ -20,14 +20,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 final class SupportTicketService
 {
     public const ALLOWED_CATEGORIES = ['billing', 'account', 'technical', 'feature_request', 'other'];
-    public const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB per file
+    // 10 MB per file.
+    public const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
     public const MAX_ATTACHMENTS_PER_MESSAGE = 6;
 
     public function __construct(
         private readonly AuditWriter $audit,
         private readonly FilesystemFactory $filesystem,
-    ) {
-    }
+    ) {}
 
     // ---- Creation ---------------------------------------------------
 

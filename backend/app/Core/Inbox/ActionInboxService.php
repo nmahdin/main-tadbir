@@ -17,9 +17,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class ActionInboxService
 {
-    public function __construct(private readonly AuditWriter $audit)
-    {
-    }
+    public function __construct(
+        private readonly AuditWriter $audit,
+    ) {}
 
     /**
      * Publish (upsert) an action item. Returns the saved model.

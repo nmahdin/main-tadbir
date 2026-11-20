@@ -20,9 +20,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 final class SupportTicketController extends Controller
 {
-    public function __construct(private readonly SupportTicketService $service)
-    {
-    }
+    public function __construct(
+        private readonly SupportTicketService $service,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
