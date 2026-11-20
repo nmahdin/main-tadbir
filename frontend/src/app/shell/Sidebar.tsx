@@ -90,6 +90,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const canManagePlatformBilling = currentEnvironment?.kind === 'platform' &&
     Boolean(environmentPayload?.platform.eligible && environmentPayload.platform.permissions.includes('platform.billing.manage'));
   const commercialActive = location.pathname === '/billing' || location.pathname.startsWith('/billing/');
+  const sharedActive = (path: string) => location.pathname===path || location.pathname.startsWith(path+'/');
+  const platformMessageAdmin = currentEnvironment?.kind==='platform' && Boolean(environmentPayload?.platform.eligible && environmentPayload.platform.permissions.includes('platform.messages.manage'));
+  const platformSupportAgent = currentEnvironment?.kind==='platform' && Boolean(environmentPayload?.platform.eligible && (environmentPayload.platform.permissions.includes('platform.support.agent')||environmentPayload.platform.permissions.includes('platform.support.manage')));
+  const sharedNavButton = (path:string,label:string,icon:React.ReactNode) => (
+    <button type="button" key={path} title={label} aria-label={label} aria-current={sharedActive(path)?'page':undefined}
+      className={envItemClassName(sharedActive(path))} onClick={()=>{navigate(path);onClose();}}>
+      {envItemContent(icon,label,sharedActive(path))}
+    </button>
+  );
   const canViewPersonalBilling = currentEnvironment?.kind === 'workspace' &&
     (currentEnvironment.id === null || Boolean(environmentPayload?.workspaces.some(ws => ws.id === currentEnvironment.id && ws.organization_id === null && ws.relation === 'owner')));
   const environmentKind = currentEnvironment?.kind ?? 'workspace';
@@ -477,6 +486,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </button>
                     );
                   })}
+                  {sharedNavButton('/shared-services/inbox','اقدامات سازمانی',<CheckSquare className="w-4 h-4"/>)}
+                  {sharedNavButton('/shared-services/messages','پیام‌های رسمی',<Mail className="w-4 h-4"/>)}
                   {canManageOrganizationBilling && <button type="button" id="nav-item-org-billing" title="اشتراک و صورتحساب سازمان"
                     aria-label="اشتراک و صورتحساب سازمان" aria-current={commercialActive ? 'page' : undefined}
                     className={envItemClassName(commercialActive)} onClick={() => { navigate('/billing/subscription'); onClose(); }}>
@@ -505,6 +516,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </button>
                     );
                   })}
+                  {platformMessageAdmin&&sharedNavButton('/shared-services/messages/admin','مدیریت پیام‌های رسمی',<Mail className="w-4 h-4"/>)}
+                  {platformSupportAgent&&sharedNavButton('/shared-services/support/queue','صف پشتیبانی',<MessageSquare className="w-4 h-4"/>)}
                   {canManagePlatformBilling && <button type="button" id="nav-item-platform-billing" title="مدیریت مالی پلتفرم"
                     aria-label="مدیریت مالی پلتفرم" aria-current={commercialActive ? 'page' : undefined}
                     className={envItemClassName(commercialActive)} onClick={() => { navigate('/billing/platform'); onClose(); }}>
@@ -520,6 +533,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <>
           {/* Main workspaces grouped by intent, so long menus remain scannable. */}
           <nav className="space-y-4" aria-label="منوی اصلی سامانه">
+            <section aria-label="خدمات مشترک">
+              {sharedNavButton('/shared-services/inbox','کارتابل اقدامات',<CheckSquare className="w-4 h-4"/>)}
+              {sharedNavButton('/shared-services/messages','پیام‌های رسمی',<Mail className="w-4 h-4"/>)}
+              {sharedNavButton('/shared-services/support','پشتیبانی من',<MessageSquare className="w-4 h-4"/>)}
+            </section>
             {canViewPersonalBilling && <section aria-label="اشتراک شخصی">
               <button type="button" id="nav-item-workspace-billing" title="اشتراک و منابع"
                 aria-label="اشتراک و منابع" aria-current={commercialActive ? 'page' : undefined}

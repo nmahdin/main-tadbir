@@ -27,6 +27,7 @@ import type { ActiveView } from '../shared/types';
 // downloaded in parallel with its data and all other pages stay off the hot path.
 const ContextDashboard = React.lazy(() => import('../features/dashboard/ContextDashboard').then(m => ({default:m.ContextDashboard})));
 const CommercialPage = React.lazy(() => import('../features/commercial/CommercialPage').then(m => ({default:m.CommercialPage})));
+const SharedServicesPage = React.lazy(() => import('../features/sharedServices/SharedServicesPage').then(m => ({default:m.SharedServicesPage})));
 const WorkspaceList = React.lazy(() => import('../features/workspace/WorkspaceList').then(m => ({default:m.WorkspaceList})));
 const ApprovalCenter = React.lazy(() => import('../features/workspace/ApprovalCenter').then(m => ({default:m.ApprovalCenter})));
 const NotificationInbox = React.lazy(() => import('../features/workspace/NotificationInbox').then(m => ({default:m.NotificationInbox})));
@@ -150,6 +151,7 @@ const MainLayout: React.FC = () => {
 
   const renderActiveView = () => {
     if (location.pathname === '/billing' || location.pathname.startsWith('/billing/')) return <CommercialPage />;
+    if (location.pathname.startsWith('/shared-services/')) return <SharedServicesPage />;
     switch (activeView) {
       case 'dashboard':
         return <ContextDashboard />;
