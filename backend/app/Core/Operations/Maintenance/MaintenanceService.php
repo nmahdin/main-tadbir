@@ -53,9 +53,7 @@ final class MaintenanceService
                 'scheduled_end' => $end,
                 'authorized_by_user_id' => $actor->id,
             ]);
-            $this->events->record('ops.maintenance.scheduled', SecurityEventOutcome::SUCCESS,
-                $actor, targetType: 'ops_maintenance_window', targetId: $window->id,
-                metadata: ['scope' => $window->scope]);
+            $this->events->record('ops.maintenance.scheduled', SecurityEventOutcome::SUCCESS, $actor, $actor->id, 'ops_maintenance_window', $window->id, null, null, ['scope' => $window->scope]);
 
             return $window;
         });
@@ -70,8 +68,7 @@ final class MaintenanceService
             $window->status = MaintenanceStatus::ACTIVE->value;
             $window->started_at = now();
             $window->save();
-            $this->events->record('ops.maintenance.activated', SecurityEventOutcome::SUCCESS,
-                $actor, targetType: 'ops_maintenance_window', targetId: $window->id);
+            $this->events->record('ops.maintenance.activated', SecurityEventOutcome::SUCCESS, $actor, $actor->id, 'ops_maintenance_window', $window->id);
 
             return $window;
         });
@@ -86,8 +83,7 @@ final class MaintenanceService
             $window->status = MaintenanceStatus::COMPLETED->value;
             $window->completed_at = now();
             $window->save();
-            $this->events->record('ops.maintenance.completed', SecurityEventOutcome::SUCCESS,
-                $actor, targetType: 'ops_maintenance_window', targetId: $window->id);
+            $this->events->record('ops.maintenance.completed', SecurityEventOutcome::SUCCESS, $actor, $actor->id, 'ops_maintenance_window', $window->id);
 
             return $window;
         });
@@ -103,8 +99,7 @@ final class MaintenanceService
             $window->cancelled_at = now();
             $window->cancelled_by_user_id = $actor->id;
             $window->save();
-            $this->events->record('ops.maintenance.cancelled', SecurityEventOutcome::SUCCESS,
-                $actor, targetType: 'ops_maintenance_window', targetId: $window->id);
+            $this->events->record('ops.maintenance.cancelled', SecurityEventOutcome::SUCCESS, $actor, $actor->id, 'ops_maintenance_window', $window->id);
 
             return $window;
         });

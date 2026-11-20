@@ -80,11 +80,7 @@ final class AlertDispatcher
             'status' => $overallStatus,
             'acknowledged_at' => $success > 0 ? now() : null,
         ]);
-        $this->events->record(
-            'ops.alert.dispatched',
-            $success > 0 ? SecurityEventOutcome::SUCCESS : SecurityEventOutcome::FAILURE,
-            metadata: ['alert_id' => (int) $alert->id, 'channels' => count($this->adapters), 'success' => $success],
-        );
+        $this->events->record('ops.alert.dispatched', $success > 0 ? SecurityEventOutcome::SUCCESS : SecurityEventOutcome::FAILURE, null, null, null, null, null, null, ['alert_id' => (int) $alert->id, 'channels' => count($this->adapters), 'success' => $success]);
 
         return $success;
     }

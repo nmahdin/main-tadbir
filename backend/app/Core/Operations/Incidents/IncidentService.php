@@ -126,8 +126,7 @@ final class IncidentService
                 'event_type' => 'incident.opened',
                 'payload' => ['source' => $source],
             ]);
-            $this->events->record('ops.incident.opened', SecurityEventOutcome::SUCCESS,
-                $actor, targetType: 'ops_incident', targetId: $incident->id);
+            $this->events->record('ops.incident.opened', SecurityEventOutcome::SUCCESS, $actor, null, 'ops_incident', $incident->id);
 
             return $incident;
         });
@@ -163,8 +162,7 @@ final class IncidentService
                 'event_type' => 'incident.'.$target->value,
                 'payload' => ['notes' => $notes],
             ]);
-            $this->events->record('ops.incident.'.$target->value, SecurityEventOutcome::SUCCESS,
-                $actor, targetType: 'ops_incident', targetId: $incident->id);
+            $this->events->record('ops.incident.'.$target->value, SecurityEventOutcome::SUCCESS, $actor, $actor->id, 'ops_incident', $incident->id);
 
             return $incident;
         });

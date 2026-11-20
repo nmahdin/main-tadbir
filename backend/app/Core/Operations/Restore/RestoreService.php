@@ -42,9 +42,7 @@ final class RestoreService
             'target_storage_prefix' => null,
             'requested_by_user_id' => $actor?->id,
         ]);
-        $this->events->record('ops.restore.requested', SecurityEventOutcome::SUCCESS,
-            $actor, targetType: 'ops_restore_verification', targetId: $verification->id,
-            metadata: ['backup_job_id' => $job->id]);
+        $this->events->record('ops.restore.requested', SecurityEventOutcome::SUCCESS, $actor, $actor?->id, 'ops_restore_verification', $verification->id, null, null, ['backup_job_id' => $job->id]);
 
         return $verification;
     }

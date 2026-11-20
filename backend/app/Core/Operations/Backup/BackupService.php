@@ -46,9 +46,7 @@ final class BackupService
             'retention_until' => now()->addDays($retentionDays ?? self::DEFAULT_RETENTION_DAYS),
             'requested_by_user_id' => $actor->id,
         ]);
-        $this->events->record('ops.backup.requested', SecurityEventOutcome::SUCCESS,
-            $actor, targetType: 'ops_backup_job', targetId: $job->id,
-            metadata: ['type' => $type->value]);
+        $this->events->record('ops.backup.requested', SecurityEventOutcome::SUCCESS, $actor, $actor->id, 'ops_backup_job', $job->id, null, null, ['type' => $type->value]);
 
         return $job;
     }
@@ -124,16 +122,13 @@ final class BackupService
             $job->error_message = null;
             $job->save();
 
-            $this->events->record('ops.backup.succeeded', SecurityEventOutcome::SUCCESS,
-                null, targetType: 'ops_backup_job', targetId: $job->id,
-                metadata: ['size_bytes' => $totalSize]);
+            $this->events->record('ops.backup.succeeded', SecurityEventOutcome::SUCCESS, null, null, 'ops_backup_job', $job->id, null, null, ['size_bytes' => $totalSize]);
         } catch (Throwable $e) {
             $job->status = BackupJobStatus::FAILED->value;
             $job->error_message = substr($e->getMessage(), 0, 1000);
             $job->finished_at = now();
             $job->save();
-            $this->events->record('ops.backup.failed', SecurityEventOutcome::FAILURE,
-                null, targetType: 'ops_backup_job', targetId: $job->id);
+            $this->events->record('ops.backup.failed', SecurityEventOutcome::FAILURE, null, null, 'ops_backup_job', $job->id);
         }
 
         return $job;

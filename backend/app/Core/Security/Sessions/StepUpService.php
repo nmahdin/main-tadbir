@@ -49,8 +49,7 @@ final class StepUpService
             'request_ip' => $request->ip(),
             'created_at' => $at,
         ]);
-        $this->events->record('step_up.verified', SecurityEventOutcome::SUCCESS,
-            $user, $user->id, scopeType: $scope, request: $request);
+        $this->events->record('step_up.verified', SecurityEventOutcome::SUCCESS, $user, $user->id, null, null, null, null, ['scope' => $scope], $request);
     }
 
     public function isVerified(User $user, string $authTokenId, string $scope): bool

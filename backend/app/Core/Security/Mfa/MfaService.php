@@ -35,7 +35,8 @@ final class MfaService
     public function __construct(
         private readonly SecurityEventWriter $events,
         private readonly Encrypter $encrypter,
-    ) {}
+    ) {
+    }
 
     // ---------------- Enrollment ----------------
 
@@ -70,13 +71,7 @@ final class MfaService
                 'updated_at' => now(),
             ]);
 
-            $this->events->record(
-                'mfa.enrollment.initiated',
-                SecurityEventOutcome::SUCCESS,
-                $user, $user->id, 'mfa_factor', $factorId,
-                metadata: ['type' => MfaFactorType::TOTP->value],
-                request: $request,
-            );
+            $this->events->record('mfa.enrollment.initiated', SecurityEventOutcome::SUCCESS, $user, $user->id, 'mfa_factor', $factorId, null, null, ['type' => MfaFactorType::TOTP->value], $request);
 
             return [
                 'factor_id' => (int) $factorId,
@@ -91,7 +86,6 @@ final class MfaService
      * fresh recovery codes are generated and returned (plaintext,
      * displayed only once).
      *
-     * @param  array<int, string>  $totpCode
      * @return array{recovery_codes: array<int, string>}
      */
     public function confirmAndActivate(User $user, int $factorId, string $nonce, string $totpCode, Request $request): array
@@ -108,8 +102,8 @@ final class MfaService
             }
             $secret = $this->encrypter->decryptString($factor->secret_encrypted);
             if (! TotpEngine::verify($secret, $totpCode)) {
-                $this->events->record('mfa.enrollment.confirm_failed', SecurityEventOutcome::FAILURE,
-                    $user, $user->id, 'mfa_factor', $factorId, request: $request);
+                $this->events->record('mfa.enrollment.confirm_failed', SecurityEventOutcome::FAILURE, $user, $user->id, 'mfa_factor', $factorId, null, null, null, $request);
+
                 throw new RuntimeException('Invalid TOTP code.');
             }
             // Generate recovery codes.
@@ -135,10 +129,7 @@ final class MfaService
                 'updated_at' => now(),
             ]);
 
-            $this->events->record('mfa.enrollment.activated', SecurityEventOutcome::SUCCESS,
-                $user, $user->id, 'mfa_factor', (int) $factor->id,
-                metadata: ['recovery_codes_generated' => count($codes)],
-                request: $request);
+            $this->events->record('mfa.enrollment.activated', SecurityEventOutcome::SUCCESS, $user, $user->id, 'mfa_factor', (int) $factor->id, null, null, ['recovery_codes_generated' => count($codes)], $request);
 
             return ['recovery_codes' => $codes];
         });
@@ -201,8 +192,7 @@ final class MfaService
     {
         $throttleKey = 'mfa:verify:'.$user->id;
         if (RateLimiter::tooManyAttempts($throttleKey, 20)) {
-            $this->events->record('mfa.challenge.rate_limited', SecurityEventOutcome::RATE_LIMITED,
-                $user, $user->id, request: $request);
+            $this->events->record('mfa.challenge.rate_limited', SecurityEventOutcome::RATE_LIMITED, $user, $user->id, null, null, null, null, null, $request);
 
             return false;
         }
@@ -216,15 +206,13 @@ final class MfaService
                 ->first();
             if (! $challenge || CarbonImmutable::now()->gt(CarbonImmutable::parse($challenge->expires_at))) {
                 RateLimiter::hit($throttleKey, 300);
-                $this->events->record('mfa.challenge.invalid', SecurityEventOutcome::FAILURE,
-                    $user, $user->id, request: $request);
+                $this->events->record('mfa.challenge.invalid', SecurityEventOutcome::FAILURE, $user, $user->id, null, null, null, null, null, $request);
 
                 return false;
             }
             if ((int) $challenge->attempts >= self::CHALLENGE_MAX_ATTEMPTS) {
                 RateLimiter::hit($throttleKey, 300);
-                $this->events->record('mfa.challenge.attempts_exhausted', SecurityEventOutcome::BLOCKED,
-                    $user, $user->id, request: $request);
+                $this->events->record('mfa.challenge.attempts_exhausted', SecurityEventOutcome::BLOCKED, $user, $user->id, null, null, null, null, null, $request);
 
                 return false;
             }
@@ -234,8 +222,7 @@ final class MfaService
                 return false;
             }
             if ($factor->locked_until && CarbonImmutable::now()->lt(CarbonImmutable::parse($factor->locked_until))) {
-                $this->events->record('mfa.factor.locked', SecurityEventOutcome::BLOCKED,
-                    $user, $user->id, 'mfa_factor', (int) $factor->id, request: $request);
+                $this->events->record('mfa.factor.locked', SecurityEventOutcome::BLOCKED, $user, $user->id, 'mfa_factor', (int) $factor->id, null, null, null, $request);
 
                 return false;
             }
@@ -258,8 +245,7 @@ final class MfaService
                     ]);
                 }
                 RateLimiter::hit($throttleKey, 300);
-                $this->events->record('mfa.challenge.invalid_code', SecurityEventOutcome::FAILURE,
-                    $user, $user->id, 'mfa_factor', (int) $factor->id, request: $request);
+                $this->events->record('mfa.challenge.invalid_code', SecurityEventOutcome::FAILURE, $user, $user->id, 'mfa_factor', (int) $factor->id, null, null, null, $request);
 
                 return false;
             }
@@ -274,10 +260,7 @@ final class MfaService
                 'updated_at' => now(),
             ]);
             RateLimiter::clear($throttleKey);
-            $this->events->record('mfa.challenge.verified', SecurityEventOutcome::SUCCESS,
-                $user, $user->id, 'mfa_factor', (int) $factor->id,
-                metadata: ['purpose' => $challenge->purpose],
-                request: $request);
+            $this->events->record('mfa.challenge.verified', SecurityEventOutcome::SUCCESS, $user, $user->id, 'mfa_factor', (int) $factor->id, null, null, ['purpose' => $challenge->purpose], $request);
 
             return true;
         });
@@ -290,8 +273,7 @@ final class MfaService
     {
         $throttleKey = 'mfa:recovery:'.$user->id;
         if (RateLimiter::tooManyAttempts($throttleKey, 10)) {
-            $this->events->record('mfa.recovery.rate_limited', SecurityEventOutcome::RATE_LIMITED,
-                $user, $user->id, request: $request);
+            $this->events->record('mfa.recovery.rate_limited', SecurityEventOutcome::RATE_LIMITED, $user, $user->id, null, null, null, null, null, $request);
 
             return false;
         }
@@ -308,15 +290,13 @@ final class MfaService
                         'used_by_factor_id' => $factor?->id,
                     ]);
                     RateLimiter::clear($throttleKey);
-                    $this->events->record('mfa.recovery.used', SecurityEventOutcome::SUCCESS,
-                        $user, $user->id, 'mfa_factor', $factor?->id, request: $request);
+                    $this->events->record('mfa.recovery.used', SecurityEventOutcome::SUCCESS, $user, $user->id, 'mfa_factor', $factor?->id, null, null, null, $request);
 
                     return true;
                 }
             }
             RateLimiter::hit($throttleKey, 300);
-            $this->events->record('mfa.recovery.invalid', SecurityEventOutcome::FAILURE,
-                $user, $user->id, request: $request);
+            $this->events->record('mfa.recovery.invalid', SecurityEventOutcome::FAILURE, $user, $user->id, null, null, null, null, null, $request);
 
             return false;
         });
@@ -337,8 +317,7 @@ final class MfaService
             DB::table('security_mfa_challenges')
                 ->where('user_id', $user->id)->whereNull('verified_at')
                 ->delete();
-            $this->events->record('mfa.factor.disabled', SecurityEventOutcome::SUCCESS,
-                $user, $user->id, request: $request);
+            $this->events->record('mfa.factor.disabled', SecurityEventOutcome::SUCCESS, $user, $user->id, null, null, null, null, null, $request);
         });
     }
 }
