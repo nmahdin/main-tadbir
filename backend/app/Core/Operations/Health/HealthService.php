@@ -136,7 +136,7 @@ final class HealthService
     private function probeCache(): array
     {
         try {
-            $key = 'health:probe:' . bin2hex(random_bytes(4));
+            $key = 'health:probe:'.bin2hex(random_bytes(4));
             Cache::put($key, 1, 5);
             $val = Cache::get($key);
             Cache::forget($key);

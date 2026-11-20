@@ -22,6 +22,7 @@ class CoreMfaFactor extends Model
 
     protected $fillable = [
         'user_id', 'type', 'secret_encrypted', 'status', 'recovery_nonce',
+        'failed_attempts', 'locked_until',
     ];
 
     protected function casts(): array

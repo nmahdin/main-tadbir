@@ -68,7 +68,7 @@ final class BackupService
         $job->save();
 
         try {
-            $baseDir = 'backups/' . $job->job_uuid;
+            $baseDir = 'backups/'.$job->job_uuid;
             $disk->makeDirectory($baseDir);
 
             $manifest = ['artifacts' => [], 'schema_version' => null, 'created_at' => now()->toIso8601String()];
@@ -77,7 +77,7 @@ final class BackupService
             $totalSize = 0;
 
             if (in_array($job->type, [BackupJobType::FULL->value, BackupJobType::DATABASE->value], true)) {
-                $dbDumpPath = $baseDir . '/database.sql';
+                $dbDumpPath = $baseDir.'/database.sql';
                 $dbBytes = $dbDumper !== null
                     ? (int) $dbDumper($disk, $dbDumpPath)
                     : $this->dumpDatabase($disk, $dbDumpPath);
@@ -90,7 +90,7 @@ final class BackupService
                 $totalSize += $dbBytes;
             }
             if (in_array($job->type, [BackupJobType::FULL->value, BackupJobType::FILES->value], true)) {
-                $fileArchivePath = $baseDir . '/files.tar';
+                $fileArchivePath = $baseDir.'/files.tar';
                 $fileBytes = $fileArchiver !== null
                     ? (int) $fileArchiver($disk, $fileArchivePath)
                     : $this->stubFileArchive($disk, $fileArchivePath);
@@ -110,7 +110,7 @@ final class BackupService
                 'app_version' => null,
                 'generated_by' => 'tadbir-backup',
             ];
-            $manifestPath = $baseDir . '/manifest.json';
+            $manifestPath = $baseDir.'/manifest.json';
             $disk->put($manifestPath, json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
             $job->status = BackupJobStatus::SUCCEEDED->value;
@@ -171,7 +171,7 @@ final class BackupService
         // and streams the bytes directly to disk. Here we write a
         // portable "placeholder dump" containing a marker and schema
         // listing so integrity/verification flows can be tested.
-        $marker = "-- Tadbir database dump placeholder\n-- Generated at " . now()->toIso8601String() . "\n-- This artifact MUST be replaced with a real mysqldump output before production use.\n";
+        $marker = "-- Tadbir database dump placeholder\n-- Generated at ".now()->toIso8601String()."\n-- This artifact MUST be replaced with a real mysqldump output before production use.\n";
         $disk->put($path, $marker);
 
         return (int) $disk->size($path);

@@ -152,10 +152,10 @@ final class IncidentService
             CoreIncidentActivity::create([
                 'incident_id' => $incident->id,
                 'actor_user_id' => $actor->id,
-                'event_type' => 'incident.' . $target->value,
+                'event_type' => 'incident.'.$target->value,
                 'payload' => ['notes' => $notes],
             ]);
-            $this->events->record('ops.incident.' . $target->value, SecurityEventOutcome::SUCCESS,
+            $this->events->record('ops.incident.'.$target->value, SecurityEventOutcome::SUCCESS,
                 $actor, targetType: 'ops_incident', targetId: $incident->id);
 
             return $incident;
@@ -225,10 +225,10 @@ final class IncidentService
             $ym = CarbonImmutable::now('UTC')->format('Ym');
             $prefixRef = "{$prefix}-{$ym}-";
             $last = (int) DB::table('ops_incidents')
-                ->where('reference', 'like', $prefixRef . '%')
-                ->max(DB::raw('CAST(SUBSTRING(reference, ' . (strlen($prefixRef) + 1) . ') AS UNSIGNED)'));
+                ->where('reference', 'like', $prefixRef.'%')
+                ->max(DB::raw('CAST(SUBSTRING(reference, '.(strlen($prefixRef) + 1).') AS UNSIGNED)'));
             $next = str_pad((string) ($last + 1), 5, '0', STR_PAD_LEFT);
-            $candidate = $prefixRef . $next;
+            $candidate = $prefixRef.$next;
             if (! CoreIncident::query()->where('reference', $candidate)->exists()) {
                 return $candidate;
             }
