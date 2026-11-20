@@ -84,6 +84,16 @@ Schedule::command('core:inbox:sweep')
     ->hourly()
     ->withoutOverlapping(2);
 
+// C7-CORE: health sweep every minute (bounded checks, dedup alerts).
+Schedule::command('ops:health-sweep')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(2);
+
+// C7-CORE: daily automated full backup (local-backup disk).
+Schedule::command('ops:backup-run')
+    ->dailyAt('02:30')
+    ->withoutOverlapping(10);
+
 // Overdue reminders are idempotent, so they may run as often or as rarely as the
 // host allows. Nothing below assumes a permanent cron: the command is safe to
 // call from the Bale tick above, from an external scheduler, or by hand.

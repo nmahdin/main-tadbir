@@ -3,6 +3,7 @@
 use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\RequestCorrelationId;
+use App\Http\Middleware\RequireStepUp;
 use App\Modules\Messaging\Bot\Bale\Support\OperationsSchema;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -39,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active-account' => EnsureActiveAccount::class,
             'permission' => EnsureUserHasPermission::class,
+            'step-up' => RequireStepUp::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

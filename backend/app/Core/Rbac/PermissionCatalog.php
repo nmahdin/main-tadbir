@@ -87,6 +87,12 @@ final class PermissionCatalog
         'platform.messages.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Publish and retire official system messages'],
         'platform.support.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Access and manage all platform support tickets'],
         'platform.support.agent' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Reply to and assign platform support tickets'],
+        'platform.security.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Manage security settings, MFA, sessions and audit review'],
+        'platform.health.view' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'View operational health and diagnostics'],
+        'platform.incidents.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Manage operational incidents and alerts'],
+        'platform.maintenance.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Schedule and control maintenance windows'],
+        'platform.backup.manage' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Request and review backups'],
+        'platform.restore.execute' => ['scope' => self::SCOPE_PLATFORM, 'name' => 'Run isolated restore verification (high-risk)'],
 
         // Projects module (Stage 04B pilot; keys owned by the Projects
         // module, registered here per the catalog-ownership contract —

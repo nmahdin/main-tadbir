@@ -109,6 +109,30 @@ final class PlatformRoleProvisioner
         'platform.messages.manage',
         'platform.support.manage',
         'platform.support.agent',
+        'platform.security.manage',
+        'platform.health.view',
+        'platform.incidents.manage',
+        'platform.maintenance.manage',
+        'platform.backup.manage',
+        'platform.restore.execute',
+    ];
+
+    /** @var list<string> Approved set after C6-CORE expansion (frozen). */
+    private const PRIMARY_PERMISSIONS_C6 = [
+        'platform.admins.view',
+        'platform.admins.manage',
+        'platform.users.view',
+        'platform.users.manage_status',
+        'platform.organizations.view',
+        'platform.organizations.manage_status',
+        'platform.organizations.end',
+        'platform.organizations.restore',
+        'platform.audit.view',
+        'platform.subscriptions.manage',
+        'platform.billing.manage',
+        'platform.messages.manage',
+        'platform.support.manage',
+        'platform.support.agent',
     ];
 
     /** @var list<string> Permissions for the standalone support_agent role. */
@@ -182,7 +206,7 @@ final class PlatformRoleProvisioner
         // holding exactly a frozen previous approved set is
         // upgraded to the current approved set. Catalog
         // synchronization alone never reaches this point.
-        foreach ([self::PRIMARY_PERMISSIONS_C2, self::PRIMARY_PERMISSIONS_C3_2, self::PRIMARY_PERMISSIONS_C5_2, self::PRIMARY_PERMISSIONS_C5_M2_S1] as $previousSet) {
+        foreach ([self::PRIMARY_PERMISSIONS_C2, self::PRIMARY_PERMISSIONS_C3_2, self::PRIMARY_PERMISSIONS_C5_2, self::PRIMARY_PERMISSIONS_C5_M2_S1, self::PRIMARY_PERMISSIONS_C6] as $previousSet) {
             $previousIds = ScopedPermission::whereIn('key', $previousSet)
                 ->pluck('id')
                 ->map(fn ($id): int => (int) $id)

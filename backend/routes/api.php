@@ -9,6 +9,9 @@ use App\Http\Controllers\Api\V1\BillingQuoteController;
 use App\Http\Controllers\Api\V1\BillingSubscriptionController;
 use App\Http\Controllers\Api\V1\Core\AccountLifecycleController;
 use App\Http\Controllers\Api\V1\Core\InboxController;
+use App\Http\Controllers\Api\V1\Core\Security\MfaChallengeController;
+use App\Http\Controllers\Api\V1\Core\Security\MfaController;
+use App\Http\Controllers\Api\V1\Core\Security\SessionController;
 use App\Http\Controllers\Api\V1\Core\SupportTicketController;
 use App\Http\Controllers\Api\V1\Core\SystemMessageController;
 use App\Http\Middleware\EnsureDepartmentStructure;
@@ -79,6 +82,9 @@ Route::prefix('v1')->group(function (): void {
     Route::get('health/db', [HealthController::class, 'db'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->name('api.v1.health.db');
+    Route::get('maintenance/current', [\App\Http\Controllers\Api\V1\Platform\PlatformMaintenanceController::class, 'current'])
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->name('api.v1.maintenance.current');
     Route::get('public/identity', [SystemSettingController::class, 'publicIdentity'])
         ->middleware('throttle:60,1')
         ->name('api.v1.public.identity');
@@ -404,6 +410,18 @@ Route::prefix('v1')->group(function (): void {
         Route::get('support/tickets/{supportTicket}', [SupportTicketController::class, 'show'])->name('api.v1.support.tickets.show');
         Route::post('support/tickets/{supportTicket}/replies', [SupportTicketController::class, 'reply'])->name('api.v1.support.tickets.reply');
         Route::get('support/attachments/{token}', [SupportTicketController::class, 'download'])->name('api.v1.support.attachments.download')->where('token', '[A-Za-z0-9]+');
+
+        // C7-CORE — Security self-service (MFA enrollment, challenges, sessions).
+        Route::get('me/security/mfa', [MfaController::class, 'status'])->name('api.v1.me.security.mfa.status');
+        Route::post('me/security/mfa/begin', [MfaController::class, 'beginEnrollment'])->name('api.v1.me.security.mfa.begin');
+        Route::post('me/security/mfa/confirm/{factorId}', [MfaController::class, 'confirmEnrollment'])->name('api.v1.me.security.mfa.confirm');
+        Route::post('me/security/mfa/disable', [MfaController::class, 'disable'])->name('api.v1.me.security.mfa.disable');
+        Route::post('me/security/mfa/challenge', [MfaChallengeController::class, 'issue'])->name('api.v1.me.security.mfa.challenge');
+        Route::post('me/security/mfa/verify', [MfaChallengeController::class, 'verify'])->name('api.v1.me.security.mfa.verify');
+        Route::get('me/security/sessions', [SessionController::class, 'index'])->name('api.v1.me.security.sessions.index');
+        Route::delete('me/security/sessions/{tokenId}', [SessionController::class, 'revoke'])->name('api.v1.me.security.sessions.revoke');
+        Route::post('me/security/sessions/revoke-others', [SessionController::class, 'revokeOthers'])->name('api.v1.me.security.sessions.revoke-others');
+        Route::get('me/security/step-up', [SessionController::class, 'stepUpStatus'])->name('api.v1.me.security.step-up.status');
 
         // C5-M2-S2 read-only commercial catalog (any authenticated active
         // account; specific billing permissions are NOT required to read

@@ -2,12 +2,18 @@
 
 use App\Http\Controllers\Api\V1\Platform\PlatformAssignmentController;
 use App\Http\Controllers\Api\V1\Platform\PlatformAuditController;
+use App\Http\Controllers\Api\V1\Platform\PlatformBackupController;
 use App\Http\Controllers\Api\V1\Platform\PlatformBillingFinanceController;
 use App\Http\Controllers\Api\V1\Platform\PlatformBillingPriceController;
+use App\Http\Controllers\Api\V1\Platform\PlatformHealthController;
+use App\Http\Controllers\Api\V1\Platform\PlatformIncidentController;
+use App\Http\Controllers\Api\V1\Platform\PlatformMaintenanceController;
 use App\Http\Controllers\Api\V1\Platform\PlatformMessageController;
 use App\Http\Controllers\Api\V1\Platform\PlatformOrganizationController;
 use App\Http\Controllers\Api\V1\Platform\PlatformPromotionController;
+use App\Http\Controllers\Api\V1\Platform\PlatformRestoreController;
 use App\Http\Controllers\Api\V1\Platform\PlatformRoleController;
+use App\Http\Controllers\Api\V1\Platform\PlatformSecurityEventController;
 use App\Http\Controllers\Api\V1\Platform\PlatformSubscriptionController;
 use App\Http\Controllers\Api\V1\Platform\PlatformSupportController;
 use App\Http\Controllers\Api\V1\Platform\PlatformTaxRuleController;
@@ -79,4 +85,30 @@ Route::prefix('platform')->name('api.v1.platform.')->group(function (): void {
     Route::get('support/queue', [PlatformSupportController::class, 'queue'])->name('support.queue');
     Route::post('support/tickets/{supportTicket}/status', [PlatformSupportController::class, 'transition'])->name('support.tickets.status');
     Route::post('support/tickets/{supportTicket}/assign', [PlatformSupportController::class, 'assign'])->name('support.tickets.assign');
+
+    // Stage C7-CORE — security & operations.
+    Route::get('health', [PlatformHealthController::class, 'details'])->name('health.details');
+    Route::get('security/events', [PlatformSecurityEventController::class, 'index'])->name('security.events.index');
+    Route::get('incidents', [PlatformIncidentController::class, 'incidents'])->name('incidents.index');
+    Route::post('incidents', [PlatformIncidentController::class, 'openIncident'])->name('incidents.open');
+    Route::get('incidents/{incident}', [PlatformIncidentController::class, 'showIncident'])->name('incidents.show');
+    Route::post('incidents/{incident}/transition', [PlatformIncidentController::class, 'transition'])->name('incidents.transition');
+    Route::post('incidents/{incident}/assign', [PlatformIncidentController::class, 'assign'])->name('incidents.assign');
+    Route::get('alerts', [PlatformIncidentController::class, 'alerts'])->name('alerts.index');
+    Route::post('alerts/{alert}/acknowledge', [PlatformIncidentController::class, 'acknowledgeAlert'])->name('alerts.acknowledge');
+    Route::post('alerts/{alert}/resolve', [PlatformIncidentController::class, 'resolveAlert'])->name('alerts.resolve');
+    Route::get('maintenance', [PlatformMaintenanceController::class, 'index'])->name('maintenance.index');
+    Route::get('maintenance/current', [PlatformMaintenanceController::class, 'current'])->name('maintenance.current');
+    Route::post('maintenance', [PlatformMaintenanceController::class, 'schedule'])->name('maintenance.schedule');
+    Route::post('maintenance/{window}/activate', [PlatformMaintenanceController::class, 'activate'])->middleware('step-up:maintenance.manage')->name('maintenance.activate');
+    Route::post('maintenance/{window}/complete', [PlatformMaintenanceController::class, 'complete'])->name('maintenance.complete');
+    Route::post('maintenance/{window}/cancel', [PlatformMaintenanceController::class, 'cancel'])->name('maintenance.cancel');
+    Route::get('backups', [PlatformBackupController::class, 'index'])->name('backups.index');
+    Route::get('backups/{backupJob}', [PlatformBackupController::class, 'show'])->name('backups.show');
+    Route::post('backups', [PlatformBackupController::class, 'request'])->name('backups.request');
+    Route::post('backups/{backupJob}/execute', [PlatformBackupController::class, 'execute'])->name('backups.execute');
+    Route::get('restores', [PlatformRestoreController::class, 'index'])->name('restores.index');
+    Route::post('backups/{backupJob}/restore', [PlatformRestoreController::class, 'request'])->middleware('step-up:backup.restore')->name('restores.request');
+    Route::post('restores/{verification}/preflight', [PlatformRestoreController::class, 'preflight'])->name('restores.preflight');
+    Route::post('restores/{verification}/verify', [PlatformRestoreController::class, 'verify'])->middleware('step-up:backup.restore')->name('restores.verify');
 });

@@ -47,6 +47,16 @@ return [
             'report' => false,
         ],
 
+        // C7 — operational backup storage: non-public, never exposed via
+        // a symbolic or signed public URL. Access is controlled entirely
+        // through the restore/backup API (platform.backup.manage).
+        'local-backup' => [
+            'driver' => 'local',
+            'root' => storage_path('app/backups'),
+            'throw' => false,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
