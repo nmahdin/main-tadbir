@@ -42,7 +42,6 @@ export function SystemMessages(){
   {change.isError&&<SharedError error={change.error}/>}
  </SharedPanel>;
  const userMessages=messages.data?.data??[];
- const ownScope=messages.data?.meta?.total;
  return <SharedPanel title="پیام‌های رسمی سامانه" description="خواندن، به معنی تأیید پیام نیست. پیام‌های تأیید الزامی نسخه مستقل دارند.">
   {pending.data?.data.length?<div role="status" className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm">پیام‌های نیازمند تأیید: {pending.data.data.length.toLocaleString('fa-IR')}. تأیید هر نسخه فقط با انتخاب شما ثبت می‌شود.</div>:null}
   <label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={unread} onChange={e=>setUnread(e.target.checked)}/> فقط خوانده‌نشده‌ها</label>

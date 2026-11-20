@@ -33,10 +33,4 @@ export const sharedServicesApi={
  assign:(id:number,userId:number|null)=>request<ApiResponse<{id:number;assigned_user_id:number|null}>>('/platform/support/tickets/'+id+'/assign',{method:'POST',body:{user_id:userId}}),
  status:(id:number,status:string)=>request<ApiResponse<{id:number;status:string}>>('/platform/support/tickets/'+id+'/status',{method:'POST',body:{status}}),
 };
-export const safeInternalActionPath=(value:string|null):string|null=>{
- if(!value||!value.startsWith('/')||value.startsWith('//')||value.includes('\\')||/[\u0000-\u001f]/.test(value))return null;
- const path=value.split(/[?#]/,1)[0];
- if(!/^\/[a-z0-9/_-]+$/i.test(path)||path.includes('..'))return null;
- const roots=['/dashboard','/projects','/tasks','/contents','/billing','/settings','/invitations','/support','/shared-services'];
- return roots.some(root=>path===root||path.startsWith(root+'/'))?value:null;
-};
+export {safeInternalActionPath} from './sharedServicesRules';
