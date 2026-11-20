@@ -306,6 +306,8 @@ class CoreSharedInboxMessagingSupportTest extends TestCase
         Sanctum::actingAs($agent);
         $this->getJson('/api/v1/platform/support/queue')->assertOk()->assertJsonCount(1, 'data');
         $this->postJson("/api/v1/platform/support/tickets/{$ticketId}/assign", ['user_id' => $agent->id])->assertOk();
+        // Self-claim does not confer queue-wide reassignment authority.
+        $this->postJson("/api/v1/platform/support/tickets/{$ticketId}/assign", ['user_id' => $admin->id])->assertForbidden();
         $this->postJson("/api/v1/support/tickets/{$ticketId}/replies", [
             'body' => 'Internal triage note.',
             'internal_note' => true,

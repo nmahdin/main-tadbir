@@ -31,9 +31,16 @@ return new class extends Migration
             $table->json('origin_context')->nullable();
             $table->timestamps();
 
+            // NULLs never compare equal in a multi-column UNIQUE index. A
+            // recipient always has exactly one non-null scope, so split the
+            // idempotency keys by user and organization to prevent races.
             $table->unique(
-                ['origin_module', 'origin_type', 'origin_id', 'recipient_user_id', 'organization_id'],
-                'action_items_origin_recipient_uniq'
+                ['origin_module', 'origin_type', 'origin_id', 'recipient_user_id'],
+                'action_items_origin_user_uniq'
+            );
+            $table->unique(
+                ['origin_module', 'origin_type', 'origin_id', 'organization_id'],
+                'action_items_origin_org_uniq'
             );
             $table->index(['recipient_user_id', 'action_kind', 'resolved_at'], 'action_items_user_kind_idx');
             $table->index(['organization_id', 'action_kind', 'resolved_at'], 'action_items_org_kind_idx');

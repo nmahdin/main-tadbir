@@ -78,11 +78,18 @@ final class PlatformSupportController extends Controller
     public function assign(CoreSupportTicket $supportTicket, Request $request): JsonResponse
     {
         return $this->platformRespond(function () use ($supportTicket, $request): JsonResponse {
-            $actor = $this->platformActor($request, 'platform.support.manage');
             $validated = $request->validate([
                 'user_id' => ['nullable', 'integer', 'exists:users,id'],
             ]);
             $assignee = isset($validated['user_id']) ? User::query()->findOrFail((int) $validated['user_id']) : null;
+            // An agent may claim an unassigned ticket for themself. Any
+            // reassignment, unassignment or assigning another user requires
+            // the distinct platform.support.manage permission.
+            $selfClaim = $assignee !== null
+                && (int) $assignee->id === (int) $request->user()->id
+                && ($supportTicket->assigned_user_id === null
+                    || (int) $supportTicket->assigned_user_id === (int) $assignee->id);
+            $actor = $this->platformActor($request, $selfClaim ? 'platform.support.agent' : 'platform.support.manage');
             try {
                 $ticket = $this->service->assign($supportTicket, $actor, $assignee);
             } catch (DomainException|InvalidArgumentException $e) {

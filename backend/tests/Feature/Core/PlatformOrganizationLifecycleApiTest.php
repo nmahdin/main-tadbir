@@ -106,12 +106,12 @@ class PlatformOrganizationLifecycleApiTest extends TestCase
             $upgraded->permissions()->pluck('key')->all(),
         );
         $this->assertEqualsCanonicalizing(
-            ['platform.organizations.manage_status', 'platform.organizations.end', 'platform.organizations.restore', 'platform.subscriptions.manage', 'platform.billing.manage'],
+            ['platform.organizations.manage_status', 'platform.organizations.end', 'platform.organizations.restore', 'platform.subscriptions.manage', 'platform.billing.manage', 'platform.messages.manage', 'platform.support.manage', 'platform.support.agent'],
             collect($upgraded->permissions()->pluck('key')->all())
                 ->diff($c2Keys)->values()->all(),
         );
         $provisioner->ensurePrimaryAdministrator();
-        $this->assertSame(11, $role->permissions()->count());
+        $this->assertSame(14, $role->permissions()->count());
         $this->assertSame(1, PlatformRole::count());
     }
 

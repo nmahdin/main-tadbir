@@ -204,6 +204,8 @@ final class SystemMessageService
      */
     public function pendingAcksForUser(User $user)
     {
+        $this->ensureEligibleDeliveriesForUser($user);
+
         return CoreSystemMessageDelivery::query()
             ->where('user_id', $user->id)
             ->whereNull('acknowledged_at')
@@ -218,6 +220,24 @@ final class SystemMessageService
      * Inbox listing for a consumer (with eligibility resolved).
      */
     public function inboxForUser(User $user, ?bool $unreadOnly = false, int $perPage = 20)
+    {
+        $this->ensureEligibleDeliveriesForUser($user);
+
+        $query = CoreSystemMessageDelivery::query()
+            ->where('user_id', $user->id)
+            ->with('message')
+            ->whereHas('message', fn ($q) => $q->where('status', 'published'))
+            ->orderByDesc('first_delivered_at');
+
+        if ($unreadOnly) {
+            $query->unread();
+        }
+
+        return $query->paginate($perPage);
+    }
+
+    /** Provision only current, eligible versions before pending-ack or inbox reads. */
+    private function ensureEligibleDeliveriesForUser(User $user): void
     {
         $eligibleMessageIds = CoreSystemMessage::query()
             ->where('status', 'published')
@@ -254,17 +274,6 @@ final class SystemMessageService
             $this->ensureDelivery($m, $user, $now);
         }
 
-        $query = CoreSystemMessageDelivery::query()
-            ->where('user_id', $user->id)
-            ->with('message')
-            ->whereHas('message', fn ($q) => $q->where('status', 'published'))
-            ->orderByDesc('first_delivered_at');
-
-        if ($unreadOnly) {
-            $query->unread();
-        }
-
-        return $query->paginate($perPage);
     }
 
     private function userEligibleForMessage(CoreSystemMessage $msg, User $user): bool
