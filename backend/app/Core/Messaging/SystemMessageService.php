@@ -8,8 +8,10 @@ use App\Core\Organizations\Organization;
 use App\Core\Organizations\OrganizationMembership;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 final class SystemMessageService
 {

@@ -37,7 +37,7 @@ final class InboxController extends Controller
         }
 
         $perPage = max(1, min($request->integer('per_page', 20), 100));
-        $page = $q->orderByRaw("CASE urgency WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END")
+        $page = $q->orderByRaw("CASE urgency WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END")
             ->orderBy('due_at', 'asc')
             ->orderBy('created_at', 'desc')
             ->paginate($perPage);
@@ -59,6 +59,7 @@ final class InboxController extends Controller
         if (! CoreActionItem::query()->whereKey($item->id)->forUser($user)->exists()) {
             abort(404);
         }
+
         return response()->json(['data' => $this->serialize($item)]);
     }
 
@@ -73,6 +74,7 @@ final class InboxController extends Controller
         if (! CoreActionItem::query()->whereKey($item->id)->forUser($user)->exists()) {
             abort(404);
         }
+
         // User can only dismiss items directly assigned to them.
         if ($item->recipient_user_id !== $user->id) {
             return response()->json(['message' => 'Only the assignee can dismiss this item.', 'code' => 'not_assignee'], 403);
@@ -95,7 +97,7 @@ final class InboxController extends Controller
             'summary' => $i->summary,
             'deep_link' => $i->deep_link,
             'due_at' => $i->due_at?->toIso8601String(),
-            'allowed_actions' => $i->allowed_actions,
+            'allowed_actions' => $i->allowed_actions ?? [],
             'recipient_scope' => $i->organization_id ? 'organization' : 'personal',
             'organization_id' => $i->organization_id,
             'is_overdue' => $i->isOverdue(),

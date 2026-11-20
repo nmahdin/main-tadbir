@@ -27,7 +27,7 @@ return new class extends Migration
             $table->foreignId('recipient_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('organization_id')->nullable()->constrained('organizations')->nullOnDelete();
             $table->foreignId('assigned_user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->json('allowed_actions')->default('[]');
+            $table->json('allowed_actions')->nullable();
             $table->json('origin_context')->nullable();
             $table->timestamps();
 

@@ -8,9 +8,11 @@ use App\Core\Support\SupportTicketPriority;
 use App\Core\Support\SupportTicketService;
 use App\Core\Support\SupportTicketStatus;
 use App\Http\Controllers\Controller;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -148,6 +150,7 @@ final class SupportTicketController extends Controller
         if (! $att) {
             abort(404);
         }
+
         try {
             return $this->service->streamAttachment($att, $request->user());
         } catch (DomainException $e) {

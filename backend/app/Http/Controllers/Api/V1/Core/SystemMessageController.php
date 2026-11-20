@@ -59,6 +59,7 @@ final class SystemMessageController extends Controller
         if ((int) $delivery->user_id !== (int) $request->user()->id) {
             abort(404);
         }
+
         $delivery = $this->service->markRead($delivery);
         return response()->json(['data' => ['delivery_id' => $delivery->id, 'read_at' => $delivery->read_at?->toIso8601String()]]);
     }
@@ -68,6 +69,7 @@ final class SystemMessageController extends Controller
         if ((int) $delivery->user_id !== (int) $request->user()->id) {
             abort(404);
         }
+
         $delivery = $this->service->acknowledge($request->user(), $delivery);
         return response()->json(['data' => [
             'delivery_id' => $delivery->id,

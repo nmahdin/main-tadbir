@@ -8,9 +8,11 @@ use App\Core\Support\SupportTicketStatus;
 use App\Http\Controllers\Api\V1\Platform\Concerns\AuthorizesPlatformRequests;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 
 /**
  * Platform staff queue management. Both manage and agent permission

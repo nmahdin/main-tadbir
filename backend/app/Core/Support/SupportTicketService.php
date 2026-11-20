@@ -5,10 +5,13 @@ namespace App\Core\Support;
 use App\Core\Audit\AuditWriter;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use DomainException;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
