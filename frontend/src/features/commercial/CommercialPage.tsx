@@ -29,7 +29,7 @@ export function CommercialPage(){
  const tabs=isPlatform?[
   ['/billing/platform','مدیریت طرح‌ها'],['/billing/platform/taxes','قوانین مالیات'],['/billing/platform/promotions','کدهای تخفیف'],['/billing/platform/findings','مغایرت‌های مالی']
  ]:[
-  ['/billing/subscription','اشتراک و منابع'],['/billing/catalog','انتخاب طرح'],['/billing/quotes','پیش‌فاکتورها'],['/billing/orders','سفارش‌ها'],['/billing/documents','اسناد مالی']
+  ['/billing/subscription','اشتراک و منابع'],['/billing/subscription-details','دوره و وضعیت تأییدشده'],['/billing/catalog','انتخاب طرح'],['/billing/quotes','پیش‌فاکتورها'],['/billing/orders','سفارش‌ها'],['/billing/documents','اسناد مالی']
  ];
  const view=isPlatform?<PlatformCommerce/>:path==='/billing/subscription'||path==='/billing'?
   <SubscriptionPage scope={access.scope}/>:path==='/billing/catalog'||path.startsWith('/billing/plan/')?

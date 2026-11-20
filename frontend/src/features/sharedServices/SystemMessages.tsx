@@ -4,6 +4,7 @@ import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {Button,Badge,LoadingState} from '../../shared/ui/Primitives';
 import {useEnvironment} from '../../app/providers/EnvironmentContext';
 import {sharedServicesApi,type SystemDelivery,type AdminMessage} from './sharedServicesApi';
+import {safeInternalActionPath} from './sharedServicesRules';
 import {SharedPanel,SharedError,SharedEmpty,SharedDate} from './SharedServicesUi';
 const field='block w-full rounded-xl border border-slate-200 p-2 text-sm';
 export function SystemMessages(){
@@ -55,7 +56,7 @@ export function SystemMessages(){
      {!m.read_at&&<Button variant="secondary" disabled={mark.isPending} onClick={()=>mark.mutate(m.delivery_id)}>ثبت خوانده‌شدن</Button>}
      {m.ack_required&&!m.acknowledged_at&&<Button disabled={acknowledge.isPending} onClick={()=>{if(window.confirm('آیا متن نسخه '+m.version+' را مطالعه کرده و دریافت آن را صریحاً تأیید می‌کنید؟'))acknowledge.mutate(m.delivery_id);}}>تأیید صریح نسخه</Button>}
      {m.acknowledged_at&&<p className="text-xs text-emerald-700">تأییدشده در <SharedDate value={m.acknowledged_at}/></p>}
-     {m.cta_link?.startsWith('/')&&!m.cta_link.startsWith('//')&&<Link to={m.cta_link} className="text-sm text-[#39677C]">{m.cta_label}</Link>}
+     {safeInternalActionPath(m.cta_link)&&<Link to={safeInternalActionPath(m.cta_link)!} className="text-sm text-[#39677C]">{m.cta_label}</Link>}
     </div>
    </article>)}</div>}
   {mark.isError&&<SharedError error={mark.error}/>}
