@@ -98,8 +98,8 @@ final class RestoreService
         $verification->preflight = $findings;
         $verification->status = $ok ? RestoreVerificationStatus::PREFLIGHT_PASSED->value : RestoreVerificationStatus::FAILED->value;
         if ($ok) {
-            $verification->target_database = 'restore_test_'.Str::lower(Str::random(8));
-            $verification->target_storage_prefix = 'restore-tests/'.Str::uuid()->toString();
+            $verification->target_database = 'restore_test_' . Str::lower(Str::random(8));
+            $verification->target_storage_prefix = 'restore-tests/' . Str::uuid()->toString();
         }
         $verification->save();
 

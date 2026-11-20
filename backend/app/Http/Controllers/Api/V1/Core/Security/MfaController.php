@@ -6,6 +6,7 @@ use App\Core\Security\Mfa\MfaService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
@@ -27,7 +28,7 @@ final class MfaController extends Controller
             'data' => [
                 'enrolled' => $this->mfa->hasActiveFactor($user),
                 'recovery_codes_remaining' => $this->mfa->hasActiveFactor($user)
-                    ? (int) \Illuminate\Support\Facades\DB::table('security_mfa_recovery_codes')
+                    ? (int) DB::table('security_mfa_recovery_codes')
                         ->where('user_id', $user->id)->whereNull('used_at')->count()
                     : 0,
             ],

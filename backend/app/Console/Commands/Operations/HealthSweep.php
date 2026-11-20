@@ -35,7 +35,7 @@ final class HealthSweep extends Command
             foreach ($degraded as $component) {
                 $incidents->raiseAlert(
                     'health',
-                    'health:'.$component,
+                    'health:' . $component,
                     IncidentSeverity::HIGH,
                     "Health degraded: {$component}",
                     null,
@@ -49,7 +49,7 @@ final class HealthSweep extends Command
                 );
             }
         } catch (Throwable $e) {
-            $this->error('Health sweep failed: '.$e->getMessage());
+            $this->error('Health sweep failed: ' . $e->getMessage());
 
             return self::FAILURE;
         }

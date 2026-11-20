@@ -9,6 +9,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
@@ -38,7 +39,7 @@ final class BackupService
     public function request(User $actor, BackupJobType $type = BackupJobType::FULL, ?int $retentionDays = null): CoreBackupJob
     {
         $job = CoreBackupJob::create([
-            'job_uuid' => \Illuminate\Support\Str::uuid()->toString(),
+            'job_uuid' => Str::uuid()->toString(),
             'type' => $type->value,
             'status' => BackupJobStatus::REQUESTED->value,
             'disk' => 'local-backup',

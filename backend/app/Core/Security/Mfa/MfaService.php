@@ -199,7 +199,7 @@ final class MfaService
      */
     public function verifyTotpChallenge(User $user, string $challengeToken, string $code, Request $request): bool
     {
-        $throttleKey = 'mfa:verify:'.$user->id;
+        $throttleKey = 'mfa:verify:' . $user->id;
         if (RateLimiter::tooManyAttempts($throttleKey, 20)) {
             $this->events->record('mfa.challenge.rate_limited', SecurityEventOutcome::RATE_LIMITED,
                 $user, $user->id, request: $request);
@@ -288,7 +288,7 @@ final class MfaService
      */
     public function useRecoveryCode(User $user, string $code, Request $request): bool
     {
-        $throttleKey = 'mfa:recovery:'.$user->id;
+        $throttleKey = 'mfa:recovery:' . $user->id;
         if (RateLimiter::tooManyAttempts($throttleKey, 10)) {
             $this->events->record('mfa.recovery.rate_limited', SecurityEventOutcome::RATE_LIMITED,
                 $user, $user->id, request: $request);

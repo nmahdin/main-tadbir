@@ -6,6 +6,7 @@ use App\Core\Security\Sessions\StepUpService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\PersonalAccessToken;
 
 /**
@@ -67,7 +68,7 @@ final class SessionController extends Controller
         $user = $request->user();
         $token = $request->bearerToken();
         $tokenId = $token ? hash('sha256', $token) : null;
-        $scopes = $tokenId ? \Illuminate\Support\Facades\DB::table('security_step_up_sessions')
+        $scopes = $tokenId ? DB::table('security_step_up_sessions')
             ->where('user_id', $user->id)
             ->where('auth_token_id', $tokenId)
             ->whereNull('revoked_at')

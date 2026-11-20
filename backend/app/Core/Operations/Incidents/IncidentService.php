@@ -152,10 +152,10 @@ final class IncidentService
             CoreIncidentActivity::create([
                 'incident_id' => $incident->id,
                 'actor_user_id' => $actor->id,
-                'event_type' => 'incident.'.$target->value,
+                'event_type' => 'incident.' . $target->value,
                 'payload' => ['notes' => $notes],
             ]);
-            $this->events->record('ops.incident.'.$target->value, SecurityEventOutcome::SUCCESS,
+            $this->events->record('ops.incident.' . $target->value, SecurityEventOutcome::SUCCESS,
                 $actor, targetType: 'ops_incident', targetId: $incident->id);
 
             return $incident;
