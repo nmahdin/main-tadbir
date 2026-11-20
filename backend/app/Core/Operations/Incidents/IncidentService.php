@@ -101,22 +101,30 @@ final class IncidentService
      */
     public function openIncident(User $actor, string $title, IncidentSeverity $severity, ?string $summary): CoreIncident
     {
-        return DB::transaction(function () use ($actor, $title, $severity, $summary): CoreIncident {
+        return $this->openManually($actor, $severity, $title, $summary, 'manual');
+    }
+
+    /**
+     * Open an incident with explicit source (used by CLI/automation).
+     */
+    public function openManually(?User $actor, IncidentSeverity $severity, string $title, ?string $summary, string $source = 'manual'): CoreIncident
+    {
+        return DB::transaction(function () use ($actor, $title, $severity, $summary, $source): CoreIncident {
             $incident = CoreIncident::create([
                 'reference' => $this->allocateReference('INC'),
                 'title' => $title,
                 'severity' => $severity->value,
                 'status' => IncidentStatus::OPEN->value,
-                'source' => 'manual',
+                'source' => $source,
                 'summary' => $summary,
-                'opened_by_user_id' => $actor->id,
+                'opened_by_user_id' => $actor?->id,
                 'opened_at' => now(),
             ]);
             CoreIncidentActivity::create([
                 'incident_id' => $incident->id,
-                'actor_user_id' => $actor->id,
+                'actor_user_id' => $actor?->id,
                 'event_type' => 'incident.opened',
-                'payload' => ['source' => 'manual'],
+                'payload' => ['source' => $source],
             ]);
             $this->events->record('ops.incident.opened', SecurityEventOutcome::SUCCESS,
                 $actor, targetType: 'ops_incident', targetId: $incident->id);

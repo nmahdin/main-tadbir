@@ -30,7 +30,7 @@ final class RestoreService
     /**
      * Begin restore verification against a backup job.
      */
-    public function requestVerification(CoreBackupJob $job, User $actor): CoreRestoreVerification
+    public function requestVerification(CoreBackupJob $job, ?User $actor = null): CoreRestoreVerification
     {
         if (! in_array($job->status, [BackupJobStatus::SUCCEEDED->value, BackupJobStatus::VERIFIED->value], true)) {
             throw new DomainException('Only succeeded/verified backups can be restored.');
@@ -40,7 +40,7 @@ final class RestoreService
             'status' => RestoreVerificationStatus::REQUESTED->value,
             'target_database' => null, // assigned at preflight
             'target_storage_prefix' => null,
-            'requested_by_user_id' => $actor->id,
+            'requested_by_user_id' => $actor?->id,
         ]);
         $this->events->record('ops.restore.requested', SecurityEventOutcome::SUCCESS,
             $actor, targetType: 'ops_restore_verification', targetId: $verification->id,

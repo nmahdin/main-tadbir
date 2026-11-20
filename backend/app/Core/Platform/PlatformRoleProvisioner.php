@@ -138,6 +138,8 @@ final class PlatformRoleProvisioner
     /** @var list<string> Permissions for the standalone support_agent role. */
     private const SUPPORT_AGENT_PERMISSIONS = [
         'platform.support.agent',
+        'platform.health.view',
+        'platform.incidents.manage',
     ];
 
     /** @return list<string> */

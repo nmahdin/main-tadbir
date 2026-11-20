@@ -94,6 +94,11 @@ Schedule::command('ops:backup-run')
     ->dailyAt('02:30')
     ->withoutOverlapping(10);
 
+// C7-CORE: alert dispatch every minute (idempotent; log adapter default).
+Schedule::command('ops:alerts:dispatch')
+    ->everyMinute()
+    ->withoutOverlapping(1);
+
 // Overdue reminders are idempotent, so they may run as often or as rarely as the
 // host allows. Nothing below assumes a permanent cron: the command is safe to
 // call from the Bale tick above, from an external scheduler, or by hand.
