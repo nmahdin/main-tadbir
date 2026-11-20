@@ -2,6 +2,7 @@
 
 namespace App\Core\Support;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -38,6 +39,13 @@ class CoreSupportAttachment extends Model
         ];
     }
 
-    public function ticket(): BelongsTo { return $this->belongsTo(CoreSupportTicket::class, 'ticket_id'); }
-    public function uploader(): BelongsTo { return $this->belongsTo(\App\Models\User::class, 'uploader_user_id'); }
+    public function ticket(): BelongsTo
+    {
+        return $this->belongsTo(CoreSupportTicket::class, 'ticket_id');
+    }
+
+    public function uploader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'uploader_user_id');
+    }
 }

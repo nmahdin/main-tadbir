@@ -46,18 +46,37 @@ class CoreSupportTicket extends Model
         ];
     }
 
-    public function owner(): BelongsTo { return $this->belongsTo(User::class, 'owner_user_id'); }
-    public function assignee(): BelongsTo { return $this->belongsTo(User::class, 'assigned_user_id'); }
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_user_id');
+    }
 
-    public function messages(): HasMany { return $this->hasMany(CoreSupportMessage::class, 'ticket_id'); }
-    public function activity(): HasMany { return $this->hasMany(CoreSupportActivity::class, 'ticket_id'); }
-    public function attachments(): HasMany { return $this->hasMany(CoreSupportAttachment::class, 'ticket_id'); }
+    public function assignee(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_user_id');
+    }
+
+    public function messages(): HasMany
+    {
+        return $this->hasMany(CoreSupportMessage::class, 'ticket_id');
+    }
+
+    public function activity(): HasMany
+    {
+        return $this->hasMany(CoreSupportActivity::class, 'ticket_id');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(CoreSupportAttachment::class, 'ticket_id');
+    }
 
     public function scopeVisibleTo(Builder $q, User $user, bool $isSupportAgent): Builder
     {
         if ($isSupportAgent) {
             return $q;
         }
+
         return $q->where('owner_user_id', $user->id);
     }
 
@@ -82,6 +101,7 @@ class CoreSupportTicket extends Model
     public function canTransitionTo(SupportTicketStatus $target): bool
     {
         $current = SupportTicketStatus::from($this->status);
+
         return $current->canTransitionTo($target);
     }
 }

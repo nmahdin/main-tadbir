@@ -2,6 +2,7 @@
 
 namespace App\Core\Support;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $id
  * @property int $ticket_id
- * @property int $actor_user_id
+ * @property int|null $actor_user_id
  * @property string $event_type
  * @property array|null $payload
  * @property \Illuminate\Support\Carbon $created_at
@@ -32,6 +33,13 @@ class CoreSupportActivity extends Model
         ];
     }
 
-    public function ticket(): BelongsTo { return $this->belongsTo(CoreSupportTicket::class, 'ticket_id'); }
-    public function actor(): BelongsTo { return $this->belongsTo(\App\Models\User::class, 'actor_user_id'); }
+    public function ticket(): BelongsTo
+    {
+        return $this->belongsTo(CoreSupportTicket::class, 'ticket_id');
+    }
+
+    public function actor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'actor_user_id');
+    }
 }

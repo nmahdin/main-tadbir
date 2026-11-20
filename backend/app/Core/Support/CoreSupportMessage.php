@@ -2,6 +2,7 @@
 
 namespace App\Core\Support;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -35,8 +36,15 @@ class CoreSupportMessage extends Model
         ];
     }
 
-    public function ticket(): BelongsTo { return $this->belongsTo(CoreSupportTicket::class, 'ticket_id'); }
-    public function author(): BelongsTo { return $this->belongsTo(\App\Models\User::class, 'author_user_id'); }
+    public function ticket(): BelongsTo
+    {
+        return $this->belongsTo(CoreSupportTicket::class, 'ticket_id');
+    }
+
+    public function author(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'author_user_id');
+    }
 
     public function isVisibleToRequester(): bool
     {
