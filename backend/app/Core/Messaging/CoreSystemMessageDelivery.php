@@ -5,6 +5,7 @@ namespace App\Core\Messaging;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Per-recipient delivery row. read_at and acknowledged_at are fully
@@ -18,12 +19,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $version
  * @property int $user_id
  * @property int|null $organization_id
- * @property \Illuminate\Support\Carbon|null $read_at
- * @property \Illuminate\Support\Carbon|null $acknowledged_at
+ * @property Carbon|null $read_at
+ * @property Carbon|null $acknowledged_at
  * @property string|null $ack_evidence_hash
- * @property \Illuminate\Support\Carbon|null $first_delivered_at
- * @property \Illuminate\Support\Carbon $created_at
- * @property \Illuminate\Support\Carbon $updated_at
+ * @property Carbon|null $first_delivered_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  */
 class CoreSystemMessageDelivery extends Model
 {

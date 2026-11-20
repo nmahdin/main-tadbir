@@ -5,6 +5,7 @@ namespace App\Core\Support;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -16,9 +17,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $mime_type
  * @property int $size_bytes
  * @property string $access_token
- * @property \Illuminate\Support\Carbon|null $accessed_at
- * @property \Illuminate\Support\Carbon $created_at
- * @property \Illuminate\Support\Carbon $updated_at
+ * @property Carbon|null $accessed_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  */
 class CoreSupportAttachment extends Model
 {

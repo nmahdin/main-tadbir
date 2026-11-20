@@ -3,13 +3,14 @@
 namespace App\Core\Inbox;
 
 use App\Core\Audit\AuditWriter;
+use App\Core\Memberships\MembershipStatus;
 use App\Core\Organizations\Organization;
+use App\Core\Organizations\OrganizationMembership;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Str;
 
 /**
  * One per-recipient actionable work entry (CORE-REQ). The origin module
@@ -49,9 +50,9 @@ class CoreActionItem extends Model
 
     public function scopeForUser(Builder $q, User $user): Builder
     {
-        $orgIds = \App\Core\Organizations\OrganizationMembership::query()
+        $orgIds = OrganizationMembership::query()
             ->where('user_id', $user->id)
-            ->where('status', \App\Core\Memberships\MembershipStatus::Active->value)
+            ->where('status', MembershipStatus::Active->value)
             ->pluck('organization_id');
 
         return $q->where(function (Builder $inner) use ($user, $orgIds): void {
@@ -151,6 +152,7 @@ class CoreActionItem extends Model
     public function isOverdue(?CarbonImmutable $now = null): bool
     {
         $now ??= CarbonImmutable::now('UTC');
+
         return $this->resolved_at === null
             && $this->due_at !== null
             && $this->due_at->lt($now);
@@ -175,6 +177,7 @@ class CoreActionItem extends Model
             && ! str_starts_with($path, '/')) {
             return null;
         }
+
         return $path;
     }
 }

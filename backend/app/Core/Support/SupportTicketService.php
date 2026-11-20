@@ -3,6 +3,7 @@
 namespace App\Core\Support;
 
 use App\Core\Audit\AuditWriter;
+use App\Core\Platform\PlatformAuthorizer;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use DomainException;
@@ -23,8 +24,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 final class SupportTicketService
 {
     public const ALLOWED_CATEGORIES = ['billing', 'account', 'technical', 'feature_request', 'other'];
+
     // 10 MB per file.
     public const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
     public const MAX_ATTACHMENTS_PER_MESSAGE = 6;
 
     public function __construct(
@@ -35,8 +38,8 @@ final class SupportTicketService
     // ---- Creation ---------------------------------------------------
 
     /**
-     * @param array{subject:string,category:string,body:string,priority?:string} $payload
-     * @param array<int,UploadedFile> $attachments
+     * @param  array{subject:string,category:string,body:string,priority?:string}  $payload
+     * @param  array<int,UploadedFile>  $attachments
      */
     public function openTicket(User $requester, array $payload, array $attachments = []): CoreSupportTicket
     {
@@ -52,7 +55,7 @@ final class SupportTicketService
         return DB::transaction(function () use ($requester, $payload, $attachments, $category, $priority): CoreSupportTicket {
             $reference = $this->generateReference();
 
-            $ticket = new CoreSupportTicket();
+            $ticket = new CoreSupportTicket;
             $ticket->fill([
                 'reference' => $reference,
                 'subject' => mb_substr((string) $payload['subject'], 0, 200),
@@ -137,6 +140,7 @@ final class SupportTicketService
                 'from' => $previous,
                 'to' => $target->value,
             ]);
+
             return $ticket;
         });
     }
@@ -158,6 +162,7 @@ final class SupportTicketService
                 'from_user_id' => $from,
                 'to_user_id' => $agent?->id,
             ]);
+
             return $ticket;
         });
     }
@@ -176,6 +181,7 @@ final class SupportTicketService
     {
         if ($internalNote) {
             $this->assertSupportAgent($actor);
+
             return;
         }
         if (! $ticket->isOwner($actor)) {
@@ -192,8 +198,9 @@ final class SupportTicketService
 
     public function isSupportAgent(User $user): bool
     {
-        /** @var \App\Core\Platform\PlatformAuthorizer $auth */
-        $auth = app(\App\Core\Platform\PlatformAuthorizer::class);
+        /** @var PlatformAuthorizer $auth */
+        $auth = app(PlatformAuthorizer::class);
+
         return $auth->allows($user, 'platform.support.manage')
             || $auth->allows($user, 'platform.support.agent');
     }
@@ -249,7 +256,7 @@ final class SupportTicketService
                 ['disk' => 'local'],
             );
 
-            $att = new CoreSupportAttachment();
+            $att = new CoreSupportAttachment;
             $att->fill([
                 'ticket_id' => $ticket->id,
                 'uploader_user_id' => $actor->id,
@@ -269,7 +276,7 @@ final class SupportTicketService
             ];
         }
 
-        $msg = new CoreSupportMessage();
+        $msg = new CoreSupportMessage;
         $msg->fill([
             'ticket_id' => $ticket->id,
             'author_user_id' => $actor->id,
@@ -285,7 +292,7 @@ final class SupportTicketService
 
     private function recordActivity(CoreSupportTicket $ticket, User $actor, string $event, ?array $payload): void
     {
-        $activity = new CoreSupportActivity();
+        $activity = new CoreSupportActivity;
         $activity->fill([
             'ticket_id' => $ticket->id,
             'actor_user_id' => $actor->id,
@@ -300,6 +307,7 @@ final class SupportTicketService
         if ($ticket->isOwner($actor)) {
             return 'requester';
         }
+
         return $this->isSupportAgent($actor) ? 'agent' : 'system';
     }
 
@@ -313,7 +321,7 @@ final class SupportTicketService
             $last = (int) DB::table('core_support_tickets')
                 ->where('reference', 'like', $prefixRef.'%')
                 ->lockForUpdate()
-                ->max(DB::raw('CAST(SUBSTRING(reference, '. (strlen($prefixRef)+1) .') AS UNSIGNED)'));
+                ->max(DB::raw('CAST(SUBSTRING(reference, '.(strlen($prefixRef) + 1).') AS UNSIGNED)'));
             $next = str_pad((string) ($last + 1), 5, '0', STR_PAD_LEFT);
             $candidate = $prefixRef.$next;
             if (! CoreSupportTicket::query()->where('reference', $candidate)->exists()) {

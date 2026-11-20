@@ -2,9 +2,6 @@
 
 namespace App\Core\Inbox;
 
-use App\Core\Organizations\Organization;
-use App\Models\User;
-
 /**
  * Provider/adapter contract for CORE-REQ. Origin modules (billing,
  * invitations, content, etc.) implement this interface to register

@@ -24,7 +24,7 @@ final class SystemMessageService
      * an existing $slug with $bumpVersion=true creates a new version;
      * acknowledgment is required per version (immutable prior evidence).
      *
-     * @param array{title:string,body_markdown:string,audience:string,ack_required?:bool,ack_policy_version?:string|null,cta_label?:string,cta_link?:string|null,category?:string|null,bump_version?:bool} $payload
+     * @param  array{title:string,body_markdown:string,audience:string,ack_required?:bool,ack_policy_version?:string|null,cta_label?:string,cta_link?:string|null,category?:string|null,bump_version?:bool}  $payload
      */
     public function draft(User $actor, string $slug, array $payload, ?Organization $organization = null): CoreSystemMessage
     {
@@ -42,7 +42,7 @@ final class SystemMessageService
                 }
             }
 
-            $msg = new CoreSystemMessage();
+            $msg = new CoreSystemMessage;
             $msg->fill([
                 'slug' => $slug,
                 'version' => $version,
@@ -102,6 +102,7 @@ final class SystemMessageService
         return DB::transaction(function () use ($actor, $msg, $at): CoreSystemMessage {
             $msg->forceFill(['status' => 'retired', 'retired_at' => $at])->save();
             $this->audit->record($actor, 'system_message.retire', ['message_id' => (int) $msg->id]);
+
             return $msg;
         });
     }
@@ -148,6 +149,7 @@ final class SystemMessageService
         if ($delivery->read_at === null) {
             $delivery->forceFill(['read_at' => $at])->save();
         }
+
         return $delivery;
     }
 

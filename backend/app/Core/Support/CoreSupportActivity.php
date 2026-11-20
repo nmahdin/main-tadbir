@@ -5,6 +5,7 @@ namespace App\Core\Support;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Append-only event log for a support ticket.
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $actor_user_id
  * @property string $event_type
  * @property array|null $payload
- * @property \Illuminate\Support\Carbon $created_at
+ * @property Carbon $created_at
  */
 class CoreSupportActivity extends Model
 {

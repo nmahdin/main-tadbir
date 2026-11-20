@@ -4,6 +4,7 @@ namespace App\Core\Messaging;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -19,11 +20,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $status
  * @property bool $ack_required
  * @property string|null $ack_policy_version
- * @property \Illuminate\Support\Carbon|null $published_at
- * @property \Illuminate\Support\Carbon|null $retired_at
+ * @property Carbon|null $published_at
+ * @property Carbon|null $retired_at
  * @property int $published_by_user_id
- * @property \Illuminate\Support\Carbon $created_at
- * @property \Illuminate\Support\Carbon $updated_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  */
 class CoreSystemMessage extends Model
 {

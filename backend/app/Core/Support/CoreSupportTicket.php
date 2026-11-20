@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -18,11 +19,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $owner_user_id
  * @property int|null $assigned_user_id
  * @property int|null $organization_id
- * @property \Illuminate\Support\Carbon|null $resolved_at
- * @property \Illuminate\Support\Carbon|null $closed_at
- * @property \Illuminate\Support\Carbon|null $last_replied_at
- * @property \Illuminate\Support\Carbon $created_at
- * @property \Illuminate\Support\Carbon $updated_at
+ * @property Carbon|null $resolved_at
+ * @property Carbon|null $closed_at
+ * @property Carbon|null $last_replied_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  */
 class CoreSupportTicket extends Model
 {

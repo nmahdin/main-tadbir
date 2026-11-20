@@ -38,6 +38,7 @@ use Illuminate\Database\QueryException;
 final class PlatformRoleProvisioner
 {
     public const PRIMARY_ROLE_KEY = 'primary_administrator';
+
     public const SUPPORT_AGENT_ROLE_KEY = 'support_agent';
 
     /** @var list<string> Previous approved set (Stage C2, frozen). */
@@ -239,6 +240,7 @@ final class PlatformRoleProvisioner
 
         if ($role->wasRecentlyCreated) {
             $role->permissions()->attach($expectedIds);
+
             return $role->refresh();
         }
 
