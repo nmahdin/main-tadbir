@@ -27,7 +27,7 @@ export function CommercialPage(){
  const isPlatform=access.area==='platform';
  const path=location.pathname;
  const tabs=isPlatform?[
-  ['/billing/platform','مدیریت طرح‌ها'],['/billing/platform/taxes','قوانین مالیات'],['/billing/platform/promotions','کدهای تخفیف']
+  ['/billing/platform','مدیریت طرح‌ها'],['/billing/platform/taxes','قوانین مالیات'],['/billing/platform/promotions','کدهای تخفیف'],['/billing/platform/findings','مغایرت‌های مالی']
  ]:[
   ['/billing/subscription','اشتراک و منابع'],['/billing/catalog','انتخاب طرح'],['/billing/quotes','پیش‌فاکتورها'],['/billing/orders','سفارش‌ها'],['/billing/documents','اسناد مالی']
  ];

@@ -4,6 +4,8 @@ import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {Button,Badge,EmptyState,LoadingState} from '../../shared/ui/Primitives';
 import {commercialApi,PERIODS,PERIOD_LABELS,toman,type Period,type Promotion,type TaxRule,type VersionPrice} from './commercialApi';
 import {Surface,ServerError,Status,date,fa} from './CommercialUi';
+import {commercialFlowsApi} from './commercialFlowsApi';
+import {PlatformFinance} from './PlatformFinance';
 
 function PriceVersion({version,planKey}:{version:VersionPrice;planKey:string}){
  const cache=useQueryClient();
@@ -35,20 +37,20 @@ function PriceVersion({version,planKey}:{version:VersionPrice;planKey:string}){
 }
 function PlanAdmin(){
  const [params,setParams]=useSearchParams();
- const catalog=useQuery({queryKey:['c5','catalog'],queryFn:commercialApi.catalog,retry:false});
+ const catalog=useQuery({queryKey:['c5','platform-plans'],queryFn:commercialFlowsApi.platformPlans,retry:false});
  const plans=catalog.data?.data.plans??[];
- const key=params.get('plan')||plans[0]?.plan.key||'';
+ const key=params.get('plan')||plans[0]?.key||'';
  const versions=useQuery({queryKey:['c5','platform-prices',key],queryFn:()=>commercialApi.prices(key),enabled:Boolean(key),retry:false});
  if(catalog.isPending)return <Surface title="مدیریت طرح‌ها"><LoadingState/></Surface>;
  if(catalog.isError)return <ServerError error={catalog.error} retry={()=>void catalog.refetch()}/>;
  return <>
- <Surface title="مدیریت طرح‌ها" description="A09 — نمای طرح‌های دارای قیمت منتشرشده. ساخت نسخه/طرح در C5-M2 API تأییدشده ندارد.">
+ <Surface title="مدیریت طرح‌ها" description="A09 — فهرست کامل طرح‌های پیش‌نویس و منتشرشده از API مدیریت پلتفرم. ایجاد نسخه از طریق API موجود نیست.">
   <div className="c5-row"><div className="c5-form" style={{minWidth:240}}><label>طرح
    <select aria-label="انتخاب طرح برای مدیریت قیمت" value={key} disabled={!plans.length} onChange={e=>setParams({plan:e.target.value})}>
-    {plans.map(entry=><option key={entry.plan.id} value={entry.plan.key}>{entry.plan.name} ({entry.plan.key})</option>)}
+    {plans.map(entry=><option key={entry.id} value={entry.key}>{entry.name} ({entry.key})</option>)}
    </select></label></div>
    <Button variant="secondary" disabled title="API ساخت نسخهٔ جدید تأیید نشده است">ایجاد نسخهٔ جدید (غیرفعال)</Button></div>
-  <p className="c5-muted">طرح‌های پیش‌نویس که در کاتالوگ منتشرشده نیستند ممکن است در این فهرست ظاهر نشوند؛ endpoint فهرست کامل طرح‌ها تأیید نشده است.</p>
+  <p className="c5-muted">منبع فهرست: /platform/billing/plans؛ داده‌های پیش‌نویس نیز نمایش داده می‌شوند.</p>
  </Surface>
  {!key?<Surface><EmptyState title="طرح قیمت‌گذاری‌شده‌ای پیدا نشد" description="پس از انتشار اولین قیمت، طرح در کاتالوگ قابل مشاهده خواهد بود."/></Surface>:
  versions.isPending?<Surface><LoadingState/></Surface>:versions.isError?
@@ -118,6 +120,7 @@ export function PlatformCommerce(){
  const path=useLocation().pathname;
  if(path==='/billing/platform/taxes')return <TaxAdmin/>;
  if(path==='/billing/platform/promotions')return <PromotionAdmin/>;
+ if(path==='/billing/platform/findings'||path.startsWith('/billing/platform/findings/'))return <PlatformFinance/>;
  if(path==='/billing/platform'||path==='/billing')return <PlanAdmin/>;
  return <Surface title="صفحهٔ نامعتبر"><EmptyState title="بخش مدیریت مالی یافت نشد"/></Surface>;
 }
