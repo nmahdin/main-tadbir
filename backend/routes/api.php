@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\Core\Security\MfaController;
 use App\Http\Controllers\Api\V1\Core\Security\SessionController;
 use App\Http\Controllers\Api\V1\Core\SupportTicketController;
 use App\Http\Controllers\Api\V1\Core\SystemMessageController;
+use App\Http\Controllers\Api\V1\Platform\PlatformMaintenanceController;
 use App\Http\Middleware\EnsureDepartmentStructure;
 use App\Models\DomainRecord;
 use App\Models\WorkspaceRecord;
@@ -82,7 +83,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('health/db', [HealthController::class, 'db'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->name('api.v1.health.db');
-    Route::get('maintenance/current', [\App\Http\Controllers\Api\V1\Platform\PlatformMaintenanceController::class, 'current'])
+    Route::get('maintenance/current', [PlatformMaintenanceController::class, 'current'])
         ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
         ->name('api.v1.maintenance.current');
     Route::get('public/identity', [SystemSettingController::class, 'publicIdentity'])

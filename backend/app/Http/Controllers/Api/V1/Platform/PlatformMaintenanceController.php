@@ -4,13 +4,11 @@ namespace App\Http\Controllers\Api\V1\Platform;
 
 use App\Core\Operations\Maintenance\CoreMaintenanceWindow;
 use App\Core\Operations\Maintenance\MaintenanceService;
-use App\Core\Operations\Maintenance\MaintenanceStatus;
 use App\Http\Controllers\Api\V1\Platform\Concerns\AuthorizesPlatformRequests;
 use App\Http\Controllers\Controller;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 final class PlatformMaintenanceController extends Controller
 {

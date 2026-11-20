@@ -9,7 +9,6 @@ use App\Core\Security\Events\SecurityEventWriter;
 use App\Models\User;
 use DomainException;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
 

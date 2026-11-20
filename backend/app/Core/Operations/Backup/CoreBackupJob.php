@@ -2,6 +2,7 @@
 
 namespace App\Core\Operations\Backup;
 
+use App\Core\Operations\Restore\CoreRestoreVerification;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -37,6 +38,6 @@ class CoreBackupJob extends Model
 
     public function restorations(): HasMany
     {
-        return $this->hasMany(\App\Core\Operations\Restore\CoreRestoreVerification::class, 'backup_job_id');
+        return $this->hasMany(CoreRestoreVerification::class, 'backup_job_id');
     }
 }

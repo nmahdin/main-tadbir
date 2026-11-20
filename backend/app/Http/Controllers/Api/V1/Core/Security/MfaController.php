@@ -16,9 +16,7 @@ use RuntimeException;
  */
 final class MfaController extends Controller
 {
-    public function __construct(
-        private readonly MfaService $mfa,
-    ) {}
+    public function __construct(private readonly MfaService $mfa) {}
 
     public function status(Request $request): JsonResponse
     {
